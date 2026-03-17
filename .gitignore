@@ -11,6 +11,9 @@ node_modules/
 mydns.db
 mydns.db-shm
 mydns.db-wal
+test_integration.db
+test_integration.db-shm
+test_integration.db-wal
 .env
 logs/
 check_err.txt
