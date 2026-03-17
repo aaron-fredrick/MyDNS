@@ -19,20 +19,29 @@ static INIT: OnceCell<()> = OnceCell::const_new();
 
 async fn ensure_server_running() {
     INIT.get_or_init(|| async {
-        // Setup a test configuration
-        let mut cfg = AppConfig::fromEnv();
-        cfg.http_port = 8181;
-        cfg.dns_port = 1053; // Non-privileged port for tests
-        cfg.db_path = "test_integration.db".to_string();
+        // Setup a strictly hermetic test configuration
+        let mut cfg = AppConfig {
+            dns_port: 1053,
+            http_port: 8181,
+            db_path: "test_integration.db".to_string(),
+            jwt_secret: mydns::config::generateSecret(64),
+            admin_username: "admin".to_string(),
+            admin_password: "changeme123".to_string(),
+            resolver_priority: mydns::config::ResolverPriority::CloudflareFirst,
+            cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
+            router_dns: None,
+        };
         
         // Ensure clean DB for tests
         let _ = std::fs::remove_file(&cfg.db_path);
+        let _ = std::fs::remove_file(format!("{}-shm", cfg.db_path));
+        let _ = std::fs::remove_file(format!("{}-wal", cfg.db_path));
 
         let pool = db::init(&cfg.db_path).await.expect("Failed to init test DB");
         
         // Seed admin
-        let hash = hashPassword("changeme123").expect("Failed to hash");
-        db::records::seedAdmin(&pool, "admin", &hash).await.expect("Failed to seed");
+        let hash = hashPassword(&cfg.admin_password).expect("Failed to hash");
+        db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await.expect("Failed to seed");
 
         let upstream = dns::upstream::UpstreamResolver::fromConfig(
             cfg.resolver_priority.clone(),
@@ -47,13 +56,17 @@ async fn ensure_server_running() {
         let server_state = Arc::clone(&state);
         let server_cancel = cancel.clone();
         
-        // Spawn HTTP server
+        // Spawn HTTP server on localhost explicitly
         tokio::spawn(async move {
-            let _ = web::server::run(server_state, server_cancel).await;
+            // We use the run function from our library
+            if let Err(e) = web::server::run(server_state, server_cancel).await {
+                eprintln!("Test server crashed: {}", e);
+            }
         });
 
-        // Give it a moment to bind
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        // Give it more time to bind on slower CI runners
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+        println!("Test server is presumably running on 127.0.0.1:8181");
     }).await;
 }
 
@@ -111,6 +124,7 @@ async fn test_records_unauthenticated_returns_401() {
 
 #[tokio::test]
 async fn test_records_full_crud_cycle() {
+    ensure_server_running().await;
     let c = client();
     let token = loginToken(&c).await;
     let auth = format!("Bearer {}", token);
