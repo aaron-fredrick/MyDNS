@@ -1,5 +1,4 @@
 [build]
-target-dir = "C:/Temp/mydns_build"
 # Limit parallelism to avoid common Windows build races.
 jobs = 2
 
