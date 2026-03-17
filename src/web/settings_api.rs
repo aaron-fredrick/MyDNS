@@ -77,8 +77,7 @@ pub async fn updateSettings(
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
-    )
-    .map_err(anyhow::Error::from)?;
+    )?;
     drop(cfg); // release write lock before acquiring upstream write lock
     *state.upstream.write().await = new_upstream;
 

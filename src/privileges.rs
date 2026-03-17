@@ -8,7 +8,6 @@
 // `drop_privileges` and `drop_privileges_impl` are compiled out on Windows
 // (they are called only inside a `#[cfg(unix)]` block in main.rs).
 #[allow(dead_code)]
-
 #[allow(non_snake_case)]
 pub fn checkAndExitIfInsufficient(dns_port: u16, http_port: u16) {
     if (dns_port < 1024 || http_port < 1024) && !isRunningElevated() {
@@ -106,7 +105,7 @@ fn elevationHint() -> &'static str {
 fn dropPrivilegesImpl() -> anyhow::Result<()> {
     use nix::unistd::{User, setuid};
 
-    match User::from_name("nobody")? {
+    match User::from_name("nobody").map_err(|e| anyhow::anyhow!(e))? {
         Some(user) => {
             setuid(user.uid)?;
             tracing::info!(uid = %user.uid, "Dropped privileges to 'nobody'");

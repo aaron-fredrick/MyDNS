@@ -148,7 +148,7 @@ fn validate_token(token: &str, secret: &str) -> anyhow::Result<Claims> {
     Ok(data.claims)
 }
 
-fn extract_bearer<'a>(parts: &'a Parts) -> anyhow::Result<&'a str> {
+fn extract_bearer(parts: &Parts) -> anyhow::Result<&str> {
     parts
         .headers
         .get("Authorization")
