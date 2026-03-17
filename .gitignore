@@ -1,5 +1,5 @@
 # Rust-specific
-/target/
+target/
 node_modules/
 **/*.rs.bk
 
@@ -25,3 +25,10 @@ check_err.txt
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# Agent/AI tools
+.agents/
+.agent/
+.agentic/
+.gemini/
+.antigravity/
