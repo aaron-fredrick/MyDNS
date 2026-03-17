@@ -7,11 +7,12 @@
 //! cargo test --test integration
 //! ```
 
+use reqwest::Client;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-use mydns::{AppConfig, state::AppState, web, db, dns, web::auth::hashPassword};
+use mydns::{config::AppConfig, state::AppState, web, db, dns, web::auth::hashPassword};
 use tokio_util::sync::CancellationToken;
-use serde_json::{json, Value};
 
 const BASE: &str = "http://127.0.0.1:8181/api/v1";
 static INIT: OnceCell<()> = OnceCell::const_new();
