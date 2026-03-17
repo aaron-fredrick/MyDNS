@@ -31,6 +31,8 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
 
     let app = Router::new()
         .route("/", get(dashboard::serveDashboard))
+        .route("/style.css", get(dashboard::serveStyles))
+        .route("/app.js", get(dashboard::serveScripts))
         .route("/ws", get(ws::wsHandler))
         .nest("/api/v1", api_routes)
         .layer(CorsLayer::permissive())
