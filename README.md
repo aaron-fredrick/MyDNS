@@ -23,7 +23,7 @@ A high-performance, restart-resilient DNS server with a modern management dashbo
 
 1. **Clone and Setup**:
    ```powershell
-   git clone https://github.com/[USER]/MyDNS
+   git clone https://github.com/aaron-fredrick/MyDNS
    cd MyDNS
    copy .env.example .env
    ```
