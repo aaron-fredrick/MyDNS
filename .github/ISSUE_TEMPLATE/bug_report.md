@@ -1,38 +1,41 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+name: "🐛 Bug Report"
+about: Report a bug or unexpected behavior in MyDNS
+title: "[BUG] "
+labels: bug
 assignees: ''
 
 ---
 
-**Describe the bug**
+## Describe the Bug
 A clear and concise description of what the bug is.
 
-**To Reproduce**
+## To Reproduce
 Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. ...
+2. ...
 
-**Expected behavior**
+## Expected Behavior
 A clear and concise description of what you expected to happen.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+## Environment Details
+- **Binary Version / Commit Hash**: [e.g., v1.0.1 or d772190]
+- **Operating System**: [e.g., Windows 11, Ubuntu 22.04]
+- **Architecture**: [e.g., x64, ARM64]
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+## Logs & Configuration
+**Relevant Logs**
+Please paste any relevant terminal output or logs from the `logs/` directory here:
+```text
+(Paste logs here)
+```
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+**Configuration (.env)**
+Please share your `.env` configuration (remove any sensitive passwords or secrets!):
+```ini
+DNS_PORT=...
+RESOLVER_PRIORITY=...
+```
 
-**Additional context**
-Add any other context about the problem here.
+## Additional Context
+Add any other context about the problem here (e.g., screenshots of the dashboard).
