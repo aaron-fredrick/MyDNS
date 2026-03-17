@@ -13,7 +13,7 @@ use std::sync::Arc;
 use mydns::{config::AppConfig, state::AppState, web, db, dns, web::auth::hashPassword};
 use tokio_util::sync::CancellationToken;
 
-async fn start_test_server() -> String {
+async fn start_test_server() -> (String, String) {
     let test_id = mydns::config::generateSecret(8);
     let db_path = format!("test_{}.db", test_id);
     let port = rand::random::<u16>() % 10000 + 20000; // Use a random high port
@@ -59,7 +59,7 @@ async fn start_test_server() -> String {
     // Give it a moment to bind
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     
-    format!("http://127.0.0.1:{}", port)
+    (format!("http://127.0.0.1:{}", port), db_path)
 }
 
 fn client() -> reqwest::Client {
@@ -86,7 +86,7 @@ async fn loginToken(c: &Client, base: &str) -> String {
 
 #[tokio::test]
 async fn test_login_wrong_password_returns_401() {
-    let base = start_test_server().await;
+    let (base, db_path) = start_test_server().await;
     let c = client();
     let res = c
         .post(format!("{}/api/v1/auth/login", base))
@@ -95,11 +95,12 @@ async fn test_login_wrong_password_returns_401() {
         .await
         .expect("Request failed");
     assert_eq!(res.status(), 401);
+    let _ = std::fs::remove_file(db_path);
 }
 
 #[tokio::test]
 async fn test_records_unauthenticated_returns_401() {
-    let base = start_test_server().await;
+    let (base, db_path) = start_test_server().await;
     let c = client();
     let res = c
         .get(format!("{}/api/v1/records", base))
@@ -107,13 +108,14 @@ async fn test_records_unauthenticated_returns_401() {
         .await
         .expect("Request failed");
     assert_eq!(res.status(), 401);
+    let _ = std::fs::remove_file(db_path);
 }
 
 // ── records CRUD ──────────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_records_full_crud_cycle() {
-    let base = start_test_server().await;
+    let (base, db_path) = start_test_server().await;
     let c = client();
     let token = loginToken(&c, &base).await;
     let auth = format!("Bearer {}", token);
@@ -174,13 +176,14 @@ async fn test_records_full_crud_cycle() {
         .iter()
         .any(|r| r["id"] == id);
     assert!(!still_present, "Deleted record should not appear in list");
+    let _ = std::fs::remove_file(db_path);
 }
 
 // ── stats ─────────────────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_stats_returned_without_auth() {
-    let base = start_test_server().await;
+    let (base, db_path) = start_test_server().await;
     let c = client();
     let res = c
         .get(format!("{}/api/v1/stats", base))
@@ -191,4 +194,5 @@ async fn test_stats_returned_without_auth() {
     let body: Value = res.json().await.unwrap();
     assert!(body["uptime_secs"].is_number());
     assert!(body["cache_hits"].is_number());
+    let _ = std::fs::remove_file(db_path);
 }
