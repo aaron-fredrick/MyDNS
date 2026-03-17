@@ -4,19 +4,14 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 
 /// Controls which upstream DNS server is tried first on a cache/DB miss.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ResolverPriority {
     /// Try Cloudflare (1.1.1.1) first, then the router gateway. (Default)
+    #[default]
     CloudflareFirst,
     /// Try the router gateway first, then Cloudflare. Useful for ISP-specific domains.
     RouterFirst,
-}
-
-impl Default for ResolverPriority {
-    fn default() -> Self {
-        Self::CloudflareFirst
-    }
 }
 
 impl std::fmt::Display for ResolverPriority {

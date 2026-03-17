@@ -1,9 +1,9 @@
-/// Cross-platform privilege helpers.
-///
-/// MyDNS must bind to port 53, which requires Administrator rights on Windows
-/// and root (UID 0) on Linux/macOS. This module provides:
-/// - [`check_and_exit_if_insufficient`] – called once at startup.
-/// - [`drop_privileges`] – called on Unix after the socket is bound.
+//! Cross-platform privilege helpers.
+//!
+//! MyDNS must bind to port 53, which requires Administrator rights on Windows
+//! and root (UID 0) on Linux/macOS. This module provides:
+//! - [`check_and_exit_if_insufficient`] – called once at startup.
+//! - [`drop_privileges`] – called on Unix after the socket is bound.
 
 // `drop_privileges` and `drop_privileges_impl` are compiled out on Windows
 // (they are called only inside a `#[cfg(unix)]` block in main.rs).

@@ -85,6 +85,11 @@ impl DnsCache {
         self.inner.len()
     }
 
+    /// Returns true if the cache contains no entries.
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     /// Clears the entire cache.
     pub fn clear(&mut self) {
         self.inner.clear();
