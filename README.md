@@ -1,5 +1,9 @@
 # MyDNS
 
+![CI status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/test.yml/badge.svg)
+![CodeQL status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/codeql.yml/badge.svg)
+![Version](https://img.shields.io/badge/version-0.1.1--dev-blue)
+
 A high-performance, restart-resilient DNS server with a modern management dashboard. Designed for speed, security, and extreme visibility.
 
 ## Features
