@@ -16,14 +16,15 @@ use crate::state::AppState;
 /// Upgrades the connection to a WebSocket and streams every log event that
 /// passes through the broadcast channel.  Clients receive newline-delimited
 /// plain-text log strings in real time.
-pub async fn ws_handler(
+#[allow(non_snake_case)]
+pub async fn wsHandler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+    ws.on_upgrade(|socket| handleSocket(socket, state))
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handleSocket(socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.log_tx.subscribe();
     let (mut sender, mut receiver) = socket.split();
 

@@ -13,7 +13,7 @@ use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::db::records::find_user_hash;
+use crate::db::records::findUserHash;
 use crate::state::AppState;
 use crate::web::error::ApiError;
 
@@ -44,11 +44,12 @@ pub struct LoginResponse {
 }
 
 /// `POST /api/v1/auth/login`
+#[allow(non_snake_case)]
 pub async fn login(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, ApiError> {
-    let hash = find_user_hash(&state.db, &body.username)
+    let hash = findUserHash(&state.db, &body.username)
         .await
         .context("DB query failed")?
         .ok_or_else(|| ApiError::Unauthorized("Invalid credentials".into()))?;
@@ -101,7 +102,8 @@ impl FromRequestParts<Arc<AppState>> for JwtClaims {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-pub fn hash_password(password: &str) -> anyhow::Result<String> {
+#[allow(non_snake_case)]
+pub fn hashPassword(password: &str) -> anyhow::Result<String> {
     use argon2::{
         password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
         Argon2,

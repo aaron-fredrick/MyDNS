@@ -11,16 +11,18 @@ use crate::web::auth::JwtClaims;
 use crate::web::error::ApiError;
 
 /// `GET /api/v1/records`
-pub async fn list(
+#[allow(non_snake_case)]
+pub async fn listRecords(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let rows = records::list(&state.db).await?;
+    let rows = records::listRecords(&state.db).await?;
     Ok(Json(serde_json::json!({ "records": rows })))
 }
 
 /// `POST /api/v1/records`
-pub async fn create(
+#[allow(non_snake_case)]
+pub async fn createRecord(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Json(mut body): Json<CreateRecord>,
@@ -28,7 +30,7 @@ pub async fn create(
     // Normalize name before storing
     body.name = body.name.trim_end_matches('.').to_lowercase();
 
-    let row = records::create(&state.db, &body).await?;
+    let row = records::createRecord(&state.db, &body).await?;
 
     // Invalidate any stale cache entry for this name so the new record is
     // picked up immediately on the next DNS query.
@@ -45,14 +47,15 @@ pub async fn create(
 }
 
 /// `PUT /api/v1/records/:id`
-pub async fn update(
+#[allow(non_snake_case)]
+pub async fn updateRecord(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
     Json(body): Json<UpdateRecord>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Fetch old record to know which cache key to invalidate.
-    if let Ok(Some(old)) = records::get(&state.db, id).await {
+    if let Ok(Some(old)) = records::getRecord(&state.db, id).await {
         if let Ok(rtype) = old.record_type.parse::<hickory_proto::rr::RecordType>() {
             state.cache.write().await.remove(&old.name, rtype);
         }
@@ -63,7 +66,7 @@ pub async fn update(
         *name = name.trim_end_matches('.').to_lowercase();
     }
 
-    let updated = records::update(&state.db, id, &body)
+    let updated = records::updateRecord(&state.db, id, &body)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
@@ -76,19 +79,20 @@ pub async fn update(
 }
 
 /// `DELETE /api/v1/records/:id`
-pub async fn delete(
+#[allow(non_snake_case)]
+pub async fn deleteRecord(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Remove from cache before deleting from DB.
-    if let Ok(Some(row)) = records::get(&state.db, id).await {
+    if let Ok(Some(row)) = records::getRecord(&state.db, id).await {
         if let Ok(rtype) = row.record_type.parse::<hickory_proto::rr::RecordType>() {
             state.cache.write().await.remove(&row.name, rtype);
         }
     }
 
-    let deleted = records::delete(&state.db, id).await?;
+    let deleted = records::deleteRecord(&state.db, id).await?;
     if !deleted {
         return Err(ApiError::NotFound(format!("Record {} not found", id)));
     }

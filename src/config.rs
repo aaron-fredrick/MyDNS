@@ -68,13 +68,14 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
+    #[allow(non_snake_case)]
     /// Builds configuration from environment variables, falling back to sensible defaults.
-    pub fn from_env() -> Self {
-        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| generate_secret(64));
+    pub fn fromEnv() -> Self {
+        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| generateSecret(64));
 
         Self {
-            dns_port: env_parse("DNS_PORT", 53),
-            http_port: env_parse("HTTP_PORT", 8080),
+            dns_port: envParse("DNS_PORT", 53),
+            http_port: envParse("HTTP_PORT", 8080),
             db_path: std::env::var("DB_PATH").unwrap_or_else(|_| "mydns.db".to_string()),
             jwt_secret,
             admin_username: std::env::var("ADMIN_USERNAME")
@@ -98,14 +99,16 @@ impl AppConfig {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-fn env_parse<T: FromStr>(key: &str, default: T) -> T {
+#[allow(non_snake_case)]
+fn envParse<T: FromStr>(key: &str, default: T) -> T {
     std::env::var(key)
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(default)
 }
 
-pub fn generate_secret(len: usize) -> String {
+#[allow(non_snake_case)]
+pub fn generateSecret(len: usize) -> String {
     use rand::Rng;
     rand::thread_rng()
         .sample_iter(&rand::distributions::Alphanumeric)

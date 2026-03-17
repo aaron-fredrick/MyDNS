@@ -19,19 +19,19 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
 
     let api_routes = Router::new()
         .route("/auth/login", post(auth::login))
-        .route("/records", get(records_api::list).post(records_api::create))
+        .route("/records", get(records_api::listRecords).post(records_api::createRecord))
         .route(
             "/records/:id",
-            put(records_api::update).delete(records_api::delete),
+            put(records_api::updateRecord).delete(records_api::deleteRecord),
         )
-        .route("/stats", get(stats_api::get_stats))
-        .route("/settings", get(settings_api::get_settings).put(settings_api::update_settings))
-        .route("/cache", get(cache_api::list_cache).delete(cache_api::clear_cache))
-        .route("/cache/:name/:rtype", delete(cache_api::delete_cache_entry));
+        .route("/stats", get(stats_api::getStats))
+        .route("/settings", get(settings_api::getSettings).put(settings_api::updateSettings))
+        .route("/cache", get(cache_api::listCache).delete(cache_api::clearCache))
+        .route("/cache/:name/:rtype", delete(cache_api::deleteCacheEntry));
 
     let app = Router::new()
-        .route("/", get(dashboard::serve_dashboard))
-        .route("/ws", get(ws::ws_handler))
+        .route("/", get(dashboard::serveDashboard))
+        .route("/ws", get(ws::wsHandler))
         .nest("/api/v1", api_routes)
         .layer(CorsLayer::permissive())
         .with_state(state);

@@ -16,8 +16,9 @@ pub struct CacheEntry {
     pub expires_at: Instant,
 }
 
+#[allow(non_snake_case)]
 impl CacheEntry {
-    pub fn is_expired(&self) -> bool {
+    pub fn isExpired(&self) -> bool {
         Instant::now() >= self.expires_at
     }
 }
@@ -29,6 +30,7 @@ pub struct DnsCache {
     inner: HashMap<CacheKey, CacheEntry>,
 }
 
+#[allow(non_snake_case)]
 impl DnsCache {
     pub fn new() -> Self {
         Self {
@@ -39,7 +41,7 @@ impl DnsCache {
     /// Returns records for the key if present **and not expired**.
     pub fn get(&self, name: &str, rtype: RecordType) -> Option<&Vec<Record>> {
         let key = (name.to_lowercase(), rtype);
-        self.inner.get(&key).filter(|e| !e.is_expired()).map(|e| &e.records)
+        self.inner.get(&key).filter(|e| !e.isExpired()).map(|e| &e.records)
     }
 
     /// Inserts or replaces a cache entry with the given TTL.
@@ -74,7 +76,7 @@ impl DnsCache {
     /// Called periodically by the background pruning task.
     pub fn prune(&mut self) -> usize {
         let before = self.inner.len();
-        self.inner.retain(|_, entry| !entry.is_expired());
+        self.inner.retain(|_, entry| !entry.isExpired());
         before - self.inner.len()
     }
 
@@ -91,11 +93,11 @@ impl DnsCache {
     /// Returns a list of all non-expired cache entries for the UI.
     ///
     /// Returns: Vec<(Name, RecordType, TTL_Remaining_Secs, Values)>
-    pub fn list_all(&self) -> Vec<(String, RecordType, u32, Vec<String>)> {
+    pub fn listAll(&self) -> Vec<(String, RecordType, u32, Vec<String>)> {
         let now = Instant::now();
         self.inner
             .iter()
-            .filter(|(_, entry)| !entry.is_expired())
+            .filter(|(_, entry)| !entry.isExpired())
             .map(|(key, entry)| {
                 let ttl_remaining = entry
                     .expires_at
@@ -125,6 +127,7 @@ pub struct CacheStats {
     pub misses: AtomicU64,
 }
 
+#[allow(non_snake_case)]
 impl CacheStats {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -133,11 +136,11 @@ impl CacheStats {
         })
     }
 
-    pub fn record_hit(&self) {
+    pub fn recordHit(&self) {
         self.hits.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn record_miss(&self) {
+    pub fn recordMiss(&self) {
         self.misses.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -159,7 +162,8 @@ impl Default for CacheStats {
 }
 
 /// Spawns a background task that prunes expired cache entries every 60 seconds.
-pub fn spawn_pruner(
+#[allow(non_snake_case)]
+pub fn spawnPruner(
     cache: Arc<tokio::sync::RwLock<DnsCache>>,
     db: sqlx::SqlitePool,
     cancel: tokio_util::sync::CancellationToken,
@@ -172,7 +176,7 @@ pub fn spawn_pruner(
                     let pruned_mem = cache.write().await.prune();
                     
                     // Prune DB cache
-                    let pruned_db = match crate::db::records::prune_cache(&db).await {
+                    let pruned_db = match crate::db::records::pruneCache(&db).await {
                         Ok(n) => n,
                         Err(e) => {
                             tracing::error!(error = %e, "Failed to prune DB cache");
@@ -195,47 +199,4 @@ pub fn spawn_pruner(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::time::Duration;
-    use hickory_proto::rr::RecordType;
-    use super::DnsCache;
-
-    #[test]
-    fn insert_and_hit() {
-        let mut cache = DnsCache::new();
-        cache.insert("example.com.", RecordType::A, vec![], Duration::from_secs(300));
-        assert!(cache.get("example.com.", RecordType::A).is_some());
-    }
-
-    #[test]
-    fn miss_on_wrong_type() {
-        let mut cache = DnsCache::new();
-        cache.insert("example.com.", RecordType::A, vec![], Duration::from_secs(300));
-        assert!(cache.get("example.com.", RecordType::AAAA).is_none());
-    }
-
-    #[test]
-    fn expired_entry_returns_none() {
-        let mut cache = DnsCache::new();
-        cache.insert("example.com.", RecordType::A, vec![], Duration::from_millis(0));
-        assert!(cache.get("example.com.", RecordType::A).is_none());
-    }
-
-    #[test]
-    fn prune_removes_expired_entries() {
-        let mut cache = DnsCache::new();
-        cache.insert("expired.test.", RecordType::A, vec![], Duration::from_millis(0));
-        cache.insert("valid.test.", RecordType::A, vec![], Duration::from_secs(300));
-        let pruned = cache.prune();
-        assert_eq!(pruned, 1);
-        assert_eq!(cache.len(), 1);
-    }
-
-    #[test]
-    fn remove_specific_entry() {
-        let mut cache = DnsCache::new();
-        cache.insert("target.test.", RecordType::A, vec![], Duration::from_secs(300));
-        cache.remove("target.test.", RecordType::A);
-        assert!(cache.get("target.test.", RecordType::A).is_none());
-    }
-}
+mod tests;

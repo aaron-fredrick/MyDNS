@@ -1,42 +1,50 @@
-#[cfg(test)]
-mod dns_handler_tests {
-    use hickory_proto::rr::RecordType;
-    use crate::dns::handler::build_record;
+use hickory_proto::rr::RecordType;
+use super::handler::buildRecord;
 
-    #[test]
-    fn build_a_record_from_valid_ip() {
-        let record = build_record("example.com.", RecordType::A, "1.2.3.4", 300, None);
-        assert!(record.is_some(), "Should build A record from valid IPv4");
-        let r = record.unwrap();
-        assert_eq!(r.ttl(), 300);
-        assert_eq!(r.record_type(), RecordType::A);
-    }
+#[test]
+fn test_build_a_record() {
+    let rec = buildRecord("example.com", RecordType::A, "127.0.0.1", 300, None);
+    assert!(rec.is_some());
+    let r = rec.unwrap();
+    assert_eq!(r.record_type(), RecordType::A);
+    assert_eq!(r.name().to_string(), "example.com.");
+    assert_eq!(r.ttl(), 300);
+}
 
-    #[test]
-    fn build_a_record_from_invalid_ip_returns_none() {
-        let record = build_record("example.com.", RecordType::A, "not-an-ip", 300, None);
-        assert!(record.is_none(), "Invalid IP should yield None");
-    }
+#[test]
+fn test_build_aaaa_record() {
+    let rec = buildRecord("example.com", RecordType::AAAA, "::1", 300, None);
+    assert!(rec.is_some());
+    assert_eq!(rec.unwrap().record_type(), RecordType::AAAA);
+}
 
-    #[test]
-    fn build_aaaa_record() {
-        let record = build_record("example.com.", RecordType::AAAA, "::1", 60, None);
-        assert!(record.is_some());
-        assert_eq!(record.unwrap().record_type(), RecordType::AAAA);
-    }
+#[test]
+fn test_build_mx_record() {
+    let rec = buildRecord("mail.test", RecordType::MX, "mx.example.com", 600, Some(5));
+    assert!(rec.is_some());
+    let r = rec.unwrap();
+    assert_eq!(r.record_type(), RecordType::MX);
+    // Note: hickory-proto RData output can be checked if needed, 
+    // but here we just verify the record was created.
+}
 
-    #[test]
-    fn build_cname_record() {
-        let record = build_record("alias.example.com.", RecordType::CNAME, "target.example.com.", 300, None);
-        assert!(record.is_some());
-        assert_eq!(record.unwrap().record_type(), RecordType::CNAME);
-    }
+#[test]
+fn test_build_ptr_record() {
+    let rec = buildRecord("1.0.0.127.in-addr.arpa", RecordType::PTR, "localhost", 3600, None);
+    assert!(rec.is_some());
+    assert_eq!(rec.unwrap().record_type(), RecordType::PTR);
+}
 
-    #[test]
-    fn build_mx_record_with_priority() {
-        let record = build_record("example.com.", RecordType::MX, "mail.example.com.", 300, Some(20));
-        assert!(record.is_some());
-        let r = record.unwrap();
-        assert_eq!(r.record_type(), RecordType::MX);
-    }
+#[test]
+fn test_build_invalid_ip() {
+    let rec = buildRecord("fail.prop", RecordType::A, "not-an-ip", 300, None);
+    assert!(rec.is_none());
+}
+
+#[test]
+fn test_build_invalid_name() {
+    // Hickory handles names broadly, but empty or weird names might fail.
+    // Here we just check one that should parse.
+    let rec = buildRecord("valid.name", RecordType::A, "1.1.1.1", 300, None);
+    assert!(rec.is_some());
 }

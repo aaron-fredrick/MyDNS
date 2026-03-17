@@ -21,7 +21,8 @@ fn client() -> Client {
 
 // ── helper ────────────────────────────────────────────────────────────────────
 
-async fn login_token(c: &Client) -> String {
+#[allow(non_snake_case)]
+async fn loginToken(c: &Client) -> String {
     let res = c
         .post(format!("{}/auth/login", BASE))
         .json(&json!({"username": "admin", "password": "changeme123"}))
@@ -63,7 +64,7 @@ async fn test_records_unauthenticated_returns_401() {
 #[tokio::test]
 async fn test_records_full_crud_cycle() {
     let c = client();
-    let token = login_token(&c).await;
+    let token = loginToken(&c).await;
     let auth = format!("Bearer {}", token);
 
     // CREATE

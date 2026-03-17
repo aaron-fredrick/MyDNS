@@ -8,7 +8,8 @@ use crate::web::error::ApiError;
 /// `GET /api/v1/stats`
 ///
 /// Returns server uptime, cache hit/miss counts, cache size, and record count.
-pub async fn get_stats(
+#[allow(non_snake_case)]
+pub async fn getStats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let uptime_secs = state.start_time.elapsed().as_secs();

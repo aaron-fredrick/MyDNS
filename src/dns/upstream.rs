@@ -12,12 +12,14 @@ use crate::config::ResolverPriority;
 /// Attempts to detect the default gateway/router IP from the OS routing table.
 ///
 /// Returns the gateway IP as port-53 `SocketAddr`, or `None` if detection fails.
-pub fn detect_gateway() -> Option<SocketAddr> {
-    detect_gateway_impl().map(|ip| SocketAddr::new(ip, 53))
+#[allow(non_snake_case)]
+pub fn detectGateway() -> Option<SocketAddr> {
+    detectGatewayImpl().map(|ip| SocketAddr::new(ip, 53))
 }
 
+#[allow(non_snake_case)]
 #[cfg(windows)]
-fn detect_gateway_impl() -> Option<IpAddr> {
+fn detectGatewayImpl() -> Option<IpAddr> {
     let output = std::process::Command::new("ipconfig")
         .output()
         .ok()?;
@@ -36,8 +38,9 @@ fn detect_gateway_impl() -> Option<IpAddr> {
     None
 }
 
+#[allow(non_snake_case)]
 #[cfg(unix)]
-fn detect_gateway_impl() -> Option<IpAddr> {
+fn detectGatewayImpl() -> Option<IpAddr> {
     let content = std::fs::read_to_string("/proc/net/route").ok()?;
     for line in content.lines().skip(1) {
         let fields: Vec<&str> = line.split_whitespace().collect();
@@ -51,14 +54,16 @@ fn detect_gateway_impl() -> Option<IpAddr> {
     None
 }
 
+#[allow(non_snake_case)]
 #[cfg(not(any(windows, unix)))]
-fn detect_gateway_impl() -> Option<IpAddr> {
+fn detectGatewayImpl() -> Option<IpAddr> {
     None
 }
 
 // ── resolver construction ─────────────────────────────────────────────────────
 
-fn build_resolver(addr: SocketAddr) -> TokioAsyncResolver {
+#[allow(non_snake_case)]
+fn buildResolver(addr: SocketAddr) -> TokioAsyncResolver {
     let group = NameServerConfigGroup::from_ips_clear(&[addr.ip()], addr.port(), true);
     let config = ResolverConfig::from_parts(None, vec![], group);
     let mut opts = ResolverOpts::default();
@@ -87,17 +92,18 @@ pub struct UpstreamResolver {
 }
 
 impl UpstreamResolver {
+    #[allow(non_snake_case)]
     /// Builds the resolver chain from config.  Gateway detection is attempted
     /// here if `router_addr` is `None` in the config.
-    pub fn from_config(
+    pub fn fromConfig(
         priority: ResolverPriority,
         cloudflare_addr: SocketAddr,
         router_addr: Option<SocketAddr>,
     ) -> anyhow::Result<Self> {
-        let effective_router = router_addr.or_else(detect_gateway);
+        let effective_router = router_addr.or_else(detectGateway);
 
-        let cloudflare = build_resolver(cloudflare_addr);
-        let router = effective_router.map(build_resolver);
+        let cloudflare = buildResolver(cloudflare_addr);
+        let router = effective_router.map(buildResolver);
 
         if let Some(addr) = effective_router {
             tracing::info!(%addr, "Router/gateway DNS detected");
@@ -121,19 +127,20 @@ impl UpstreamResolver {
         name: &Name,
         rtype: RecordType,
     ) -> Option<(Vec<Record>, u32)> {
-        let (first, second) = self.ordered_resolvers();
+        let (first, second) = self.orderedResolvers();
 
-        if let Some(result) = query_resolver(first, name, rtype).await {
+        if let Some(result) = queryResolver(first, name, rtype).await {
             return Some(result);
         }
         if let Some(resolver) = second {
-            return query_resolver(resolver, name, rtype).await;
+            return queryResolver(resolver, name, rtype).await;
         }
         None
     }
 
+    #[allow(non_snake_case)]
     /// Returns (primary, secondary) resolver references in priority order.
-    fn ordered_resolvers(&self) -> (&TokioAsyncResolver, Option<&TokioAsyncResolver>) {
+    fn orderedResolvers(&self) -> (&TokioAsyncResolver, Option<&TokioAsyncResolver>) {
         match self.priority {
             ResolverPriority::CloudflareFirst => (&self.cloudflare, self.router.as_ref()),
             ResolverPriority::RouterFirst => {
@@ -147,8 +154,9 @@ impl UpstreamResolver {
     }
 }
 
+#[allow(non_snake_case)]
 /// Issues a lookup against a single resolver, returning `(records, min_ttl)`.
-async fn query_resolver(
+async fn queryResolver(
     resolver: &TokioAsyncResolver,
     name: &Name,
     rtype: RecordType,

@@ -20,7 +20,8 @@ pub struct CacheEntryInfo {
 }
 
 /// `GET /api/v1/cache`
-pub async fn list_cache(
+#[allow(non_snake_case)]
+pub async fn listCache(
     State(state): State<Arc<AppState>>,
     _claims: JwtClaims,
 ) -> Result<Json<Vec<CacheEntryInfo>>, ApiError> {
@@ -31,7 +32,7 @@ pub async fn list_cache(
     // 1. Get memory entries
     {
         let cache = state.cache.read().await;
-        for (name, rtype, ttl, values) in cache.list_all() {
+        for (name, rtype, ttl, values) in cache.listAll() {
             map.insert((name.clone(), rtype.to_string()), CacheEntryInfo {
                 name,
                 record_type: rtype.to_string(),
@@ -42,7 +43,7 @@ pub async fn list_cache(
     }
 
     // 2. Get DB entries
-    if let Ok(db_entries) = crate::db::records::list_cache(&state.db).await {
+    if let Ok(db_entries) = crate::db::records::listCacheEntries(&state.db).await {
         let now = chrono::Utc::now().timestamp();
         for row in db_entries {
             let key = (row.name.clone(), row.record_type.clone());
@@ -70,7 +71,8 @@ pub async fn list_cache(
 }
 
 /// `DELETE /api/v1/cache`
-pub async fn clear_cache(
+#[allow(non_snake_case)]
+pub async fn clearCache(
     State(state): State<Arc<AppState>>,
     _claims: JwtClaims,
 ) -> Result<StatusCode, ApiError> {
@@ -78,7 +80,7 @@ pub async fn clear_cache(
     state.cache.write().await.clear();
     
     // Clear DB
-    let _ = crate::db::records::clear_cache(&state.db).await;
+    let _ = crate::db::records::clearCache(&state.db).await;
     
     let _ = state.log_tx.send("[CRUD] Cache cleared".to_string());
     tracing::info!("DNS cache cleared by admin");
@@ -87,7 +89,8 @@ pub async fn clear_cache(
 }
 
 /// `DELETE /api/v1/cache/:name/:type`
-pub async fn delete_cache_entry(
+#[allow(non_snake_case)]
+pub async fn deleteCacheEntry(
     State(state): State<Arc<AppState>>,
     _claims: JwtClaims,
     Path((name, rtype_str)): Path<(String, String)>,
@@ -99,7 +102,7 @@ pub async fn delete_cache_entry(
     state.cache.write().await.remove(&name, rtype);
     
     // Delete from DB
-    let _ = crate::db::records::delete_cache_entry(&state.db, &name, &rtype_str).await;
+    let _ = crate::db::records::deleteCacheEntry(&state.db, &name, &rtype_str).await;
     
     let _ = state.log_tx.send(format!("[CRUD] Cache entry deleted: {} {}", name, rtype));
     tracing::info!(name = %name, r#type = %rtype, "Cache entry deleted by admin");

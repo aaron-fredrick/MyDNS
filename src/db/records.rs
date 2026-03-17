@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use anyhow::Context;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -51,7 +53,7 @@ pub struct UpdateRecord {
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
 /// Returns all DNS records ordered by name.
-pub async fn list(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
+pub async fn listRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at \
          FROM dns_records ORDER BY name",
@@ -62,7 +64,7 @@ pub async fn list(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
 }
 
 /// Returns records matching a specific name (case-insensitive domain normalisation).
-pub async fn find_by_name(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
+pub async fn findByName(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at \
          FROM dns_records WHERE lower(name) = lower(?)",
@@ -74,7 +76,7 @@ pub async fn find_by_name(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<D
 }
 
 /// Returns a single record by its primary key.
-pub async fn get(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsRecord>> {
+pub async fn getRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at \
          FROM dns_records WHERE id = ?",
@@ -86,7 +88,7 @@ pub async fn get(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsRecord>
 }
 
 /// Inserts a new DNS record and returns the inserted row.
-pub async fn create(pool: &SqlitePool, req: &CreateRecord) -> anyhow::Result<DnsRecord> {
+pub async fn createRecord(pool: &SqlitePool, req: &CreateRecord) -> anyhow::Result<DnsRecord> {
     let id = sqlx::query(
         "INSERT INTO dns_records (name, record_type, value, ttl, priority) \
          VALUES (?, upper(?), ?, ?, ?)",
@@ -101,13 +103,13 @@ pub async fn create(pool: &SqlitePool, req: &CreateRecord) -> anyhow::Result<Dns
     .context("Failed to insert DNS record")?
     .last_insert_rowid();
 
-    get(pool, id)
+    getRecord(pool, id)
         .await?
         .context("Inserted record not found after insert")
 }
 
 /// Updates a record in-place. Only non-`None` fields are changed.
-pub async fn update(
+pub async fn updateRecord(
     pool: &SqlitePool,
     id: i64,
     req: &UpdateRecord,
@@ -132,11 +134,11 @@ pub async fn update(
     .await
     .context("Failed to update DNS record")?;
 
-    get(pool, id).await
+    getRecord(pool, id).await
 }
 
 /// Deletes a record by ID. Returns `true` if a row was removed.
-pub async fn delete(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
+pub async fn deleteRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
     let rows = sqlx::query("DELETE FROM dns_records WHERE id = ?")
         .bind(id)
         .execute(pool)
@@ -147,7 +149,7 @@ pub async fn delete(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
 }
 
 /// Looks up a user's hashed password by username.
-pub async fn find_user_hash(
+pub async fn findUserHash(
     pool: &SqlitePool,
     username: &str,
 ) -> anyhow::Result<Option<String>> {
@@ -161,7 +163,7 @@ pub async fn find_user_hash(
 }
 
 /// Inserts the admin user if not already present.
-pub async fn seed_admin(
+pub async fn seedAdmin(
     pool: &SqlitePool,
     username: &str,
     password_hash: &str,
@@ -179,7 +181,7 @@ pub async fn seed_admin(
 }
 // ── Cache Persistence ───────────────────────────────────────────────────────
 
-pub async fn get_cache(
+pub async fn getCache(
     pool: &SqlitePool,
     name: &str,
     record_type: &str,
@@ -198,7 +200,7 @@ pub async fn get_cache(
     .context("Failed to query DNS cache")
 }
 
-pub async fn insert_cache(
+pub async fn insertCache(
     pool: &SqlitePool,
     name: &str,
     record_type: &str,
@@ -223,7 +225,7 @@ pub async fn insert_cache(
     Ok(())
 }
 
-pub async fn list_cache(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRow>> {
+pub async fn listCacheEntries(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRow>> {
     let now = Utc::now().timestamp();
     sqlx::query_as::<_, CacheRow>(
         "SELECT id, name, record_type, value, ttl, expires_at, priority \
@@ -235,7 +237,7 @@ pub async fn list_cache(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRow>> {
     .context("Failed to list DNS cache")
 }
 
-pub async fn delete_cache_entry(pool: &SqlitePool, name: &str, rtype: &str) -> anyhow::Result<()> {
+pub async fn deleteCacheEntry(pool: &SqlitePool, name: &str, rtype: &str) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM dns_cache WHERE lower(name) = lower(?) AND upper(record_type) = upper(?)")
         .bind(name)
         .bind(rtype)
@@ -245,12 +247,12 @@ pub async fn delete_cache_entry(pool: &SqlitePool, name: &str, rtype: &str) -> a
     Ok(())
 }
 
-pub async fn clear_cache(pool: &SqlitePool) -> anyhow::Result<()> {
+pub async fn clearCache(pool: &SqlitePool) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM dns_cache").execute(pool).await.context("Failed to clear cache")?;
     Ok(())
 }
 
-pub async fn prune_cache(pool: &SqlitePool) -> anyhow::Result<u64> {
+pub async fn pruneCache(pool: &SqlitePool) -> anyhow::Result<u64> {
     let now = Utc::now().timestamp();
     let rows = sqlx::query("DELETE FROM dns_cache WHERE expires_at <= ?")
         .bind(now)

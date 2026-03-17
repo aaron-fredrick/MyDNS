@@ -25,7 +25,8 @@ pub struct UpdateSettings {
 }
 
 /// `GET /api/v1/settings`
-pub async fn get_settings(
+#[allow(non_snake_case)]
+pub async fn getSettings(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<SettingsResponse>, ApiError> {
@@ -41,7 +42,8 @@ pub async fn get_settings(
 ///
 /// Applies changes immediately to the live [`AppState`] and persists them to
 /// the `settings` DB table so they survive a restart.
-pub async fn update_settings(
+#[allow(non_snake_case)]
+pub async fn updateSettings(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Json(body): Json<UpdateSettings>,
@@ -52,14 +54,14 @@ pub async fn update_settings(
         cfg.resolver_priority = prio_str
             .parse::<ResolverPriority>()
             .map_err(|e| ApiError::BadRequest(e.to_string()))?;
-        db::set_setting(&state.db, "resolver_priority", prio_str).await?;
+        db::setSetting(&state.db, "resolver_priority", prio_str).await?;
     }
 
     if let Some(ref addr_str) = body.cloudflare_dns {
         cfg.cloudflare_dns = addr_str
             .parse()
             .map_err(|_| ApiError::BadRequest("Invalid cloudflare_dns address".into()))?;
-        db::set_setting(&state.db, "cloudflare_dns", addr_str).await?;
+        db::setSetting(&state.db, "cloudflare_dns", addr_str).await?;
     }
 
     if let Some(ref addr_str) = body.router_dns {
@@ -67,11 +69,11 @@ pub async fn update_settings(
             .parse()
             .map_err(|_| ApiError::BadRequest("Invalid router_dns address".into()))?;
         cfg.router_dns = Some(addr);
-        db::set_setting(&state.db, "router_dns", addr_str).await?;
+        db::setSetting(&state.db, "router_dns", addr_str).await?;
     }
 
     // Rebuild the upstream resolver chain with the updated config.
-    let new_upstream = UpstreamResolver::from_config(
+    let new_upstream = UpstreamResolver::fromConfig(
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
