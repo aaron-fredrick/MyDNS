@@ -10,80 +10,69 @@
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tokio::sync::OnceCell;
 use mydns::{config::AppConfig, state::AppState, web, db, dns, web::auth::hashPassword};
 use tokio_util::sync::CancellationToken;
 
-const BASE: &str = "http://127.0.0.1:8181/api/v1";
-static INIT: OnceCell<()> = OnceCell::const_new();
+async fn start_test_server() -> String {
+    let test_id = mydns::config::generateSecret(8);
+    let db_path = format!("test_{}.db", test_id);
+    let port = rand::random::<u16>() % 10000 + 20000; // Use a random high port
+    
+    let cfg = AppConfig {
+        dns_port: port + 1,
+        http_port: port,
+        db_path: db_path.clone(),
+        jwt_secret: mydns::config::generateSecret(64),
+        admin_username: "admin".to_string(),
+        admin_password: "changeme123".to_string(),
+        resolver_priority: mydns::config::ResolverPriority::CloudflareFirst,
+        cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
+        router_dns: None,
+    };
+    
+    // Ensure clean DB
+    let _ = std::fs::remove_file(&cfg.db_path);
 
-async fn ensure_server_running() {
-    INIT.get_or_init(|| async {
-        // Setup a strictly hermetic test configuration
-        let mut cfg = AppConfig {
-            dns_port: 1053,
-            http_port: 8181,
-            db_path: "test_integration.db".to_string(),
-            jwt_secret: mydns::config::generateSecret(64),
-            admin_username: "admin".to_string(),
-            admin_password: "changeme123".to_string(),
-            resolver_priority: mydns::config::ResolverPriority::CloudflareFirst,
-            cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
-            router_dns: None,
-        };
-        
-        // Ensure clean DB for tests
-        let _ = std::fs::remove_file(&cfg.db_path);
-        let _ = std::fs::remove_file(format!("{}-shm", cfg.db_path));
-        let _ = std::fs::remove_file(format!("{}-wal", cfg.db_path));
+    let pool = db::init(&cfg.db_path).await.expect("Failed to init test DB");
+    
+    // Seed admin
+    let hash = hashPassword(&cfg.admin_password).expect("Failed to hash");
+    db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await.expect("Failed to seed");
 
-        let pool = db::init(&cfg.db_path).await.expect("Failed to init test DB");
-        
-        // Seed admin
-        let hash = hashPassword(&cfg.admin_password).expect("Failed to hash");
-        db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await.expect("Failed to seed");
+    let upstream = dns::upstream::UpstreamResolver::fromConfig(
+        cfg.resolver_priority.clone(),
+        cfg.cloudflare_dns,
+        cfg.router_dns,
+    ).expect("Failed to build resolver");
 
-        let upstream = dns::upstream::UpstreamResolver::fromConfig(
-            cfg.resolver_priority.clone(),
-            cfg.cloudflare_dns,
-            cfg.router_dns,
-        ).expect("Failed to build resolver");
+    let (log_tx, _) = tokio::sync::broadcast::channel(1024);
+    let cancel = CancellationToken::new();
+    let state = AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone());
 
-        let (log_tx, _) = tokio::sync::broadcast::channel(1024);
-        let cancel = CancellationToken::new();
-        let state = AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone());
+    let server_state = Arc::clone(&state);
+    let server_cancel = cancel.clone();
+    
+    tokio::spawn(async move {
+        let _ = web::server::run(server_state, server_cancel).await;
+    });
 
-        let server_state = Arc::clone(&state);
-        let server_cancel = cancel.clone();
-        
-        // Spawn HTTP server on localhost explicitly
-        tokio::spawn(async move {
-            // We use the run function from our library
-            if let Err(e) = web::server::run(server_state, server_cancel).await {
-                eprintln!("Test server crashed: {}", e);
-            }
-        });
-
-        // Give it more time to bind on slower CI runners
-        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        println!("Test server is presumably running on 127.0.0.1:8181");
-    }).await;
+    // Give it a moment to bind
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    
+    format!("http://127.0.0.1:{}", port)
 }
 
-fn client() -> Client {
+fn client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
         .unwrap()
 }
 
-// ── helper ────────────────────────────────────────────────────────────────────
-
 #[allow(non_snake_case)]
-async fn loginToken(c: &Client) -> String {
-    ensure_server_running().await;
+async fn loginToken(c: &Client, base: &str) -> String {
     let res = c
-        .post(format!("{}/auth/login", BASE))
+        .post(format!("{}/api/v1/auth/login", base))
         .json(&json!({"username": "admin", "password": "changeme123"}))
         .send()
         .await
@@ -97,10 +86,10 @@ async fn loginToken(c: &Client) -> String {
 
 #[tokio::test]
 async fn test_login_wrong_password_returns_401() {
-    ensure_server_running().await;
+    let base = start_test_server().await;
     let c = client();
     let res = c
-        .post(format!("{}/auth/login", BASE))
+        .post(format!("{}/api/v1/auth/login", base))
         .json(&json!({"username": "admin", "password": "wrongpassword"}))
         .send()
         .await
@@ -110,10 +99,10 @@ async fn test_login_wrong_password_returns_401() {
 
 #[tokio::test]
 async fn test_records_unauthenticated_returns_401() {
-    ensure_server_running().await;
+    let base = start_test_server().await;
     let c = client();
     let res = c
-        .get(format!("{}/records", BASE))
+        .get(format!("{}/api/v1/records", base))
         .send()
         .await
         .expect("Request failed");
@@ -124,14 +113,14 @@ async fn test_records_unauthenticated_returns_401() {
 
 #[tokio::test]
 async fn test_records_full_crud_cycle() {
-    ensure_server_running().await;
+    let base = start_test_server().await;
     let c = client();
-    let token = loginToken(&c).await;
+    let token = loginToken(&c, &base).await;
     let auth = format!("Bearer {}", token);
 
     // CREATE
     let res = c
-        .post(format!("{}/records", BASE))
+        .post(format!("{}/api/v1/records", &base))
         .header("Authorization", &auth)
         .json(&json!({
             "name": "test.integration.local.",
@@ -148,7 +137,7 @@ async fn test_records_full_crud_cycle() {
 
     // LIST — ensure the new record appears
     let res = c
-        .get(format!("{}/records", BASE))
+        .get(format!("{}/api/v1/records", &base))
         .header("Authorization", &auth)
         .send()
         .await
@@ -164,7 +153,7 @@ async fn test_records_full_crud_cycle() {
 
     // DELETE
     let res = c
-        .delete(format!("{}/records/{}", BASE, id))
+        .delete(format!("{}/api/v1/records/{}", &base, id))
         .header("Authorization", &auth)
         .send()
         .await
@@ -173,7 +162,7 @@ async fn test_records_full_crud_cycle() {
 
     // LIST again — should be gone
     let res = c
-        .get(format!("{}/records", BASE))
+        .get(format!("{}/api/v1/records", &base))
         .header("Authorization", &auth)
         .send()
         .await
@@ -191,11 +180,10 @@ async fn test_records_full_crud_cycle() {
 
 #[tokio::test]
 async fn test_stats_returned_without_auth() {
-    ensure_server_running().await;
-    // Stats endpoint is intentionally public (no sensitive info).
+    let base = start_test_server().await;
     let c = client();
     let res = c
-        .get(format!("{}/stats", BASE))
+        .get(format!("{}/api/v1/stats", base))
         .send()
         .await
         .unwrap();
