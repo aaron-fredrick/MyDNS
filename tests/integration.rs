@@ -7,10 +7,54 @@
 //! cargo test --test integration
 //! ```
 
-use reqwest::Client;
+use std::sync::Arc;
+use tokio::sync::OnceCell;
+use mydns::{AppConfig, state::AppState, web, db, dns, web::auth::hashPassword};
+use tokio_util::sync::CancellationToken;
 use serde_json::{json, Value};
 
-const BASE: &str = "http://127.0.0.1:8080/api/v1";
+const BASE: &str = "http://127.0.0.1:8181/api/v1";
+static INIT: OnceCell<()> = OnceCell::const_new();
+
+async fn ensure_server_running() {
+    INIT.get_or_init(|| async {
+        // Setup a test configuration
+        let mut cfg = AppConfig::fromEnv();
+        cfg.http_port = 8181;
+        cfg.dns_port = 1053; // Non-privileged port for tests
+        cfg.db_path = "test_integration.db".to_string();
+        
+        // Ensure clean DB for tests
+        let _ = std::fs::remove_file(&cfg.db_path);
+
+        let pool = db::init(&cfg.db_path).await.expect("Failed to init test DB");
+        
+        // Seed admin
+        let hash = hashPassword("changeme123").expect("Failed to hash");
+        db::records::seedAdmin(&pool, "admin", &hash).await.expect("Failed to seed");
+
+        let upstream = dns::upstream::UpstreamResolver::fromConfig(
+            cfg.resolver_priority.clone(),
+            cfg.cloudflare_dns,
+            cfg.router_dns,
+        ).expect("Failed to build resolver");
+
+        let (log_tx, _) = tokio::sync::broadcast::channel(1024);
+        let cancel = CancellationToken::new();
+        let state = AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone());
+
+        let server_state = Arc::clone(&state);
+        let server_cancel = cancel.clone();
+        
+        // Spawn HTTP server
+        tokio::spawn(async move {
+            let _ = web::server::run(server_state, server_cancel).await;
+        });
+
+        // Give it a moment to bind
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }).await;
+}
 
 fn client() -> Client {
     reqwest::Client::builder()
@@ -23,6 +67,7 @@ fn client() -> Client {
 
 #[allow(non_snake_case)]
 async fn loginToken(c: &Client) -> String {
+    ensure_server_running().await;
     let res = c
         .post(format!("{}/auth/login", BASE))
         .json(&json!({"username": "admin", "password": "changeme123"}))
@@ -38,6 +83,7 @@ async fn loginToken(c: &Client) -> String {
 
 #[tokio::test]
 async fn test_login_wrong_password_returns_401() {
+    ensure_server_running().await;
     let c = client();
     let res = c
         .post(format!("{}/auth/login", BASE))
@@ -50,6 +96,7 @@ async fn test_login_wrong_password_returns_401() {
 
 #[tokio::test]
 async fn test_records_unauthenticated_returns_401() {
+    ensure_server_running().await;
     let c = client();
     let res = c
         .get(format!("{}/records", BASE))
@@ -129,6 +176,7 @@ async fn test_records_full_crud_cycle() {
 
 #[tokio::test]
 async fn test_stats_returned_without_auth() {
+    ensure_server_running().await;
     // Stats endpoint is intentionally public (no sensitive info).
     let c = client();
     let res = c

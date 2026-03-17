@@ -4,13 +4,7 @@ use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-mod cache;
-mod config;
-mod db;
-mod dns;
-mod privileges;
-mod state;
-mod web;
+use mydns::{cache, config, db, dns, privileges, state, web};
 
 use config::AppConfig;
 use dns::upstream::UpstreamResolver;
