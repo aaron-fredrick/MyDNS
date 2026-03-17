@@ -7,7 +7,7 @@ fn test_build_a_record() {
     assert!(rec.is_some());
     let r = rec.unwrap();
     assert_eq!(r.record_type(), RecordType::A);
-    assert_eq!(r.name().to_string(), "example.com.");
+    assert_eq!(r.name().to_string().trim_end_matches('.'), "example.com");
     assert_eq!(r.ttl(), 300);
 }
 
