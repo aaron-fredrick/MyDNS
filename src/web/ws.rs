@@ -24,6 +24,7 @@ pub async fn wsHandler(
     ws.on_upgrade(|socket| handleSocket(socket, state))
 }
 
+#[allow(non_snake_case)]
 async fn handleSocket(socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.log_tx.subscribe();
     let (mut sender, mut receiver) = socket.split();

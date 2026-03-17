@@ -10,7 +10,7 @@
 use reqwest::Client;
 use serde_json::{json, Value};
 
-const BASE: &str = "http://127.0.0.1:8181/api/v1";
+const BASE: &str = "http://127.0.0.1:8080/api/v1";
 
 fn client() -> Client {
     reqwest::Client::builder()

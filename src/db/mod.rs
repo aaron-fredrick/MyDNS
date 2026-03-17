@@ -14,6 +14,7 @@ pub async fn init(db_path: &str) -> anyhow::Result<SqlitePool> {
     Ok(pool)
 }
 
+#[allow(non_snake_case)]
 async fn runMigrations(pool: &SqlitePool) -> anyhow::Result<()> {
     sqlx::query(
         r#"

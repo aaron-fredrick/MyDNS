@@ -334,9 +334,9 @@ impl DnsHandler {
     }
 }
 
+#[allow(non_snake_case)]
 pub fn buildRecord(name: &str, rtype: RecordType, value: &str, ttl: u32, priority: Option<i64>) -> Option<Record> {
     use hickory_proto::rr::rdata::{A, AAAA, CNAME, MX, PTR};
-    use std::net::{Ipv4Addr, Ipv6Addr};
 
     let fqdn: Name = name.parse().ok()?;
     let rdata = match rtype {
@@ -356,6 +356,7 @@ pub fn buildRecord(name: &str, rtype: RecordType, value: &str, ttl: u32, priorit
     Some(record)
 }
 
+#[allow(non_snake_case)]
 fn isPrivateIp(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),

@@ -28,6 +28,7 @@ pub fn checkAndExitIfInsufficient(dns_port: u16, http_port: u16) {
 ///
 /// On Windows, privilege dropping is not implemented; the function logs a
 /// warning and returns normally.
+#[allow(dead_code)]
 #[allow(non_snake_case)]
 pub fn dropPrivileges() -> anyhow::Result<()> {
     dropPrivilegesImpl()
