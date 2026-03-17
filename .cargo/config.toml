@@ -1,0 +1,10 @@
+[build]
+target-dir = "C:/Temp/mydns_build"
+# Limit parallelism to avoid common Windows build races.
+jobs = 2
+
+[profile.dev]
+codegen-units = 1
+
+[profile.release]
+codegen-units = 1

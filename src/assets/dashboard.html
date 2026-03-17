@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MyDNS Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #0d0d14;
+      --surface:   #13131f;
+      --border:    #1e1e30;
+      --accent:    #7c6af7;
+      --accent2:   #4ea8de;
+      --danger:    #e05c73;
+      --success:   #3ecf8e;
+      --text:      #e2e2f0;
+      --muted:     #6b6b8a;
+      --card-glow: 0 0 0 1px var(--border), 0 8px 32px rgba(0,0,0,.5);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;overflow-x:hidden}
+    a{color:var(--accent);text-decoration:none}
+    input,select,textarea{font-family:inherit;background:#0a0a12;border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;border-radius:.5rem;outline:none;transition:border .2s}
+    input:focus,select:focus{border-color:var(--accent)}
+    button{font-family:inherit;cursor:pointer;border:none;border-radius:.5rem;font-weight:500;transition:all .2s}
+
+    /* ── Login ── */
+    #login-page{display:flex;align-items:center;justify-content:center;width:100%;min-height:100vh;background:radial-gradient(ellipse at 50% 0%,#1a1040 0%,var(--bg) 70%)}
+    .login-card{background:var(--surface);border:1px solid var(--border);border-radius:1.25rem;padding:2.5rem 2rem;width:100%;max-width:380px;box-shadow:var(--card-glow)}
+    .login-card h1{font-size:1.6rem;font-weight:700;text-align:center;margin-bottom:.25rem;background:linear-gradient(135deg,var(--accent),var(--accent2));background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .login-card p{color:var(--muted);text-align:center;margin-bottom:1.75rem;font-size:.875rem}
+    .form-group{margin-bottom:1rem}
+    .form-group label{display:block;margin-bottom:.4rem;font-size:.825rem;color:var(--muted);font-weight:500}
+    .form-group input{width:100%}
+    .btn-primary{background:linear-gradient(135deg,var(--accent),#5a4fcf);color:#fff;padding:.65rem 1.25rem;font-size:.95rem;width:100%;margin-top:.5rem;letter-spacing:.015em}
+    .btn-primary:hover{opacity:.88;transform:translateY(-1px)}
+    #login-error{color:var(--danger);font-size:.83rem;margin-top:.75rem;text-align:center;display:none}
+ 
+    /* ── Layout ── */
+    #app{display:flex;width:100%;min-height:100vh;display:none}
+    aside{width:220px;min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:1.5rem 1rem;position:sticky;top:0;height:100vh}
+    .logo{font-size:1.2rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:2rem;padding-left:.25rem}
+    nav a{display:flex;align-items:center;gap:.6rem;padding:.55rem .75rem;border-radius:.5rem;color:var(--muted);font-size:.9rem;margin-bottom:.2rem;transition:all .2s}
+    nav a:hover,nav a.active{background:rgba(124,106,247,.12);color:var(--text)}
+    nav a.active{color:var(--accent);font-weight:500}
+    .nav-icon{width:16px;height:16px;opacity:.7}
+    .sidebar-bottom{margin-top:auto}
+    .btn-logout{background:rgba(224,92,115,.1);color:var(--danger);width:100%;padding:.5rem;font-size:.85rem;border:1px solid rgba(224,92,115,.2)}
+    .btn-logout:hover{background:rgba(224,92,115,.2)}
+
+    main{flex:1;padding:2rem;overflow-y:auto}
+    .section{display:none}
+    .section.active{display:block}
+    h2{font-size:1.3rem;font-weight:600;margin-bottom:1.5rem}
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      opacity: 1;
+      height: 24px;
+      padding: 2px;
+      cursor: pointer;
+      filter: invert(1) brightness(0.8);
+    }
+    input[type="number"] {
+      appearance: textfield;
+      -moz-appearance: textfield;
+    }
+
+    /* ── Stats ── */
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;margin-bottom:2rem}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.25rem;box-shadow:var(--card-glow);transition:transform .2s}
+    .stat-card:hover{transform:translateY(-2px)}
+    .stat-label{font-size:.75rem;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+    .stat-value{font-size:1.75rem;font-weight:700;color:var(--text)}
+    .stat-value.accent{color:var(--accent)}
+    .stat-value.green{color:var(--success)}
+
+    /* ── Log panel ── */
+    .log-panel{background:#08080f;border:1px solid var(--border);border-radius:1rem;padding:1rem;height:340px;overflow-y:auto;font-size:.8rem;font-family:'Courier New',monospace;line-height:1.6}
+    .log-line{padding:.2rem .5rem;border-bottom:1px solid rgba(255,255,255,.03);border-radius:.25rem;margin:.1rem 0;transition:background .2s}
+    .log-line:hover{background:rgba(255,255,255,.03)}
+    .log-line .ts{color:var(--muted);margin-right:.5rem;font-size:.75rem}
+    .log-line .tag{font-weight:700;margin-right:.4rem}
+    
+    .log-line.hit{background:rgba(62,207,142,.03)}
+    .log-line.hit .tag{color:var(--success)}
+    .log-line.hit-db{background:rgba(168,230,207,.03)}
+    .log-line.hit-db .tag{color:#a8e6cf}
+    .log-line.upstream{background:rgba(183,148,244,.05)}
+    .log-line.upstream .tag{color:#b794f4}
+    .log-line.crud{background:rgba(255,179,71,.03)}
+    .log-line.crud .tag{color:#ffb347}
+    .log-line.auth{background:rgba(255,121,198,.03)}
+    .log-line.auth .tag{color:#ff79c6}
+    .log-line.special{background:rgba(246,135,179,.05)}
+    .log-line.special .tag{color:#f687b3}
+    .log-line.nxdomain{background:rgba(252,129,129,.05)}
+    .log-line.nxdomain .tag{color:#fc8181;font-weight:800}
+
+    /* ── Records table ── */
+    .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:.75rem}
+    .btn-add{background:linear-gradient(135deg,var(--accent),#5a4fcf);color:#fff;padding:.5rem 1rem;font-size:.875rem}
+    .btn-add:hover{opacity:.85}
+    .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:1rem;overflow:hidden;box-shadow:var(--card-glow)}
+    table{width:100%;border-collapse:collapse}
+    th{background:#0e0e1a;padding:.75rem 1rem;text-align:left;font-size:.78rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border)}
+    td{padding:.7rem 1rem;font-size:.875rem;border-bottom:1px solid var(--border)}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:rgba(255,255,255,.02)}
+    .badge{display:inline-block;padding:.2rem .55rem;border-radius:.35rem;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+    .badge-A{background:rgba(62,207,142,.15);color:var(--success)}
+    .badge-AAAA{background:rgba(78,168,222,.15);color:var(--accent2)}
+    .badge-CNAME{background:rgba(124,106,247,.15);color:var(--accent)}
+    .badge-MX{background:rgba(255,179,71,.15);color:#ffb347}
+    .badge-PTR{background:rgba(246,135,179,.15);color:#f687b3}
+    .btn-del{background:rgba(224,92,115,.1);color:var(--danger);padding:.3rem .65rem;font-size:.8rem;border:1px solid rgba(224,92,115,.2)}
+    .btn-del:hover{background:rgba(224,92,115,.2)}
+    .no-data{text-align:center;color:var(--muted);padding:2rem}
+
+    /* ── Modal ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:100;display:none}
+    .modal-overlay.open{display:flex}
+    .modal{background:var(--surface);border:1px solid var(--border);border-radius:1.25rem;padding:2rem;width:100%;max-width:440px;box-shadow:0 24px 64px rgba(0,0,0,.7)}
+    .modal h3{margin-bottom:1.25rem;font-size:1.1rem}
+    .modal .form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+    .modal-actions{display:flex;gap:.75rem;margin-top:1.25rem;justify-content:flex-end}
+    .btn-cancel{background:rgba(255,255,255,.06);color:var(--muted);padding:.5rem 1rem}
+    .btn-cancel:hover{background:rgba(255,255,255,.1)}
+    .btn-save{background:linear-gradient(135deg,var(--accent),#5a4fcf);color:#fff;padding:.5rem 1rem}
+
+    /* ── Settings ── */
+    .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.5rem;margin-bottom:1.25rem;max-width:540px;box-shadow:var(--card-glow)}
+    .settings-card h3{font-size:.95rem;font-weight:600;margin-bottom:1rem;color:var(--muted)}
+    .priority-toggle{display:flex;border:1px solid var(--border);border-radius:.6rem;overflow:hidden;margin-bottom:1rem;max-width:320px}
+    .priority-toggle button{flex:1;padding:.55rem;background:none;color:var(--muted);font-size:.85rem;transition:all .2s}
+    .priority-toggle button.active{background:linear-gradient(135deg,var(--accent),#5a4fcf);color:#fff}
+    .ip-field{display:flex;gap:.5rem;margin-bottom:.75rem;align-items:center}
+    .ip-field label{width:110px;font-size:.82rem;color:var(--muted);flex-shrink:0}
+    .ip-field input{flex:1;font-size:.85rem}
+    .btn-save-settings{background:linear-gradient(135deg,var(--accent),#5a4fcf);color:#fff;padding:.55rem 1.25rem;font-size:.875rem;margin-top:.5rem}
+    .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--success);color:#0a2218;padding:.65rem 1.25rem;border-radius:.6rem;font-size:.875rem;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:200}
+    .toast.show{opacity:1}
+    .ws-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.75rem;padding:.2rem .55rem;border-radius:2rem;font-weight:500}
+    .ws-badge.connected{background:rgba(62,207,142,.15);color:var(--success)}
+    .ws-badge.disconnected{background:rgba(224,92,115,.1);color:var(--danger)}
+    .ws-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  </style>
+</head>
+<body>
+
+<!-- ── Login ──────────────────────────────────────────────────────────────── -->
+<div id="login-page">
+  <div class="login-card">
+    <h1>⬡ MyDNS</h1>
+    <p>Sign in to your dashboard</p>
+    <div class="form-group">
+      <label>Username</label>
+      <input id="username" type="text" placeholder="admin" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button class="btn-primary" onclick="login()">Sign in</button>
+    <p id="login-error"></p>
+  </div>
+</div>
+
+<!-- ── App shell ───────────────────────────────────────────────────────────── -->
+<div id="app">
+  <aside>
+    <div class="logo">⬡ MyDNS</div>
+    <nav>
+      <a href="#" class="active" onclick="showSection('dashboard',this)" id="nav-dashboard">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="#" onclick="showSection('records',this)" id="nav-records">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7"/><path d="M16 5V3"/><path d="M8 5V3"/><path d="M3 10h18"/><path d="M16 19h6"/><path d="M19 16v6"/></svg>
+        DNS Records
+      </a>
+      <a href="#" onclick="showSection('cache',this)" id="nav-cache">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12H16L14 15H10L8 12H2"/><path d="M5.45 5.11L2 12V18A2 2 0 0 0 4 20H20A2 2 0 0 0 22 18V12L18.55 5.11A2 2 0 0 0 16.76 4H7.24A2 2 0 0 0 5.45 5.11Z"/></svg>
+        DNS Cache
+      </a>
+      <a href="#" onclick="showSection('logs',this)" id="nav-logs">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Live Logs
+      </a>
+      <a href="#" onclick="showSection('settings',this)" id="nav-settings">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </a>
+      <a href="#" class="logout-btn" onclick="logout()" style="margin-top:auto; color:var(--danger)">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Logout
+      </a>
+    </nav>
+    <div class="sidebar-bottom">
+      <!-- The logout button is now part of the nav for consistent styling -->
+    </div>
+  </aside>
+
+  <main>
+    <!-- Dashboard -->
+    <div class="section active" id="section-dashboard">
+      <h2>Dashboard</h2>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value accent" id="s-uptime">—</div></div>
+        <div class="stat-card"><div class="stat-label">Cache Hits</div><div class="stat-value green" id="s-hits">—</div></div>
+        <div class="stat-card"><div class="stat-label">Cache Misses</div><div class="stat-value" id="s-misses">—</div></div>
+        <div class="stat-card"><div class="stat-label">Cache Size</div><div class="stat-value" id="s-cache-size">—</div></div>
+        <div class="stat-card"><div class="stat-label">Records</div><div class="stat-value" id="s-records">—</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+        <h2 style="margin:0">Recent Logs</h2>
+        <span id="ws-badge-dash" class="ws-badge disconnected"><span class="ws-dot"></span>Disconnected</span>
+      </div>
+      <div class="log-panel" id="log-panel-dash"></div>
+    </div>
+
+    <!-- Records -->
+    <div class="section" id="section-records">
+      <h2>DNS Records</h2>
+      <div class="toolbar">
+        <span style="color:var(--muted);font-size:.875rem" id="record-count-label"></span>
+        <button class="btn-add" onclick="openAddModal()">+ Add Record</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Value</th><th>TTL</th><th>Priority</th><th>Actions</th></tr></thead>
+          <tbody id="records-tbody"><tr><td colspan="6" class="no-data">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Logs -->
+    <div class="section" id="section-logs">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem">
+        <h2 style="margin:0">Live Query Logs</h2>
+        <span id="ws-badge-logs" class="ws-badge disconnected"><span class="ws-dot"></span>Disconnected</span>
+        <button style="margin-left:auto;background:rgba(255,255,255,.06);color:var(--muted);padding:.4rem .8rem;font-size:.8rem" onclick="clearLogs()">Clear</button>
+      </div>
+      <div class="log-panel" style="height:60vh" id="log-panel-logs"></div>
+    </div>
+
+    <!-- Cache -->
+    <div class="section" id="section-cache">
+      <h2>In-Memory Cache</h2>
+      <div class="toolbar">
+        <span style="color:var(--muted);font-size:.875rem" id="cache-count-label"></span>
+        <button class="btn-del" style="background:rgba(224,92,115,.1);border:1px solid rgba(224,92,115,.2);padding:.5rem 1rem" onclick="clearCache()">Clear All Cache</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>TTL Remaining</th><th>Value</th><th>Actions</th></tr></thead>
+          <tbody id="cache-tbody"><tr><td colspan="5" class="no-data">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="section" id="section-settings">
+      <h2>Resolver Settings</h2>
+      <div class="settings-card">
+        <h3>Upstream Priority</h3>
+        <div class="priority-toggle">
+          <button id="prio-cf" onclick="setPriority('cloudflare_first')">🌐 Cloudflare First</button>
+          <button id="prio-rt" onclick="setPriority('router_first')">🏠 Router First</button>
+        </div>
+        <p style="font-size:.8rem;color:var(--muted);margin-bottom:.5rem">
+          <b>Cloudflare First</b>: Best for public domains. Falls back to router for ISP-specific names.<br/>
+          <b>Router First</b>: Best when you have private/ISP-specific domains. Falls back to Cloudflare.
+        </p>
+      </div>
+      <div class="settings-card">
+        <h3>Upstream Addresses</h3>
+        <div class="ip-field">
+          <label>Cloudflare DNS</label>
+          <input id="cf-dns" type="text" placeholder="1.1.1.1:53"/>
+        </div>
+        <div class="ip-field">
+          <label>Router DNS</label>
+          <input id="router-dns" type="text" placeholder="Auto-detected"/>
+        </div>
+        <button class="btn-save-settings" onclick="saveSettings()">Save Settings</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Add/Edit Record Modal ────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Add DNS Record</h3>
+    <input type="hidden" id="m-id"/>
+    <div class="form-group">
+      <label>Name (FQDN)</label>
+      <input id="m-name" type="text" placeholder="example.com."/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Type</label>
+        <select id="m-type" style="width:100%" onchange="updateRecordPlaceholder()">
+          <option value="A">A (IPv4)</option>
+          <option value="AAAA">AAAA (IPv6)</option>
+          <option value="CNAME">CNAME (Alias)</option>
+          <option value="MX">MX (Mail)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>TTL (seconds)</label>
+        <input id="m-ttl" type="number" value="300" min="0"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Value</label>
+      <input id="m-value" type="text" placeholder="1.2.3.4"/>
+    </div>
+    <div class="form-group" id="m-priority-group" style="display:none">
+      <label>MX Priority</label>
+      <input id="m-priority" type="number" value="10" min="0"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" id="btn-save-record" onclick="saveRecord()">Add Record</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── state ──────────────────────────────────────────────────────────────────
+  let token = localStorage.getItem('mydns_token') || '';
+  let ws = null;
+  let statsInterval = null;
+  let priority = 'cloudflare_first';
+
+  // ── auth ───────────────────────────────────────────────────────────────────
+  async function login() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({username, password})
+      });
+      if (!res.ok) { errEl.style.display = 'block'; errEl.textContent = 'Invalid credentials'; return; }
+      const data = await res.json();
+      token = data.token;
+      localStorage.setItem('mydns_token', token);
+      showApp();
+    } catch(e) { errEl.style.display = 'block'; errEl.textContent = 'Connection error'; }
+  }
+
+  function logout() {
+    localStorage.removeItem('mydns_token');
+    token = '';
+    if (ws) ws.close();
+    if (statsInterval) clearInterval(statsInterval);
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-page').style.display = 'flex';
+  }
+
+  function authHeaders() { return {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}; }
+
+  // ── boot ───────────────────────────────────────────────────────────────────
+  window.onload = () => {
+    if (token) showApp();
+    document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  };
+
+  function showApp() {
+    document.getElementById('login-page').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    loadStats();
+    statsInterval = setInterval(loadStats, 5000);
+    connectWS();
+    loadRecords();
+    loadSettings();
+  }
+
+  // ── navigation ─────────────────────────────────────────────────────────────
+  function showSection(id, el) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+    document.getElementById('section-' + id).classList.add('active');
+    if (el) el.classList.add('active');
+    if (id === 'records') loadRecords();
+    if (id === 'cache') loadCache();
+    if (id === 'settings') loadSettings();
+  }
+
+  // ── stats ──────────────────────────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      const res = await fetch('/api/v1/stats', {headers: authHeaders()});
+      if (!res.ok) return;
+      const d = await res.json();
+      document.getElementById('s-uptime').textContent = formatUptime(d.uptime_secs);
+      document.getElementById('s-hits').textContent = d.cache_hits;
+      document.getElementById('s-misses').textContent = d.cache_misses;
+      document.getElementById('s-cache-size').textContent = d.cache_size;
+      document.getElementById('s-records').textContent = d.record_count;
+    } catch(e) {}
+  }
+
+  function formatUptime(s) {
+    if (s < 60) return s + 's';
+    if (s < 3600) return Math.floor(s/60) + 'm ' + (s%60) + 's';
+    return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'm';
+  }
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+  function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => setWsBadge(true);
+    ws.onclose = () => { setWsBadge(false); setTimeout(connectWS, 3000); };
+    ws.onerror = () => setWsBadge(false);
+    ws.onmessage = e => appendLog(e.data);
+  }
+
+  function setWsBadge(connected) {
+    ['ws-badge-dash','ws-badge-logs'].forEach(id => {
+      const el = document.getElementById(id);
+      el.className = 'ws-badge ' + (connected ? 'connected' : 'disconnected');
+      el.innerHTML = `<span class="ws-dot"></span>${connected ? 'Live' : 'Disconnected'}`;
+    });
+  }
+
+  function addLogLine(text) {
+    const ts = new Date().toLocaleTimeString();
+    const line = document.createElement('div');
+    
+    // Auto-detect type for row and tag styling
+    const type = classifyLog(text);
+    line.className = 'log-line ' + type;
+    
+    let processedText = escHtml(text);
+    // Wrap tags like [UPSTREAM] in a span.tag if they exist at the start
+    processedText = processedText.replace(/^(\[[A-Z\s]+\])/, '<span class="tag">$1</span>');
+
+    line.innerHTML = `<span class="ts">${ts}</span>${processedText}`;
+    
+    ['log-panel-dash','log-panel-logs'].forEach(id => {
+      const p = document.getElementById(id);
+      if (p) {
+        p.appendChild(line.cloneNode(true));
+        p.scrollTop = p.scrollHeight;
+        while (p.children.length > 500) p.removeChild(p.firstChild);
+      }
+    });
+  }
+
+  function appendLog(text) {
+    addLogLine(text);
+  }
+
+  function classifyLog(t) {
+    if (t.includes('[CACHE HIT]')) return 'hit';
+    if (t.includes('[DB HIT]')) return 'hit-db';
+    if (t.includes('[UPSTREAM]')) return 'upstream';
+    if (t.includes('[NXDOMAIN]')) return 'nxdomain';
+    if (t.includes('[CRUD]')) return 'crud';
+    if (t.includes('[AUTH]')) return 'auth';
+    if (t.includes('[SPECIAL]')) return 'special';
+    return 'info';
+  }
+
+  function clearLogs() {
+    ['log-panel-dash','log-panel-logs'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+  }
+
+  function escHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+  // ── Records ────────────────────────────────────────────────────────────────
+  let records = [];
+
+  async function loadRecords() {
+    try {
+      const res = await fetch('/api/v1/records', {headers: authHeaders()});
+      if (!res.ok) return;
+      const d = await res.json();
+      records = d.records;
+      renderRecords();
+    } catch(e) {}
+  }
+  function renderRecords() {
+    const tbody = document.getElementById('records-tbody');
+    document.getElementById('record-count-label').textContent = `${records.length} record(s)`;
+
+    const rows = [
+      `<tr style="background:rgba(124,106,247,.05)">
+        <td style="font-family:monospace;font-size:.85rem">mydns.local</td>
+        <td><span class="badge" style="background:rgba(255,255,255,.1);color:var(--muted)">SYSTEM</span></td>
+        <td style="font-family:monospace;font-size:.85rem;color:var(--accent2)">[Context Aware]</td>
+        <td>60s</td>
+        <td>—</td>
+        <td><span style="color:var(--muted);font-size:.75rem;font-style:italic">Protected</span></td>
+      </tr>`
+    ];
+
+    records.forEach(r => {
+      rows.push(`
+        <tr>
+          <td style="font-family:monospace;font-size:.85rem">${escHtml(r.name)}</td>
+          <td><span class="badge badge-${r.record_type}">${r.record_type}</span></td>
+          <td style="font-family:monospace;font-size:.85rem">${escHtml(r.value)}</td>
+          <td>${r.ttl}s</td>
+          <td>${r.priority ?? '—'}</td>
+          <td>
+            <div style="display:flex;gap:.4rem">
+              <button class="btn-add" style="padding:.3rem .6rem;background:rgba(255,255,255,.06);color:var(--text);font-size:.8rem" onclick="openEditModal(${r.id})">Edit</button>
+              <button class="btn-del" onclick="deleteRecord(${r.id})">Delete</button>
+            </div>
+          </td>
+        </tr>`);
+    });
+
+    tbody.innerHTML = rows.join('');
+  }
+
+  // ── Modal Logic ──────────────────────────────────────────────────────────
+  function openAddModal() {
+    document.getElementById('modal-title').textContent = 'Add DNS Record';
+    document.getElementById('btn-save-record').textContent = 'Add Record';
+    document.getElementById('m-id').value = '';
+    closeModal(); // Reset fields
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function openEditModal(id) {
+    const r = records.find(rec => rec.id === id);
+    if (!r) return;
+    document.getElementById('modal-title').textContent = 'Edit DNS Record';
+    document.getElementById('btn-save-record').textContent = 'Update Record';
+    document.getElementById('m-id').value = id;
+    document.getElementById('m-name').value = r.name;
+    document.getElementById('m-type').value = r.record_type;
+    document.getElementById('m-value').value = r.value;
+    document.getElementById('m-ttl').value = r.ttl;
+    if (r.record_type === 'MX') {
+      document.getElementById('m-priority-group').style.display = 'block';
+      document.getElementById('m-priority').value = r.priority || 10;
+    } else {
+      document.getElementById('m-priority-group').style.display = 'none';
+    }
+    updateRecordPlaceholder();
+    document.getElementById('modal').classList.add('open');
+  }
+
+  function updateRecordPlaceholder() {
+    const type = document.getElementById('m-type').value;
+    const valInput = document.getElementById('m-value');
+    const placeholders = {
+      'A': '192.168.1.1',
+      'AAAA': '2001:db8::1',
+      'CNAME': 'target.example.com.',
+      'MX': 'mail.example.com.'
+    };
+    valInput.placeholder = placeholders[type] || 'Value';
+    document.getElementById('m-priority-group').style.display = type === 'MX' ? 'block' : 'none';
+  }
+  function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+    ['m-name','m-value'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('m-ttl').value = '300';
+    document.getElementById('m-type').value = 'A';
+    document.getElementById('m-priority-group').style.display = 'none';
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('m-type').addEventListener('change', function() {
+      document.getElementById('m-priority-group').style.display = this.value === 'MX' ? 'block' : 'none';
+    });
+  });
+
+  async function saveRecord() {
+    const id = document.getElementById('m-id').value;
+    const body = {
+      name: document.getElementById('m-name').value.trim(),
+      record_type: document.getElementById('m-type').value,
+      value: document.getElementById('m-value').value.trim(),
+      ttl: parseInt(document.getElementById('m-ttl').value),
+    };
+    if (body.record_type === 'MX') body.priority = parseInt(document.getElementById('m-priority').value);
+    
+    const url = id ? '/api/v1/records/' + id : '/api/v1/records';
+    const method = id ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {method: method, headers: authHeaders(), body: JSON.stringify(body)});
+      if (!res.ok) { const e = await res.json(); showToast('Error: ' + e.error, true); return; }
+      closeModal();
+      loadRecords();
+      showToast(id ? 'Record updated ✓' : 'Record added ✓');
+    } catch(e) { showToast('Connection error', true); }
+  }
+
+  async function deleteRecord(id) {
+    if (!confirm('Delete this record?')) return;
+    try {
+      const res = await fetch('/api/v1/records/' + id, {method:'DELETE', headers: authHeaders()});
+      if (!res.ok) { showToast('Delete failed', true); return; }
+      loadRecords();
+      showToast('Record deleted ✓');
+    } catch(e) {}
+  }
+
+  // ── Cache ──────────────────────────────────────────────────────────────────
+  async function loadCache() {
+    try {
+      const res = await fetch('/api/v1/cache', {headers: authHeaders()});
+      if (!res.ok) return;
+      const data = await res.json();
+      renderCache(data);
+    } catch(e) {}
+  }
+
+  function renderCache(data) {
+    const tbody = document.getElementById('cache-tbody');
+    document.getElementById('cache-count-label').textContent = `${data.length} cached entry(s)`;
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="5" class="no-data">Cache is empty.</td></tr>'; return; }
+    tbody.innerHTML = data.sort((a,b) => a.name.localeCompare(b.name)).map(c => `
+      <tr>
+        <td style="font-family:monospace;font-size:.85rem">${escHtml(c.name)}</td>
+        <td><span class="badge badge-${c.record_type}">${c.record_type}</span></td>
+        <td>${c.ttl_remaining}s</td>
+        <td style="font-family:monospace;font-size:.82rem">${escHtml(c.values.join(', '))}</td>
+        <td><button class="btn-del" onclick="deleteCacheEntry('${c.name}', '${c.record_type}')">Delete</button></td>
+      </tr>`).join('');
+  }
+
+  async function deleteCacheEntry(name, type) {
+    try {
+      const res = await fetch(`/api/v1/cache/${name}/${type}`, {method:'DELETE', headers: authHeaders()});
+      if (!res.ok) { showToast('Delete failed', true); return; }
+      loadCache();
+      showToast('Cache entry deleted ✓');
+    } catch(e) {}
+  }
+
+  async function clearCache() {
+    if (!confirm('Clear the entire DNS cache?')) return;
+    try {
+      const res = await fetch('/api/v1/cache', {method:'DELETE', headers: authHeaders()});
+      if (!res.ok) { showToast('Clear failed', true); return; }
+      loadCache();
+      showToast('Cache cleared ✓');
+    } catch(e) {}
+  }
+
+  // ── Settings ───────────────────────────────────────────────────────────────
+  async function loadSettings() {
+    try {
+      const res = await fetch('/api/v1/settings', {headers: authHeaders()});
+      if (!res.ok) return;
+      const d = await res.json();
+      priority = d.resolver_priority;
+      updatePriorityUI();
+      document.getElementById('cf-dns').value = d.cloudflare_dns || '1.1.1.1:53';
+      document.getElementById('router-dns').value = d.router_dns || '';
+    } catch(e) {}
+  }
+
+  function setPriority(p) { priority = p; updatePriorityUI(); }
+  function updatePriorityUI() {
+    document.getElementById('prio-cf').classList.toggle('active', priority === 'cloudflare_first');
+    document.getElementById('prio-rt').classList.toggle('active', priority === 'router_first');
+  }
+
+  async function saveSettings() {
+    const body = {resolver_priority: priority};
+    const cf = document.getElementById('cf-dns').value.trim();
+    const rt = document.getElementById('router-dns').value.trim();
+    if (cf) body.cloudflare_dns = cf;
+    if (rt) body.router_dns = rt;
+    try {
+      const res = await fetch('/api/v1/settings', {method:'PUT', headers: authHeaders(), body: JSON.stringify(body)});
+      if (!res.ok) { const e = await res.json(); showToast('Error: ' + e.error, true); return; }
+      showToast('Settings saved ✓');
+    } catch(e) { showToast('Connection error', true); }
+  }
+
+  // ── toast ──────────────────────────────────────────────────────────────────
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = isError ? 'var(--danger)' : 'var(--success)';
+    t.style.color = isError ? '#fff' : '#0a2218';
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  // Initial UI state
+  setTimeout(updatePriorityUI, 100);
+</script>
+</body>
+</html>

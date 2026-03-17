@@ -1,0 +1,2 @@
+2026-03-16T20:10:34.687087Z ERROR mydns: DNS server terminated with error error=Failed to bind UDP socket on port 53
+2026-03-16T20:10:34.687115Z ERROR mydns: HTTP server terminated with error error=Failed to bind HTTP server on port 8080
