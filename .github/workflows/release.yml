@@ -38,7 +38,7 @@ jobs:
 
       - name: Install zig (for cross-compilation on Linux)
         if: runner.os == 'Linux'
-        uses: korandiru/setup-zig@v1
+        uses: mlugg/setup-zig@v1
 
       - name: Install cargo-zigbuild
         if: runner.os == 'Linux'

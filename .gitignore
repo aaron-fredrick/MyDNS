@@ -1,5 +1,13 @@
-target/
+# Rust-specific
+/target/
+node_modules/
 **/*.rs.bk
+
+# Compiled Binary
+/mydns
+/mydns.exe
+
+# DB and Logs
 mydns.db
 mydns.db-shm
 mydns.db-wal
@@ -7,3 +15,13 @@ mydns.db-wal
 logs/
 check_err.txt
 *.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS-specific
+.DS_Store
+Thumbs.db
