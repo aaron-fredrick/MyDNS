@@ -51,3 +51,10 @@ A high-performance, restart-resilient DNS server with a modern management dashbo
 ## License
 
 Custom License. Free for public/personal use. **Commercial, production, or commercial-public use requires attribution to the author**. See [LICENSE](LICENSE) for details.
+
+---
+
+## 💖 Support the Project
+If you find MyDNS useful, please consider supporting its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/aaronfredrick)
