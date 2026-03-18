@@ -35,3 +35,4 @@ Thumbs.db
 .agentic/
 .gemini/
 .antigravity/
+Cargo.lock
