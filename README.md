@@ -1,8 +1,12 @@
-# MyDNS
+<div align="center">
 
-![CI status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/test.yml/badge.svg)
-![CodeQL status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/codeql.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-0.1.1--dev-blue)
+# ⬡ MyDNS
+
+[![CI status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/test.yml/badge.svg)](https://github.com/aaron-fredrick/MyDNS/actions/workflows/test.yml)
+[![CodeQL status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/codeql.yml/badge.svg)](https://github.com/aaron-fredrick/MyDNS/actions/workflows/codeql.yml)
+![Version](https://img.shields.io/badge/version-v0.1.1--dev-blue?style=flat-square)
+
+</div>
 
 A high-performance, restart-resilient DNS server with a modern management dashboard. Designed for speed, security, and extreme visibility.
 
