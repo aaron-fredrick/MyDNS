@@ -244,6 +244,19 @@ pub async fn deleteCacheEntry(pool: &SqlitePool, name: &str, rtype: &str) -> any
     Ok(())
 }
 
+/// Removes every persistent cache entry for a DNS name.
+///
+/// Record mutations use name-wide invalidation because cached A/AAAA/MX/etc.
+/// answers can depend on the name's CNAME chain, not only on the mutated type.
+pub async fn deleteCacheForName(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
+    sqlx::query("DELETE FROM dns_cache WHERE lower(name) = lower(?)")
+        .bind(name)
+        .execute(pool)
+        .await
+        .context("Failed to delete DNS cache entries for name")?;
+    Ok(())
+}
+
 pub async fn clearCache(pool: &SqlitePool) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM dns_cache")
         .execute(pool)
