@@ -35,9 +35,7 @@ pub async fn createRecord(
     // A newly-created authoritative record must supersede any cached answer
     // for this name, including answers that depended on a CNAME chain.
     records::deleteCacheForName(&state.db, &body.name).await?;
-    if let Ok(rtype) = body.record_type.parse::<hickory_proto::rr::RecordType>() {
-        state.cache.write().await.remove(&body.name, rtype);
-    }
+    state.cache.write().await.removeName(&body.name);
 
     tracing::info!(name = %row.name, r#type = %row.record_type, "DNS record created");
     let _ = state.log_tx.send(format!(
@@ -56,8 +54,8 @@ pub async fn updateRecord(
     Path(id): Path<i64>,
     Json(body): Json<UpdateRecord>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    // Fetch old record to invalidate both its old and new cache keys if the
-    // mutation changes the name or record type.
+    // Fetch old record so both the old and new names can be invalidated when
+    // the mutation changes the record's owner name.
     let old = records::getRecord(&state.db, id)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
@@ -78,12 +76,8 @@ pub async fn updateRecord(
     }
     {
         let mut cache = state.cache.write().await;
-        if let Ok(rtype) = old.record_type.parse::<hickory_proto::rr::RecordType>() {
-            cache.remove(&old_name, rtype);
-        }
-        if let Ok(rtype) = updated.record_type.parse::<hickory_proto::rr::RecordType>() {
-            cache.remove(&updated.name, rtype);
-        }
+        cache.removeName(&old_name);
+        cache.removeName(&updated.name);
     }
 
     tracing::info!(id, name = %updated.name, "DNS record updated");
@@ -111,9 +105,7 @@ pub async fn deleteRecord(
     // Remove all cached answers for the name, since cached records may depend
     // on the deleted record through a CNAME chain.
     records::deleteCacheForName(&state.db, &row.name).await?;
-    if let Ok(rtype) = row.record_type.parse::<hickory_proto::rr::RecordType>() {
-        state.cache.write().await.remove(&row.name, rtype);
-    }
+    state.cache.write().await.removeName(&row.name);
 
     tracing::info!(id, "DNS record deleted");
     let _ = state.log_tx.send(format!("[CRUD] DELETE record id={}", id));
