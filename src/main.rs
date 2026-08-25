@@ -99,14 +99,8 @@ async fn main() -> anyhow::Result<()> {
     cache::spawnPruner(Arc::clone(&state.cache), pool.clone(), cancel.clone());
 
     // ── 9. Spawn DNS and HTTP servers with fate-sharing ───────────────────────
-    // On Unix, drop privileges now that socket binding will happen inside the
-    // DNS server task. We drop here (before spawn) so the spawned tasks already
-    // run with reduced permissions.
-    #[cfg(unix)]
-    if let Err(e) = privileges::dropPrivileges() {
-        tracing::warn!(error = %e, "Privilege drop failed — continuing as root");
-    }
-
+    // The DNS server binds its privileged sockets before dropping Unix
+    // privileges. The process then continues with reduced privileges.
     let dns_state = Arc::clone(&state);
     let dns_cancel = cancel.clone();
     let dns_handle = tokio::spawn(async move {
