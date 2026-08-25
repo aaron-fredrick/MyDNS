@@ -10,14 +10,16 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 
 use crate::state::AppState;
+use crate::web::auth::JwtClaims;
 
 /// `GET /ws`
 ///
-/// Upgrades the connection to a WebSocket and streams every log event that
-/// passes through the broadcast channel.  Clients receive newline-delimited
-/// plain-text log strings in real time.
+/// Upgrades an authenticated connection to a WebSocket and streams every log
+/// event that passes through the broadcast channel. Clients receive
+/// newline-delimited plain-text log strings in real time.
 #[allow(non_snake_case)]
 pub async fn wsHandler(
+    _claims: JwtClaims,
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
