@@ -38,12 +38,12 @@ pub fn dropPrivileges() -> anyhow::Result<()> {
 #[allow(non_snake_case)]
 #[cfg(windows)]
 fn isRunningElevated() -> bool {
+    use std::ptr;
     use winapi::um::{
         processthreadsapi::{GetCurrentProcess, OpenProcessToken},
         securitybaseapi::GetTokenInformation,
-        winnt::{TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY, HANDLE},
+        winnt::{TokenElevation, HANDLE, TOKEN_ELEVATION, TOKEN_QUERY},
     };
-    use std::ptr;
 
     unsafe {
         let mut token: HANDLE = ptr::null_mut();
@@ -103,7 +103,7 @@ fn elevationHint() -> &'static str {
 #[allow(non_snake_case)]
 #[cfg(unix)]
 fn dropPrivilegesImpl() -> anyhow::Result<()> {
-    use nix::unistd::{User, setuid};
+    use nix::unistd::{setuid, User};
 
     match User::from_name("nobody").map_err(|e| anyhow::anyhow!(e))? {
         Some(user) => {

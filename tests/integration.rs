@@ -7,17 +7,17 @@
 //! cargo test --test integration
 //! ```
 
+use mydns::{config::AppConfig, db, dns, state::AppState, web, web::auth::hashPassword};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::sync::Arc;
-use mydns::{config::AppConfig, state::AppState, web, db, dns, web::auth::hashPassword};
 use tokio_util::sync::CancellationToken;
 
 async fn start_test_server() -> (String, String) {
     let test_id = mydns::config::generateSecret(8);
     let db_path = format!("test_{}.db", test_id);
     let port = rand::random::<u16>() % 10000 + 20000; // Use a random high port
-    
+
     let cfg = AppConfig {
         dns_port: port + 1,
         http_port: port,
@@ -29,21 +29,26 @@ async fn start_test_server() -> (String, String) {
         cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
         router_dns: None,
     };
-    
+
     // Ensure clean DB
     let _ = std::fs::remove_file(&cfg.db_path);
 
-    let pool = db::init(&cfg.db_path).await.expect("Failed to init test DB");
-    
+    let pool = db::init(&cfg.db_path)
+        .await
+        .expect("Failed to init test DB");
+
     // Seed admin
     let hash = hashPassword(&cfg.admin_password).expect("Failed to hash");
-    db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await.expect("Failed to seed");
+    db::records::seedAdmin(&pool, &cfg.admin_username, &hash)
+        .await
+        .expect("Failed to seed");
 
     let upstream = dns::upstream::UpstreamResolver::fromConfig(
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
-    ).expect("Failed to build resolver");
+    )
+    .expect("Failed to build resolver");
 
     let (log_tx, _) = tokio::sync::broadcast::channel(1024);
     let cancel = CancellationToken::new();
@@ -51,14 +56,14 @@ async fn start_test_server() -> (String, String) {
 
     let server_state = Arc::clone(&state);
     let server_cancel = cancel.clone();
-    
+
     tokio::spawn(async move {
         let _ = web::server::run(server_state, server_cancel).await;
     });
 
     // Give it a moment to bind
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    
+
     (format!("http://127.0.0.1:{}", port), db_path)
 }
 

@@ -1,11 +1,11 @@
-use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json,
 };
-use serde::Serialize;
 use hickory_proto::rr::RecordType;
+use serde::Serialize;
+use std::sync::Arc;
 
 use crate::state::AppState;
 use crate::web::auth::JwtClaims;
@@ -33,12 +33,15 @@ pub async fn listCache(
     {
         let cache = state.cache.read().await;
         for (name, rtype, ttl, values) in cache.listAll() {
-            map.insert((name.clone(), rtype.to_string()), CacheEntryInfo {
-                name,
-                record_type: rtype.to_string(),
-                ttl_remaining: ttl,
-                values,
-            });
+            map.insert(
+                (name.clone(), rtype.to_string()),
+                CacheEntryInfo {
+                    name,
+                    record_type: rtype.to_string(),
+                    ttl_remaining: ttl,
+                    values,
+                },
+            );
         }
     }
 
@@ -48,19 +51,21 @@ pub async fn listCache(
         for row in db_entries {
             let key = (row.name.clone(), row.record_type.clone());
             let ttl = (row.expires_at - now).max(0) as u32;
-            
-            map.entry(key).and_modify(|e| {
-                if !e.values.contains(&row.value) {
-                    e.values.push(row.value.clone());
-                }
-                // Keep the lowest TTL
-                e.ttl_remaining = e.ttl_remaining.min(ttl);
-            }).or_insert(CacheEntryInfo {
-                name: row.name,
-                record_type: row.record_type,
-                ttl_remaining: ttl,
-                values: vec![row.value],
-            });
+
+            map.entry(key)
+                .and_modify(|e| {
+                    if !e.values.contains(&row.value) {
+                        e.values.push(row.value.clone());
+                    }
+                    // Keep the lowest TTL
+                    e.ttl_remaining = e.ttl_remaining.min(ttl);
+                })
+                .or_insert(CacheEntryInfo {
+                    name: row.name,
+                    record_type: row.record_type,
+                    ttl_remaining: ttl,
+                    values: vec![row.value],
+                });
         }
     }
 
@@ -78,13 +83,13 @@ pub async fn clearCache(
 ) -> Result<StatusCode, ApiError> {
     // Clear Memory
     state.cache.write().await.clear();
-    
+
     // Clear DB
     let _ = crate::db::records::clearCache(&state.db).await;
-    
+
     let _ = state.log_tx.send("[CRUD] Cache cleared".to_string());
     tracing::info!("DNS cache cleared by admin");
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -95,17 +100,20 @@ pub async fn deleteCacheEntry(
     _claims: JwtClaims,
     Path((name, rtype_str)): Path<(String, String)>,
 ) -> Result<StatusCode, ApiError> {
-    let rtype = rtype_str.parse::<RecordType>()
+    let rtype = rtype_str
+        .parse::<RecordType>()
         .map_err(|_| ApiError::BadRequest(format!("Invalid record type: {}", rtype_str)))?;
-    
+
     // Delete from Memory
     state.cache.write().await.remove(&name, rtype);
-    
+
     // Delete from DB
     let _ = crate::db::records::deleteCacheEntry(&state.db, &name, &rtype_str).await;
-    
-    let _ = state.log_tx.send(format!("[CRUD] Cache entry deleted: {} {}", name, rtype));
+
+    let _ = state
+        .log_tx
+        .send(format!("[CRUD] Cache entry deleted: {} {}", name, rtype));
     tracing::info!(name = %name, r#type = %rtype, "Cache entry deleted by admin");
-    
+
     Ok(StatusCode::NO_CONTENT)
 }

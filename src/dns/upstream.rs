@@ -2,8 +2,7 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
-
-use hickory_proto::rr::{Name, RecordType, Record};
+use hickory_proto::rr::{Name, Record, RecordType};
 use hickory_resolver::config::{NameServerConfigGroup, ResolverConfig, ResolverOpts};
 use hickory_resolver::TokioAsyncResolver;
 
@@ -20,9 +19,7 @@ pub fn detectGateway() -> Option<SocketAddr> {
 #[allow(non_snake_case)]
 #[cfg(windows)]
 fn detectGatewayImpl() -> Option<IpAddr> {
-    let output = std::process::Command::new("ipconfig")
-        .output()
-        .ok()?;
+    let output = std::process::Command::new("ipconfig").output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     for line in text.lines() {
         if line.contains("Default Gateway") {
@@ -122,11 +119,7 @@ impl UpstreamResolver {
 
     /// Queries upstream servers in priority order. Returns the first successful
     /// response as a tuple of `(records, ttl_seconds)`, or `None` if all fail.
-    pub async fn resolve(
-        &self,
-        name: &Name,
-        rtype: RecordType,
-    ) -> Option<(Vec<Record>, u32)> {
+    pub async fn resolve(&self, name: &Name, rtype: RecordType) -> Option<(Vec<Record>, u32)> {
         let (first, second) = self.orderedResolvers();
 
         if let Some(result) = queryResolver(first, name, rtype).await {

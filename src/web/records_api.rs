@@ -39,9 +39,10 @@ pub async fn createRecord(
     }
 
     tracing::info!(name = %row.name, r#type = %row.record_type, "DNS record created");
-    let _ = state
-        .log_tx
-        .send(format!("[CRUD] CREATE record id={} name={}", row.id, row.name));
+    let _ = state.log_tx.send(format!(
+        "[CRUD] CREATE record id={} name={}",
+        row.id, row.name
+    ));
 
     Ok(Json(serde_json::json!({ "record": row })))
 }
@@ -71,9 +72,7 @@ pub async fn updateRecord(
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
     tracing::info!(id, name = %updated.name, "DNS record updated");
-    let _ = state
-        .log_tx
-        .send(format!("[CRUD] UPDATE record id={}", id));
+    let _ = state.log_tx.send(format!("[CRUD] UPDATE record id={}", id));
 
     Ok(Json(serde_json::json!({ "record": updated })))
 }

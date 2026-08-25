@@ -149,17 +149,12 @@ pub async fn deleteRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
 }
 
 /// Looks up a user's hashed password by username.
-pub async fn findUserHash(
-    pool: &SqlitePool,
-    username: &str,
-) -> anyhow::Result<Option<String>> {
-    sqlx::query_scalar::<_, String>(
-        "SELECT password_hash FROM users WHERE username = ?",
-    )
-    .bind(username)
-    .fetch_optional(pool)
-    .await
-    .context("Failed to query user")
+pub async fn findUserHash(pool: &SqlitePool, username: &str) -> anyhow::Result<Option<String>> {
+    sqlx::query_scalar::<_, String>("SELECT password_hash FROM users WHERE username = ?")
+        .bind(username)
+        .fetch_optional(pool)
+        .await
+        .context("Failed to query user")
 }
 
 /// Inserts the admin user if not already present.
@@ -238,17 +233,22 @@ pub async fn listCacheEntries(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRow>
 }
 
 pub async fn deleteCacheEntry(pool: &SqlitePool, name: &str, rtype: &str) -> anyhow::Result<()> {
-    sqlx::query("DELETE FROM dns_cache WHERE lower(name) = lower(?) AND upper(record_type) = upper(?)")
-        .bind(name)
-        .bind(rtype)
-        .execute(pool)
-        .await
-        .context("Failed to delete cache entry")?;
+    sqlx::query(
+        "DELETE FROM dns_cache WHERE lower(name) = lower(?) AND upper(record_type) = upper(?)",
+    )
+    .bind(name)
+    .bind(rtype)
+    .execute(pool)
+    .await
+    .context("Failed to delete cache entry")?;
     Ok(())
 }
 
 pub async fn clearCache(pool: &SqlitePool) -> anyhow::Result<()> {
-    sqlx::query("DELETE FROM dns_cache").execute(pool).await.context("Failed to clear cache")?;
+    sqlx::query("DELETE FROM dns_cache")
+        .execute(pool)
+        .await
+        .context("Failed to clear cache")?;
     Ok(())
 }
 

@@ -73,8 +73,7 @@ impl AppConfig {
             http_port: envParse("HTTP_PORT", 8080),
             db_path: std::env::var("DB_PATH").unwrap_or_else(|_| "mydns.db".to_string()),
             jwt_secret,
-            admin_username: std::env::var("ADMIN_USERNAME")
-                .unwrap_or_else(|_| "admin".to_string()),
+            admin_username: std::env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string()),
             admin_password: std::env::var("ADMIN_PASSWORD")
                 .unwrap_or_else(|_| "changeme123".to_string()),
             resolver_priority: std::env::var("RESOLVER_PRIORITY")

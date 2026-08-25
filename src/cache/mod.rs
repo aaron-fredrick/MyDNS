@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use hickory_proto::rr::{RecordType, Record};
+use hickory_proto::rr::{Record, RecordType};
 
 /// Key into the DNS cache: normalised lowercase domain name + record type.
 pub type CacheKey = (String, RecordType);
@@ -41,13 +41,16 @@ impl DnsCache {
     /// Returns records for the key if present **and not expired**.
     pub fn get(&self, name: &str, rtype: RecordType) -> Option<&Vec<Record>> {
         let key = (name.to_lowercase(), rtype);
-        self.inner.get(&key).filter(|e| !e.isExpired()).map(|e| &e.records)
+        self.inner
+            .get(&key)
+            .filter(|e| !e.isExpired())
+            .map(|e| &e.records)
     }
 
     /// Inserts or replaces a cache entry with the given TTL.
     pub fn insert(&mut self, name: &str, rtype: RecordType, records: Vec<Record>, ttl: Duration) {
         let key = (name.to_lowercase(), rtype);
-        
+
         // Simple cap to prevent memory bloat since we have DB persistence now
         if self.inner.len() >= 5000 {
             // Remove an arbitrary entry (HashMap doesn't have order, but this is fine)
@@ -109,8 +112,10 @@ impl DnsCache {
                     .checked_duration_since(now)
                     .unwrap_or_default()
                     .as_secs() as u32;
-                
-                let values = entry.records.iter()
+
+                let values = entry
+                    .records
+                    .iter()
                     .filter_map(|r| r.data().map(|d| d.to_string()))
                     .collect();
 
@@ -179,7 +184,7 @@ pub fn spawnPruner(
                 _ = tokio::time::sleep(Duration::from_secs(60)) => {
                     // Prune memory cache
                     let pruned_mem = cache.write().await.prune();
-                    
+
                     // Prune DB cache
                     let pruned_db = match crate::db::records::pruneCache(&db).await {
                         Ok(n) => n,
@@ -191,8 +196,8 @@ pub fn spawnPruner(
 
                     if pruned_mem > 0 || pruned_db > 0 {
                         tracing::debug!(
-                            mem = pruned_mem, 
-                            db = pruned_db, 
+                            mem = pruned_mem,
+                            db = pruned_db,
                             "Pruned expired cache entries"
                         );
                     }

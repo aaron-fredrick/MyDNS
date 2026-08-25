@@ -1,5 +1,5 @@
-use hickory_proto::rr::RecordType;
 use super::handler::buildRecord;
+use hickory_proto::rr::RecordType;
 
 #[test]
 fn test_build_a_record() {
@@ -24,13 +24,19 @@ fn test_build_mx_record() {
     assert!(rec.is_some());
     let r = rec.unwrap();
     assert_eq!(r.record_type(), RecordType::MX);
-    // Note: hickory-proto RData output can be checked if needed, 
+    // Note: hickory-proto RData output can be checked if needed,
     // but here we just verify the record was created.
 }
 
 #[test]
 fn test_build_ptr_record() {
-    let rec = buildRecord("1.0.0.127.in-addr.arpa", RecordType::PTR, "localhost", 3600, None);
+    let rec = buildRecord(
+        "1.0.0.127.in-addr.arpa",
+        RecordType::PTR,
+        "localhost",
+        3600,
+        None,
+    );
     assert!(rec.is_some());
     assert_eq!(rec.unwrap().record_type(), RecordType::PTR);
 }

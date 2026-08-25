@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use sqlx::SqlitePool;
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{broadcast, RwLock};
 use tokio_util::sync::CancellationToken;
 
-use crate::cache::{DnsCache, CacheStats};
+use crate::cache::{CacheStats, DnsCache};
 use crate::config::AppConfig;
 use crate::dns::upstream::UpstreamResolver;
 

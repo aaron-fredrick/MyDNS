@@ -82,7 +82,9 @@ pub async fn updateSettings(
     *state.upstream.write().await = new_upstream;
 
     tracing::info!("Resolver settings updated");
-    let _ = state.log_tx.send("[SETTINGS] Resolver settings updated".to_string());
+    let _ = state
+        .log_tx
+        .send("[SETTINGS] Resolver settings updated".to_string());
 
     // Re-read to build response.
     let cfg = state.config.read().await;
