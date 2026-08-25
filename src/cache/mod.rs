@@ -74,6 +74,15 @@ impl DnsCache {
         self.inner.remove(&key);
     }
 
+    /// Removes all entries for a DNS name.
+    ///
+    /// Name-wide invalidation is required because cached A/AAAA/etc. answers
+    /// may depend on a CNAME record for the same owner name.
+    pub fn removeName(&mut self, name: &str) {
+        let name = name.to_lowercase();
+        self.inner.retain(|(cached_name, _), _| cached_name != &name);
+    }
+
     /// Removes all entries that have passed their expiry time.
     ///
     /// Called periodically by the background pruning task.
