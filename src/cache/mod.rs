@@ -108,7 +108,8 @@ impl DnsCache {
     /// may depend on a CNAME record for the same owner name.
     pub fn removeName(&mut self, name: &str) {
         let name = name.to_lowercase();
-        self.inner.retain(|(cached_name, _), _| cached_name != &name);
+        self.inner
+            .retain(|(cached_name, _), _| cached_name != &name);
     }
 
     /// Removes all entries that have passed their expiry time.
