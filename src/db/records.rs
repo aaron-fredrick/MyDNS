@@ -279,17 +279,27 @@ pub async fn findCnameDependents(pool: &SqlitePool, name: &str) -> anyhow::Resul
 /// Removes every persistent cache entry for a DNS name and its authoritative
 /// CNAME dependents.
 pub async fn deleteCacheForName(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
-    let dependents = findCnameDependents(pool, name).await?;
     sqlx::query(
         r#"
+        WITH RECURSIVE dependents(name) AS (
+            SELECT lower(name)
+            FROM dns_records
+            WHERE record_type = 'CNAME'
+              AND lower(trim(value, '.')) = lower(trim(?, '.'))
+            UNION
+            SELECT lower(r.name)
+            FROM dns_records r
+            JOIN dependents d
+              ON r.record_type = 'CNAME'
+             AND lower(trim(r.value, '.')) = d.name
+        )
         DELETE FROM dns_cache
         WHERE lower(name) = lower(trim(?, '.'))
-           OR lower(name) IN (SELECT lower(?) UNION ALL SELECT name FROM json_each(?))
+           OR lower(name) IN (SELECT name FROM dependents)
         "#,
     )
     .bind(name)
     .bind(name)
-    .bind(serde_json::to_string(&dependents).unwrap_or_else(|_| "[]".to_string()))
     .execute(pool)
     .await
     .context("Failed to delete DNS cache entries for name")?;
