@@ -194,7 +194,7 @@ where
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-pub fn generateSecret(len: usize) -> String {
+pub fn generate_secret(len: usize) -> String {
     use rand::Rng;
     rand::thread_rng()
         .sample_iter(&rand::distributions::Alphanumeric)
