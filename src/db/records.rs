@@ -206,7 +206,11 @@ pub async fn insertCache(
     let expires_at = Utc::now().timestamp() + (ttl as i64);
     sqlx::query(
         "INSERT INTO dns_cache (name, record_type, value, ttl, expires_at, priority) \
-         VALUES (lower(?), upper(?), ?, ?, ?, ?)",
+         VALUES (lower(?), upper(?), ?, ?, ?, ?) \
+         ON CONFLICT DO UPDATE SET \
+            ttl = excluded.ttl, \
+            expires_at = excluded.expires_at, \
+            priority = excluded.priority",
     )
     .bind(name)
     .bind(record_type)
@@ -244,16 +248,51 @@ pub async fn deleteCacheEntry(pool: &SqlitePool, name: &str, rtype: &str) -> any
     Ok(())
 }
 
-/// Removes every persistent cache entry for a DNS name.
+/// Returns authoritative CNAME dependents of a name, recursively.
 ///
-/// Record mutations use name-wide invalidation because cached A/AAAA/MX/etc.
-/// answers can depend on the name's CNAME chain, not only on the mutated type.
+/// A dependent is a DNS name whose CNAME chain eventually points at `name`.
+/// `UNION` (rather than `UNION ALL`) makes the traversal cycle-safe.
+pub async fn findCnameDependents(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<String>> {
+    sqlx::query_scalar::<_, String>(
+        r#"
+        WITH RECURSIVE dependents(name) AS (
+            SELECT lower(name)
+            FROM dns_records
+            WHERE record_type = 'CNAME'
+              AND lower(trim(value, '.')) = lower(trim(?, '.'))
+            UNION
+            SELECT lower(r.name)
+            FROM dns_records r
+            JOIN dependents d
+              ON r.record_type = 'CNAME'
+             AND lower(trim(r.value, '.')) = d.name
+        )
+        SELECT name FROM dependents
+        "#,
+    )
+    .bind(name)
+    .fetch_all(pool)
+    .await
+    .context("Failed to find CNAME cache dependents")
+}
+
+/// Removes every persistent cache entry for a DNS name and its authoritative
+/// CNAME dependents.
 pub async fn deleteCacheForName(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
-    sqlx::query("DELETE FROM dns_cache WHERE lower(name) = lower(?)")
-        .bind(name)
-        .execute(pool)
-        .await
-        .context("Failed to delete DNS cache entries for name")?;
+    let dependents = findCnameDependents(pool, name).await?;
+    sqlx::query(
+        r#"
+        DELETE FROM dns_cache
+        WHERE lower(name) = lower(trim(?, '.'))
+           OR lower(name) IN (SELECT lower(?) UNION ALL SELECT name FROM json_each(?))
+        "#,
+    )
+    .bind(name)
+    .bind(name)
+    .bind(serde_json::to_string(&dependents).unwrap_or_else(|_| "[]".to_string()))
+    .execute(pool)
+    .await
+    .context("Failed to delete DNS cache entries for name")?;
     Ok(())
 }
 
