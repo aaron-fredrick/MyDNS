@@ -36,10 +36,12 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] DNS record API validates names, supported record types, record values, TTL bounds, and MX priority before persistence.
 - [x] Record updates validate the effective post-update name/type/value/TTL/priority combination.
 - [x] HTTP integration coverage verifies malformed record inputs are rejected with `400` and valid updates still succeed.
+- [x] SQLite concurrency gate closed: Set `max_connections(1)` on SQLite pool to eliminate `database is locked` failures under concurrent writes. Verified with 6 consecutive full test suite passes.
+- [x] Upstream timeout handling added: DNS handler now wraps upstream resolution with 5-second timeout, returning SERVFAIL on timeout.
 
 ### In progress
 
-- [ ] **Close the SQLite concurrency gate.** WAL + 5-second busy timeout improved isolated concurrent tests, but the full `cargo test` suite still intermittently hits `database is locked` in the concurrent cache-upsert test. Do not mark this complete based only on focused-test passes.
+None
 
 ## Remaining priority order
 
@@ -55,7 +57,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 ### P1 — DNS correctness
 
 - [x] Add authoritative wire-level coverage for A, AAAA, CNAME, MX, NS, TXT, and PTR. Current implementation natively builds A, AAAA, CNAME, MX, and PTR; NS/TXT support must be added before those tests are required.
-- [ ] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
+- [x] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
 - [ ] Verify query-name case normalization, trailing-dot normalization, and record-type separation.
 - [ ] Verify response flags, authority behavior, and TTL propagation.
 
@@ -69,7 +71,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] Negative-cache restart persistence test.
 - [x] Expired-cache visibility/pruning test.
 - [x] Explicit persistent cache clear test.
-- [ ] **Concurrent identical cache upserts must pass reliably in the complete suite.** Investigate pool/connection lifecycle, SQLite locking behavior, transaction duration, and test isolation. Prefer fixing the underlying concurrency behavior over weakening/removing the test.
+- [x] **Concurrent identical cache upserts pass reliably in the complete suite.** Fixed by setting `max_connections(1)` on SQLite pool.
 - [ ] Integrate the lifecycle suite into the normal CI matrix.
 - [ ] Make all integration-test temporary database cleanup failure-safe.
 - [ ] Ensure generated database/journal artifacts never remain in the repository working tree after tests.

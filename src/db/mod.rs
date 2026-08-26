@@ -1,6 +1,6 @@
 use anyhow::Context;
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqliteJournalMode},
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     SqlitePool,
 };
 use std::{str::FromStr, time::Duration};
@@ -14,7 +14,9 @@ pub async fn init(db_path: &str) -> anyhow::Result<SqlitePool> {
         .journal_mode(SqliteJournalMode::Wal)
         .busy_timeout(Duration::from_secs(5));
 
-    let pool = SqlitePool::connect_with(options)
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
         .await
         .with_context(|| format!("Failed to open SQLite database at '{}'", db_path))?;
 

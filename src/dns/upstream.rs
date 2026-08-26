@@ -189,6 +189,12 @@ async fn queryResolver(
                 tracing::info!(query = %name, "Upstream returned NXDOMAIN");
                 UpstreamResolution::NxDomain
             }
+            ResolveErrorKind::NoRecordsFound { response_code, .. }
+                if *response_code == ResponseCode::ServFail =>
+            {
+                tracing::info!(query = %name, "Upstream returned SERVFAIL");
+                UpstreamResolution::ServFail
+            }
             ResolveErrorKind::NoRecordsFound { .. } => {
                 tracing::info!(query = %name, "Upstream returned NODATA");
                 UpstreamResolution::Nodata

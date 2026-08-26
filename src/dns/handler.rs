@@ -370,10 +370,16 @@ impl DnsHandler {
             }
         };
         let upstream = self.state.upstream.read().await;
-        let result = upstream.resolve(&parsed_name, rtype).await;
         let addr = self.getUpstreamAddressString(&upstream).await;
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            upstream.resolve(&parsed_name, rtype),
+        )
+        .await;
+
         match result {
-            UpstreamResolution::Positive(records, _ttl) => {
+            Ok(UpstreamResolution::Positive(records, _ttl)) => {
                 let values = self.getRecordValuesString(&records);
                 tracing::info!(client = %src, query = %name, r#type = %rtype, value = %values, upstream = %addr, "Upstream resolve hit");
                 let _ = self.state.log_tx.send(format!(
@@ -382,9 +388,17 @@ impl DnsHandler {
                 ));
                 ResolutionResult::Positive(records)
             }
-            UpstreamResolution::Nodata => ResolutionResult::Nodata,
-            UpstreamResolution::NxDomain => ResolutionResult::NxDomain,
-            UpstreamResolution::ServFail => ResolutionResult::ServFail,
+            Ok(UpstreamResolution::Nodata) => ResolutionResult::Nodata,
+            Ok(UpstreamResolution::NxDomain) => ResolutionResult::NxDomain,
+            Ok(UpstreamResolution::ServFail) => ResolutionResult::ServFail,
+            Err(_) => {
+                tracing::warn!(client = %src, query = %name, r#type = %rtype, "Upstream resolve timed out; returning SERVFAIL");
+                let _ = self.state.log_tx.send(format!(
+                    "[UPSTREAM TIMEOUT] client={} query={} type={} server={}",
+                    src, name, rtype, addr
+                ));
+                ResolutionResult::ServFail
+            }
         }
     }
 
