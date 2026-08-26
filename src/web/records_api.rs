@@ -11,7 +11,10 @@ use crate::state::AppState;
 use crate::web::auth::JwtClaims;
 use crate::web::error::ApiError;
 
-async fn cacheInvalidationNames(pool: &sqlx::SqlitePool, names: &[String]) -> anyhow::Result<Vec<String>> {
+async fn cacheInvalidationNames(
+    pool: &sqlx::SqlitePool,
+    names: &[String],
+) -> anyhow::Result<Vec<String>> {
     let mut invalidation = HashSet::new();
     for name in names {
         let normalized = name.trim_end_matches('.').to_lowercase();
@@ -26,13 +29,7 @@ async fn cacheInvalidationNames(pool: &sqlx::SqlitePool, names: &[String]) -> an
 async fn invalidateCaches(state: &Arc<AppState>, names: &[String]) -> anyhow::Result<()> {
     let names = cacheInvalidationNames(&state.db, names).await?;
     for name in &names {
-        records::deleteCacheEntry(&state.db, name, "A").await?;
-        records::deleteCacheEntry(&state.db, name, "AAAA").await?;
-        records::deleteCacheEntry(&state.db, name, "CNAME").await?;
-        records::deleteCacheEntry(&state.db, name, "MX").await?;
-        records::deleteCacheEntry(&state.db, name, "NS").await?;
-        records::deleteCacheEntry(&state.db, name, "TXT").await?;
-        records::deleteCacheEntry(&state.db, name, "PTR").await?;
+        records::deleteCacheForName(&state.db, name).await?;
         state.cache.write().await.removeName(name);
     }
     Ok(())
@@ -84,7 +81,8 @@ pub async fn updateRecord(
     let old_name = old.name.clone();
     // Capture dependents before the mutation because changing a CNAME target
     // can remove the old dependency from dns_records.
-    let mut invalidation_names = cacheInvalidationNames(&state.db, std::slice::from_ref(&old_name)).await?;
+    let mut invalidation_names =
+        cacheInvalidationNames(&state.db, std::slice::from_ref(&old_name)).await?;
 
     let mut body = body;
     if let Some(ref mut name) = body.name {
@@ -118,7 +116,8 @@ pub async fn deleteRecord(
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
     // Capture CNAME dependents before deleting the authoritative record.
-    let invalidation_names = cacheInvalidationNames(&state.db, std::slice::from_ref(&row.name)).await?;
+    let invalidation_names =
+        cacheInvalidationNames(&state.db, std::slice::from_ref(&row.name)).await?;
 
     let deleted = records::deleteRecord(&state.db, id).await?;
     if !deleted {
