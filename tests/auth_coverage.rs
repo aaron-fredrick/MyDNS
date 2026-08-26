@@ -30,6 +30,7 @@ async fn start_test_server() -> (String, String) {
         router_dns: None,
         run_as_user: "nobody".to_string(),
         run_as_group: "nobody".to_string(),
+        allowed_zones: vec![],
     };
 
     let _ = std::fs::remove_file(&db_path);
@@ -82,11 +83,7 @@ async fn test_all_protected_routes_require_auth() {
 
     // -- Unauthenticated routes (must pass) --
     assert_eq!(
-        c.get(format!("{api}/stats"))
-            .send()
-            .await
-            .unwrap()
-            .status(),
+        c.get(format!("{api}/stats")).send().await.unwrap().status(),
         200,
         "/stats should not require auth"
     );

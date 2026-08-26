@@ -36,6 +36,7 @@ async fn start_test_server() -> (String, String) {
         router_dns: None,
         run_as_user: "nobody".to_string(),
         run_as_group: "nobody".to_string(),
+        allowed_zones: vec![],
     };
 
     // Ensure clean DB

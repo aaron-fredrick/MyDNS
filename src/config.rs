@@ -72,6 +72,9 @@ pub struct AppConfig {
     pub run_as_user: String,
     /// Target Unix group to run as after binding privileged sockets.
     pub run_as_group: String,
+    /// DNS zones the API is allowed to manage (e.g. ["home.local", "lab.local"]).
+    /// Empty = allow any zone (default). Non-empty = strict allow-list.
+    pub allowed_zones: Vec<String>,
 }
 
 impl AppConfig {
@@ -143,6 +146,16 @@ impl AppConfig {
                 .get("run_as_group")
                 .cloned()
                 .unwrap_or_else(|| "nobody".to_string()),
+            allowed_zones: values
+                .get("allowed_zones")
+                .map(|v| {
+                    v.split(',')
+                        .map(str::trim)
+                        .filter(|z| !z.is_empty())
+                        .map(|z| z.trim_end_matches('.').to_lowercase())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
         })
     }
 }

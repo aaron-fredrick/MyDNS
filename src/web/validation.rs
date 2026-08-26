@@ -10,6 +10,30 @@ pub const MAX_TTL: u32 = 86_400;
 const MAX_DNS_NAME_LEN: usize = 253;
 const MAX_LABEL_LEN: usize = 63;
 
+/// Checks that `name` belongs to one of the configured `allowed_zones`.
+///
+/// If `allowed_zones` is empty the check is skipped (allow-all mode), which
+/// preserves backwards-compatibility when the operator has not configured
+/// zone restrictions.
+pub fn validate_zone(name: &str, allowed_zones: &[String]) -> Result<(), ApiError> {
+    if allowed_zones.is_empty() {
+        return Ok(());
+    }
+    let normalized = name.trim_end_matches('.').to_lowercase();
+    let matches = allowed_zones
+        .iter()
+        .any(|z| normalized == *z || normalized.ends_with(&format!(".{z}")));
+    if matches {
+        Ok(())
+    } else {
+        Err(ApiError::BadRequest(format!(
+            "Record name '{}' does not belong to any allowed zone: [{}]",
+            name,
+            allowed_zones.join(", ")
+        )))
+    }
+}
+
 pub fn validate_create_record(req: &CreateRecord) -> Result<(), ApiError> {
     validate_record(
         &req.name,
@@ -235,5 +259,37 @@ mod tests {
     #[test]
     fn rejects_empty_txt_value() {
         assert!(validate_create_record(&create("TXT", "")).is_err());
+    }
+
+    // ── Zone validation ───────────────────────────────────────────────────────
+
+    #[test]
+    fn zone_allow_all_when_list_is_empty() {
+        assert!(validate_zone("anything.example.com", &[]).is_ok());
+    }
+
+    #[test]
+    fn zone_accepts_exact_zone_match() {
+        let zones = vec!["home.local".to_string()];
+        assert!(validate_zone("home.local", &zones).is_ok());
+    }
+
+    #[test]
+    fn zone_accepts_subdomain_of_allowed_zone() {
+        let zones = vec!["home.local".to_string()];
+        assert!(validate_zone("server.home.local", &zones).is_ok());
+        assert!(validate_zone("deep.sub.home.local", &zones).is_ok());
+    }
+
+    #[test]
+    fn zone_rejects_name_not_in_any_zone() {
+        let zones = vec!["home.local".to_string(), "lab.local".to_string()];
+        assert!(validate_zone("server.corp.example", &zones).is_err());
+    }
+
+    #[test]
+    fn zone_handles_trailing_dot_in_name() {
+        let zones = vec!["home.local".to_string()];
+        assert!(validate_zone("server.home.local.", &zones).is_ok());
     }
 }

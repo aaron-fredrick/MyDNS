@@ -12,6 +12,10 @@ http_port = 8080
 # The special dashboard hostname that resolves to the MyDNS server itself.
 # dashboard_domain = mydns.local
 
+# DNS zones the API is allowed to manage (comma-separated).
+# If empty or omitted, any zone is allowed (allow-all).
+# allowed_zones = home.local, lab.local
+
 # SQLite database. Stores zones, users, and cache.
 # Supported DNS record types: A, AAAA, CNAME, MX, NS, TXT, PTR
 db_path = mydns.db

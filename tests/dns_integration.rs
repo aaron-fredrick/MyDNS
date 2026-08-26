@@ -45,6 +45,7 @@ async fn start_dns_server() -> (
         router_dns: None,
         run_as_user: "nobody".to_string(),
         run_as_group: "nobody".to_string(),
+        allowed_zones: vec![],
     };
 
     let _ = std::fs::remove_file(&db_path);
@@ -63,7 +64,11 @@ async fn start_dns_server() -> (
             "CNAME",
             "loop-two.dns-test.local",
         ),
-        ("loop-two.dns-test.local", "CNAME", "loop-one.dns-test.local"),
+        (
+            "loop-two.dns-test.local",
+            "CNAME",
+            "loop-one.dns-test.local",
+        ),
         // AAAA record
         ("dns6-test.local", "AAAA", "2001:db8::1"),
         // MX record
@@ -71,7 +76,11 @@ async fn start_dns_server() -> (
         // NS record
         ("ns-test.local", "NS", "ns1.example.com"),
         // TXT record
-        ("txt-test.local", "TXT", "v=spf1 include:_spf.example.com ~all"),
+        (
+            "txt-test.local",
+            "TXT",
+            "v=spf1 include:_spf.example.com ~all",
+        ),
     ] {
         db::records::createRecord(
             &pool,

@@ -54,6 +54,10 @@ pub async fn createRecord(
     Json(mut body): Json<CreateRecord>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     validation::validate_create_record(&body)?;
+
+    let allowed_zones = state.config.read().await.allowed_zones.clone();
+    validation::validate_zone(&body.name, &allowed_zones)?;
+
     body.name = body.name.trim_end_matches('.').to_lowercase();
     body.record_type = body.record_type.trim().to_ascii_uppercase();
     body.value = body.value.trim().to_string();
@@ -78,6 +82,14 @@ pub async fn updateRecord(
     Path(id): Path<i64>,
     Json(body): Json<UpdateRecord>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    validation::validate_update_record(&body)?;
+
+    // If name is being changed, check it against allowed zones
+    if let Some(ref new_name) = body.name {
+        let allowed_zones = state.config.read().await.allowed_zones.clone();
+        validation::validate_zone(new_name, &allowed_zones)?;
+    }
+
     let old = records::getRecord(&state.db, id)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
@@ -85,8 +97,6 @@ pub async fn updateRecord(
     let old_name = old.name.clone();
     let mut invalidation_names =
         cache_invalidation_names(&state.db, std::slice::from_ref(&old_name)).await?;
-
-    validation::validate_update_record(&body)?;
 
     let new_name = body
         .name
