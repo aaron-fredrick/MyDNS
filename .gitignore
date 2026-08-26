@@ -17,6 +17,12 @@ test_integration.db-wal
 test_*.db
 test_*.db-shm
 test_*.db-wal
+auth_cov_*.db
+auth_cov_*.db-shm
+auth_cov_*.db-wal
+dns_*.db
+dns_*.db-shm
+dns_*.db-wal
 .env
 logs/
 check_err.txt
