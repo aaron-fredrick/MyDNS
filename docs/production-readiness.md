@@ -8,11 +8,12 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ## Current baseline
 
+- `cargo fmt --check` passes.
 - `cargo check` passes.
 - `cargo clippy -- -D warnings` passes.
 - Unit tests pass: 18 passed.
 - Existing API integration tests pass: 5 passed.
-- New DNS wire integration tests are implemented in `tests/dns_integration.rs`; the initial run exposed a test-fixture naming mismatch (fixture stored a trailing-dot name while the handler normalizes query names before SQLite lookup). The fixture has been corrected to use the normalized storage form; local re-verification is still required.
+- New DNS wire integration tests pass: 2 passed, covering UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior.
 - Release tests pass, including release CORS restriction coverage.
 - Manual DNS smoke testing has covered A, AAAA, MX, NS, TXT, CNAME, PTR, NXDOMAIN, and cache-hit behavior.
 - Dependencies were refreshed and `Cargo.lock` updated; `cargo audit` is still required.
@@ -27,6 +28,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] Upstream resolver failures no longer automatically become NXDOMAIN; resolver errors are classified as NXDOMAIN, NODATA, or SERVFAIL.
 - [x] NXDOMAIN remains the only negative result persisted through the existing negative-cache path.
 - [x] Added real DNS wire-level integration coverage for UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior in `tests/dns_integration.rs`.
+- [x] Verified the DNS wire-level integration tests locally after correcting the fixture naming mismatch.
 
 ### Still open from the audit
 
@@ -81,7 +83,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [ ] Add authoritative handling/tests for A, AAAA, CNAME, MX, NS, TXT, and PTR.
 - [ ] Test CNAME-only responses and multi-hop CNAME chains.
 - [ ] Test CNAME loops and recursion limits.
-- [ ] Verify the new DNS outcome model over the real wire for positive answers, NODATA, and NXDOMAIN (UDP), plus positive answers over TCP. **Tests are implemented; local verification remains pending after the fixture correction.**
+- [x] Verify the new DNS outcome model over the real wire for positive answers, NODATA, and NXDOMAIN (UDP), plus positive answers over TCP.
 - [ ] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
 - [x] Verify UDP and TCP DNS listener behavior independently at the socket level and with wire-level integration tests.
 - [ ] Verify query-name case normalization, trailing-dot normalization, and record-type separation.
