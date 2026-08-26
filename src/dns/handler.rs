@@ -261,25 +261,72 @@ impl DnsHandler {
     }
 
     async fn queryDatabase(&self, name: &str, rtype: RecordType) -> Option<ResolutionResult> {
-        let rows = crate::db::records::findByName(&self.state.db, name)
-            .await
-            .ok()?;
-        if rows.is_empty() {
-            return None;
-        }
-        let rtype_str = rtype.to_string().to_uppercase();
-        let mut records = Vec::new();
-        for row in rows.iter().filter(|r| r.record_type == rtype_str) {
-            if let Some(record) = buildRecord(name, rtype, &row.value, row.ttl as u32, row.priority)
-            {
-                records.push(record);
+        let mut current = name.to_string();
+        let mut chain = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+
+        for depth in 0..=10u8 {
+            if !visited.insert(current.clone()) {
+                tracing::warn!(name = %name, r#type = %rtype, depth = %depth, "Authoritative CNAME loop detected");
+                return Some(ResolutionResult::ServFail);
             }
+
+            let rows = crate::db::records::findByName(&self.state.db, &current)
+                .await
+                .ok()?;
+
+            let rtype_str = rtype.to_string().to_uppercase();
+            let mut records = Vec::new();
+            for row in rows.iter().filter(|r| r.record_type == rtype_str) {
+                if let Some(record) =
+                    buildRecord(&current, rtype, &row.value, row.ttl as u32, row.priority)
+                {
+                    records.push(record);
+                }
+            }
+
+            if !records.is_empty() {
+                if !chain.is_empty() {
+                    chain.reverse();
+                    for cname in chain {
+                        records.insert(0, cname);
+                    }
+                }
+                return Some(ResolutionResult::Positive(records));
+            }
+
+            if rtype == RecordType::CNAME {
+                return if rows.is_empty() {
+                    None
+                } else {
+                    Some(ResolutionResult::Nodata)
+                };
+            }
+
+            let cname_row = rows.iter().find(|row| row.record_type == "CNAME");
+            let Some(cname_row) = cname_row else {
+                return if rows.is_empty() {
+                    None
+                } else {
+                    Some(ResolutionResult::Nodata)
+                };
+            };
+
+            let Some(cname_record) = buildRecord(
+                &current,
+                RecordType::CNAME,
+                &cname_row.value,
+                cname_row.ttl as u32,
+                None,
+            ) else {
+                return Some(ResolutionResult::ServFail);
+            };
+            chain.push(cname_record);
+            current = cname_row.value.trim_end_matches('.').to_lowercase();
         }
-        if records.is_empty() {
-            Some(ResolutionResult::Nodata)
-        } else {
-            Some(ResolutionResult::Positive(records))
-        }
+
+        tracing::warn!(name = %name, r#type = %rtype, "Authoritative CNAME recursion limit reached");
+        Some(ResolutionResult::ServFail)
     }
 
     async fn querySpecialRecords(
