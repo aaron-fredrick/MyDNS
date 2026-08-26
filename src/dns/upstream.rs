@@ -2,8 +2,10 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
+use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{Name, Record, RecordType};
 use hickory_resolver::config::{NameServerConfigGroup, ResolverConfig, ResolverOpts};
+use hickory_resolver::error::ResolveErrorKind;
 use hickory_resolver::TokioAsyncResolver;
 
 use crate::config::ResolverPriority;
@@ -117,12 +119,16 @@ impl UpstreamResolver {
         let (first, second) = self.orderedResolvers();
 
         match queryResolver(first, name, rtype).await {
-            UpstreamResolution::Positive(records, ttl) => return UpstreamResolution::Positive(records, ttl),
+            UpstreamResolution::Positive(records, ttl) => {
+                return UpstreamResolution::Positive(records, ttl)
+            }
             UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
             UpstreamResolution::Nodata => {
                 if let Some(resolver) = second {
                     match queryResolver(resolver, name, rtype).await {
-                        UpstreamResolution::Positive(records, ttl) => return UpstreamResolution::Positive(records, ttl),
+                        UpstreamResolution::Positive(records, ttl) => {
+                            return UpstreamResolution::Positive(records, ttl)
+                        }
                         UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
                         UpstreamResolution::Nodata => return UpstreamResolution::Nodata,
                         UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
@@ -133,7 +139,9 @@ impl UpstreamResolver {
             UpstreamResolution::ServFail => {
                 if let Some(resolver) = second {
                     match queryResolver(resolver, name, rtype).await {
-                        UpstreamResolution::Positive(records, ttl) => return UpstreamResolution::Positive(records, ttl),
+                        UpstreamResolution::Positive(records, ttl) => {
+                            return UpstreamResolution::Positive(records, ttl)
+                        }
                         UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
                         UpstreamResolution::Nodata => return UpstreamResolution::Nodata,
                         UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
@@ -174,17 +182,20 @@ async fn queryResolver(
             let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(300);
             UpstreamResolution::Positive(records, ttl)
         }
-        Err(e) if e.is_nx_domain() => {
-            tracing::info!(query = %name, "Upstream returned NXDOMAIN");
-            UpstreamResolution::NxDomain
-        }
-        Err(e) if e.is_no_records_found() => {
-            tracing::info!(query = %name, "Upstream returned NODATA");
-            UpstreamResolution::Nodata
-        }
-        Err(e) => {
-            tracing::warn!(query = %name, error = %e, "Upstream lookup failed; returning SERVFAIL");
-            UpstreamResolution::ServFail
-        }
+        Err(e) => match e.kind() {
+            ResolveErrorKind::NoRecordsFound { response_code, .. }
+                if *response_code == ResponseCode::NXDomain => {
+                tracing::info!(query = %name, "Upstream returned NXDOMAIN");
+                UpstreamResolution::NxDomain
+            }
+            ResolveErrorKind::NoRecordsFound { .. } => {
+                tracing::info!(query = %name, "Upstream returned NODATA");
+                UpstreamResolution::Nodata
+            }
+            _ => {
+                tracing::warn!(query = %name, error = %e, "Upstream lookup failed; returning SERVFAIL");
+                UpstreamResolution::ServFail
+            }
+        },
     }
 }
