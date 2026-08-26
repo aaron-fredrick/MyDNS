@@ -127,37 +127,6 @@ impl AppConfig {
                 .map_err(|e| anyhow::anyhow!("Invalid router_dns: {}", e))?,
         })
     }
-
-    /// Compatibility helper for tests and callers that previously used the environment.
-    /// Prefer [`Self::from_config_file`] for application startup.
-    #[allow(non_snake_case)]
-    pub fn fromEnv() -> Self {
-        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| generateSecret(64));
-
-        Self {
-            bind_host: envParse("BIND_HOST", IpAddr::V4(Ipv4Addr::LOCALHOST)),
-            dns_port: envParse("DNS_PORT", 53),
-            http_host: envParse("HTTP_HOST", IpAddr::V4(Ipv4Addr::LOCALHOST)),
-            http_port: envParse("HTTP_PORT", 8080),
-            cors_domains: vec!["mydns.local".to_string()],
-            db_path: std::env::var("DB_PATH").unwrap_or_else(|_| "mydns.db".to_string()),
-            jwt_secret,
-            admin_username: std::env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string()),
-            admin_password: std::env::var("ADMIN_PASSWORD")
-                .unwrap_or_else(|_| "changeme123".to_string()),
-            resolver_priority: std::env::var("RESOLVER_PRIORITY")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_default(),
-            cloudflare_dns: std::env::var("CLOUDFLARE_DNS")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or_else(|| SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 53)),
-            router_dns: std::env::var("ROUTER_DNS")
-                .ok()
-                .and_then(|s| s.parse().ok()),
-        }
-    }
 }
 
 fn parse_ini(contents: &str) -> anyhow::Result<std::collections::HashMap<String, String>> {
@@ -225,15 +194,6 @@ where
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-#[allow(non_snake_case)]
-fn envParse<T: FromStr>(key: &str, default: T) -> T {
-    std::env::var(key)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default)
-}
-
-#[allow(non_snake_case)]
 pub fn generateSecret(len: usize) -> String {
     use rand::Rng;
     rand::thread_rng()
