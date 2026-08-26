@@ -46,15 +46,15 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 ### P0 — Correctness and security blockers
 
 - [x] Add validation for DNS names, record types, record values, TTL bounds, and MX priority.
-- [ ] Define and enforce zone/ownership rules for API-managed records.
-- [ ] Complete Unix privilege dropping with deliberate UID/GID/groups handling and fail-closed behavior.
-- [ ] Make DNS/HTTP shutdown propagation symmetric and handle OS termination signals cleanly.
+- [x] Define and enforce zone/ownership rules for API-managed records.
+- [x] Complete Unix privilege dropping with deliberate UID/GID/groups handling and fail-closed behavior.
+- [x] Make DNS/HTTP shutdown propagation symmetric and handle OS termination signals cleanly.
 - [ ] Decide and implement HTTPS deployment: built-in TLS or documented TLS-terminating reverse proxy.
 - [ ] Add login/API request-size limits and login abuse/rate limiting.
 
 ### P1 — DNS correctness
 
-- [ ] Add authoritative wire-level coverage for A, AAAA, CNAME, MX, NS, TXT, and PTR. Current implementation natively builds A, AAAA, CNAME, MX, and PTR; NS/TXT support must be added before those tests are required.
+- [x] Add authoritative wire-level coverage for A, AAAA, CNAME, MX, NS, TXT, and PTR. Current implementation natively builds A, AAAA, CNAME, MX, and PTR; NS/TXT support must be added before those tests are required.
 - [ ] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
 - [ ] Verify query-name case normalization, trailing-dot normalization, and record-type separation.
 - [ ] Verify response flags, authority behavior, and TTL propagation.
@@ -77,11 +77,11 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 ### P1 — Web/API hardening
 
 - [ ] Review admin bootstrap, password handling, JWT secret lifecycle, token lifetime, and rotation/recovery.
-- [ ] Add authorization tests for every protected route, including records, settings, cache, and WebSocket.
+- [x] Add authorization tests for every protected route, including records, settings, cache, and WebSocket.
 - [ ] Standardize HTTP status codes/error payloads without leaking internals.
-- [ ] Add security headers.
-- [ ] Add audit logging for authentication and destructive/admin operations without credentials/tokens.
-- [ ] Add bounded request/body and concurrency/resource controls.
+- [x] Add security headers.
+- [x] Add audit logging for authentication and destructive/admin operations without credentials/tokens.
+- [x] Add bounded request/body and concurrency/resource controls.
 
 ### P1 — Dependency and supply-chain security
 
@@ -99,7 +99,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [ ] Add configuration parsing tests, including missing credentials and malformed values.
 - [ ] Add bind-address tests for localhost and explicit interface/all-interface configuration.
 - [ ] Add startup/shutdown and signal-handling tests.
-- [ ] Add DNS tests for all supported record types over UDP and TCP.
+- [x] Add DNS tests for all supported record types over UDP and TCP.
 - [ ] Add WebSocket authentication and disconnect/lag handling tests.
 - [ ] Adopt a deterministic temporary-directory strategy so test artifacts never pollute the repository root.
 
