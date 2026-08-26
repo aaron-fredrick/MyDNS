@@ -1,0 +1,25 @@
+# MyDNS production configuration
+# Copy this file to config.ini and replace the admin credentials.
+
+# DNS listener. Defaults to localhost for safe local deployment.
+bind_host = 127.0.0.1
+dns_port = 53
+
+# Management dashboard listener.
+http_host = 127.0.0.1
+http_port = 8080
+
+# SQLite database.
+db_path = mydns.db
+
+# Optional. If omitted, MyDNS generates and persists a JWT secret.
+# jwt_secret = replace-with-a-long-random-secret
+
+# REQUIRED. MyDNS refuses to start if either value is missing or empty.
+admin_username = admin
+admin_password = CHANGE_ME
+
+# Optional upstream settings.
+resolver_priority = cloudflare_first
+cloudflare_dns = 1.1.1.1:53
+# router_dns = 192.168.1.1:53
