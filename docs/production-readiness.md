@@ -8,15 +8,14 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ## Current baseline
 
-- `cargo fmt --check` passes locally after the latest formatting cleanup.
+- `cargo fmt --check` passes locally.
 - `cargo check` passes locally.
 - `cargo clippy -- -D warnings` passes locally.
-- Unit tests: 22 passed in the latest reported full run.
-- HTTP/API integration tests: 7 passed in the latest reported full run.
-- DNS wire integration tests: 4 passed in the latest reported full run, covering UDP positive/NODATA/NXDOMAIN, TCP positive answers, CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
-- Persistent cache lifecycle integration tests: 4/5 passed in the latest full run; the concurrent-upsert test exposed an intermittent/contended SQLite `database is locked` failure.
+- Latest full test run: 22 unit tests passed, 5 cache-persistence tests passed, 4 DNS integration tests passed, and 7 HTTP/API integration tests passed before the intermittent cache concurrency failure.
+- The focused `cache_persistence` target passes repeatedly, including 5 consecutive runs.
+- The complete `cargo test` suite still exposes an intermittent SQLite `database is locked` failure in `test_concurrent_cache_upserts_remain_deduplicated`.
+- SQLite concurrency hardening has been applied on `production-readiness` using WAL journaling plus a bounded 5-second busy timeout, but the full-suite race is not yet considered closed.
 - API validation unit and HTTP-level tests pass.
-- A SQLite concurrency hardening change has been applied on `production-readiness`: WAL journaling plus a 5-second busy timeout. It is pending local verification before being marked complete.
 - `cargo audit` remains outstanding.
 - `production-readiness` is the active implementation branch.
 
@@ -28,7 +27,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] DNS resolution distinguishes positive, NODATA, NXDOMAIN, and SERVFAIL outcomes.
 - [x] Upstream resolver failures are not collapsed into NXDOMAIN.
 - [x] Authoritative CNAME chasing is bounded and loop-safe.
-- [x] Wire-level DNS coverage exists for UDP/TCP, NODATA, NXDOMAIN, CNAME chains, CNAME-only responses, and CNAME loops.
+- [x] Wire-level DNS coverage exists for UDP/TCP, NODATA, NXDOMAIN, CNAME chains, CNAME-only responses, multi-hop chains, and CNAME loops.
 - [x] Persistent cache insertion deduplicates records using a database uniqueness constraint.
 - [x] Persistent cache lookups enforce TTL expiration.
 - [x] CNAME-dependent persistent cache invalidation is implemented.
@@ -40,7 +39,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ### In progress
 
-- [ ] Harden SQLite concurrent-write behavior and verify the concurrent persistent-cache test under contention. Current fix configures WAL mode and a bounded 5-second busy timeout; local test verification is still required.
+- [ ] **Close the SQLite concurrency gate.** WAL + 5-second busy timeout improved isolated concurrent tests, but the full `cargo test` suite still intermittently hits `database is locked` in the concurrent cache-upsert test. Do not mark this complete based only on focused-test passes.
 
 ## Remaining priority order
 
@@ -70,9 +69,10 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] Negative-cache restart persistence test.
 - [x] Expired-cache visibility/pruning test.
 - [x] Explicit persistent cache clear test.
-- [ ] Verify concurrent identical cache upserts with SQLite contention handling; do not mark complete until the focused test and full suite pass.
+- [ ] **Concurrent identical cache upserts must pass reliably in the complete suite.** Investigate pool/connection lifecycle, SQLite locking behavior, transaction duration, and test isolation. Prefer fixing the underlying concurrency behavior over weakening/removing the test.
 - [ ] Integrate the lifecycle suite into the normal CI matrix.
 - [ ] Make all integration-test temporary database cleanup failure-safe.
+- [ ] Ensure generated database/journal artifacts never remain in the repository working tree after tests.
 
 ### P1 — Web/API hardening
 
@@ -177,17 +177,33 @@ A production release is complete only when:
 
 ## Immediate next steps
 
-1. Pull the latest `production-readiness` branch containing the SQLite concurrency hardening.
-2. Run `cargo fmt --check`.
-3. Run `cargo check`.
-4. Run `cargo clippy -- -D warnings`.
-5. Run `cargo test --test cache_persistence -- --nocapture` and confirm all 5 persistence tests pass.
-6. Repeat the focused cache test several times to check that the lock failure is not intermittent.
-7. Run `cargo test` and confirm the complete suite is green.
-8. Remove generated `test_*.db` / `test_dns_*.db` artifacts; do not commit them.
-9. If all verification passes, commit/push the SQLite hardening and mark the cache concurrency item complete.
-10. Next implementation tranche: **zone/ownership model + enforcement**, followed by Unix privilege and shutdown hardening.
-11. Run `cargo audit` before the next release-security gate and record the advisory disposition in this plan.
+1. Pull the latest `production-readiness` branch.
+2. Remove any leftover `test_*.db`, `test_dns_*.db`, and `*.db-journal` artifacts; never commit them.
+3. Inspect the SQLite connection/pool initialization and persistent-cache upsert path.
+4. Reproduce the lock failure with the **full** `cargo test` suite, not only the focused cache target.
+5. Fix the underlying SQLite contention/transaction/pool lifecycle issue. Do not weaken the concurrency assertion merely to make the test pass.
+6. Run `cargo fmt --check`.
+7. Run `cargo check`.
+8. Run `cargo clippy -- -D warnings`.
+9. Run `cargo test --test cache_persistence -- --nocapture` repeatedly.
+10. Run the complete `cargo test` suite repeatedly until the concurrency test is stable.
+11. Verify the working tree is clean of generated runtime artifacts.
+12. Commit and push the verified SQLite fix.
+13. Only after the cache gate is genuinely stable, proceed to the next P0 item: **zone/ownership enforcement**.
+14. Run `cargo audit` as the next security gate and record advisory dispositions in this document.
+
+## Handoff state
+
+The current blocking issue for the next engineer/agent is **SQLite concurrent-write reliability**. The isolated persistence test can pass repeatedly, but the complete suite has demonstrated an intermittent `database is locked` failure. Treat the cache concurrency gate as open until the full suite is consistently green.
+
+Recommended investigation order:
+
+1. SQLite connection initialization and PRAGMA settings.
+2. SQLx pool size, acquisition/release behavior, and test pool lifecycle.
+3. Cache upsert transaction scope and duration.
+4. SQLite busy timeout/WAL interaction and whether retries are required for transient contention.
+5. Parallel integration-test database isolation and cleanup.
+6. Repeat the complete suite enough times to establish stability.
 
 ## Execution order
 
