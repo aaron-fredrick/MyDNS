@@ -92,7 +92,7 @@ pub async fn updateRecord(
 
     let old = records::getRecord(&state.db, id)
         .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
+        .ok_or_else(|| ApiError::NotFound("Record not found".into()))?;
 
     let old_name = old.name.clone();
     let mut invalidation_names =

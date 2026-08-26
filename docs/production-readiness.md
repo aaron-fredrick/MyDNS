@@ -78,7 +78,7 @@ None
 
 ### P1 — Web/API hardening
 
-- [ ] Review admin bootstrap, password handling, JWT secret lifecycle, token lifetime, and rotation/recovery.
+- [x] Review admin bootstrap, password handling, JWT secret lifecycle, token lifetime, and rotation/recovery.
 - [x] Add authorization tests for every protected route, including records, settings, cache, and WebSocket.
 - [ ] Standardize HTTP status codes/error payloads without leaking internals.
 - [x] Add security headers.
