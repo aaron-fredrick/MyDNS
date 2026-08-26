@@ -11,9 +11,10 @@ Bring MyDNS to a production-ready baseline by addressing correctness, security, 
 - `cargo fmt --check` passes.
 - `cargo check` passes.
 - `cargo clippy -- -D warnings` passes.
-- Unit and integration tests pass: 17 total tests, 0 failures.
+- Unit and integration tests pass: 18 total tests, 0 failures.
+- Release tests pass, including release CORS restriction coverage.
 - Manual DNS smoke testing has covered A, AAAA, MX, NS, TXT, CNAME, PTR, NXDOMAIN, and cache-hit behavior.
-- CNAME behavior has been compared against Cloudflare DNS for both working and non-working examples.
+- Manual release CORS testing confirms the configured HTTP origin is accepted and an unrelated origin is rejected.
 - `production-readiness` is the active implementation branch; work continues on this branch.
 
 ## Decisions
@@ -30,7 +31,7 @@ Bring MyDNS to a production-ready baseline by addressing correctness, security, 
 ### Web/CORS
 
 - Debug builds may continue to use `CorsLayer::permissive()` for development convenience.
-- Release builds must use an explicit CORS allowlist; `permissive()` is not allowed.
+- Release builds use an explicit CORS allowlist; `permissive()` is not allowed.
 - By default, release CORS origins are derived from the configured HTTP bind address plus the default dashboard hostname `mydns.local` where applicable.
 - If HTTP binds to `0.0.0.0`, release CORS may include the machine's usable local interface IP origins plus `mydns.local`.
 - If a domain list is configured, that list is authoritative for domain-based origins rather than automatically allowing arbitrary hostnames.
@@ -54,18 +55,18 @@ Bring MyDNS to a production-ready baseline by addressing correctness, security, 
 - [x] Move DNS and HTTP bind configuration to `config.ini` with localhost-safe defaults.
 - [x] Remove insecure default admin username/password behavior and fail fast when either credential is missing.
 - [x] Restrict `.env` handling to debug/development builds only.
-- [ ] Implement release CORS allowlist generation from bind address and configured domains.
+- [x] Implement release CORS allowlist generation from bind address and configured domains.
 - [ ] Verify negative-cache persistence and invalidation across process restarts.
 - [ ] Review all privileged operations and privilege-drop ordering for startup/shutdown races.
 
 ### P1 — Web/API hardening
 
 - [ ] Review admin authentication/bootstrap behavior and secret handling after the configuration migration.
-- [ ] Replace release `CorsLayer::permissive()` with explicit origin/method/header policy.
+- [x] Replace release `CorsLayer::permissive()` with explicit origin/method/header policy.
 - [ ] Validate DNS record names, types, values, TTLs, and zone boundaries consistently at the API/database boundary.
 - [ ] Review error responses for information leakage and consistent HTTP status handling.
 - [ ] Add authorization tests for every protected API surface.
-- [ ] Add regression tests for debug-permissive versus release-restricted CORS behavior.
+- [x] Add regression tests for debug-permissive versus release-restricted CORS behavior.
 
 ### P1 — DNS correctness and resolver behavior
 
@@ -104,9 +105,9 @@ Bring MyDNS to a production-ready baseline by addressing correctness, security, 
 - [ ] Add API validation and authorization tests.
 - [ ] Add configuration parsing and fail-fast startup tests.
 - [ ] Add bind-address/default-exposure tests.
-- [ ] Add release CORS origin-generation tests.
+- [x] Add release CORS origin-generation tests.
 - [ ] Add CI workflow covering format, check, clippy, tests, and release build.
-- [ ] Run the complete release smoke test against `target/release/mydns.exe`.
+- [x] Run the complete release smoke test against `target/release/mydns.exe`.
 
 ## Acceptance criteria
 
@@ -125,11 +126,11 @@ A production-readiness pass is complete when:
 ## Execution order
 
 1. ~~Implement `config.ini` parsing and configuration precedence.~~ **Done.**
-2. Implement localhost-safe DNS/HTTP binding with explicit override support.
+2. ~~Implement localhost-safe DNS/HTTP binding with explicit override support.~~ **Done.**
 3. ~~Remove insecure admin credential defaults and add fail-fast validation.~~ **Done.**
-4. Implement debug/release CORS behavior and default/configured domain handling.
-5. Add configuration, binding, CORS, and authentication regression tests.
-6. Complete dependency vulnerability audit and targeted upgrades.
+4. ~~Implement debug/release CORS behavior and default/configured domain handling.~~ **Done.**
+5. ~~Add configuration, binding, CORS, and authentication regression tests.~~ **CORS/auth coverage done; configuration/binding test expansion remains.**
+6. **Next: complete the dependency vulnerability audit and targeted upgrades.**
 7. Continue DNS/cache correctness, persistence, privilege, and operational hardening.
 8. Verify CI and release smoke testing.
 9. Run a final clean-tree audit and tag the production-ready commit.
