@@ -28,8 +28,8 @@ pub fn checkAndExitIfInsufficient(dns_port: u16, http_port: u16) {
 /// failure to drop privileges is returned to the caller so startup fails closed.
 #[allow(dead_code)]
 #[allow(non_snake_case)]
-pub fn dropPrivileges() -> anyhow::Result<()> {
-    dropPrivilegesImpl()
+pub fn dropPrivileges(user: &str, group: &str) -> anyhow::Result<()> {
+    dropPrivilegesImpl(user, group)
 }
 
 // ── platform implementations ──────────────────────────────────────────────────
@@ -101,23 +101,37 @@ fn elevationHint() -> &'static str {
 
 #[allow(non_snake_case)]
 #[cfg(unix)]
-fn dropPrivilegesImpl() -> anyhow::Result<()> {
-    use nix::unistd::{setuid, User};
+fn dropPrivilegesImpl(user_name: &str, group_name: &str) -> anyhow::Result<()> {
+    use nix::unistd::{setgroups, setresgid, setresuid, Group, User};
 
-    match User::from_name("nobody").map_err(|e| anyhow::anyhow!(e))? {
-        Some(user) => {
-            setuid(user.uid)?;
-            tracing::info!(uid = %user.uid, "Dropped privileges to 'nobody'");
-        }
-        None => Err(anyhow::anyhow!("Required Unix user 'nobody' was not found"))?,
-    }
+    let group = Group::from_name(group_name)
+        .map_err(|e| anyhow::anyhow!("Error looking up Unix group '{}': {}", group_name, e))?
+        .ok_or_else(|| anyhow::anyhow!("Required Unix group '{}' was not found", group_name))?;
+
+    let user = User::from_name(user_name)
+        .map_err(|e| anyhow::anyhow!("Error looking up Unix user '{}': {}", user_name, e))?
+        .ok_or_else(|| anyhow::anyhow!("Required Unix user '{}' was not found", user_name))?;
+
+    // Drop supplemental groups
+    setgroups(&[group.gid])
+        .map_err(|e| anyhow::anyhow!("Failed to drop supplemental groups: {}", e))?;
+
+    // Drop GID first (because setuid might strip capability to change GID later)
+    setresgid(group.gid, group.gid, group.gid)
+        .map_err(|e| anyhow::anyhow!("Failed to drop group privileges to {}: {}", group_name, e))?;
+
+    // Drop UID
+    setresuid(user.uid, user.uid, user.uid)
+        .map_err(|e| anyhow::anyhow!("Failed to drop user privileges to {}: {}", user_name, e))?;
+
+    tracing::info!(uid = %user.uid, gid = %group.gid, "Dropped privileges to {}:{}", user_name, group_name);
     Ok(())
 }
 
 #[allow(non_snake_case)]
 #[cfg(not(unix))]
 #[allow(dead_code)]
-fn dropPrivilegesImpl() -> anyhow::Result<()> {
+fn dropPrivilegesImpl(_user: &str, _group: &str) -> anyhow::Result<()> {
     tracing::warn!("Privilege dropping is not supported on this platform");
     Ok(())
 }

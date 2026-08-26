@@ -517,14 +517,16 @@ pub fn buildRecord(
     ttl: u32,
     priority: Option<i64>,
 ) -> Option<Record> {
-    use hickory_proto::rr::rdata::{A, AAAA, CNAME, MX, PTR};
+    use hickory_proto::rr::rdata::{A, AAAA, CNAME, MX, NS, PTR, TXT};
     let fqdn: Name = name.parse().ok()?;
     let rdata = match rtype {
         RecordType::A => RData::A(A(value.parse().ok()?)),
         RecordType::AAAA => RData::AAAA(AAAA(value.parse().ok()?)),
         RecordType::CNAME => RData::CNAME(CNAME(value.parse().ok()?)),
         RecordType::MX => RData::MX(MX::new(priority.unwrap_or(10) as u16, value.parse().ok()?)),
+        RecordType::NS => RData::NS(NS(value.parse().ok()?)),
         RecordType::PTR => RData::PTR(PTR(value.parse().ok()?)),
+        RecordType::TXT => RData::TXT(TXT::new(vec![value.to_string()])),
         _ => return None,
     };
     let mut record = Record::new();

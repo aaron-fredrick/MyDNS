@@ -33,8 +33,11 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
     // The privileged bind must happen before this process drops its Unix
     // privileges. The sockets remain usable by the unprivileged process.
     #[cfg(unix)]
-    crate::privileges::dropPrivileges()
-        .context("Failed to drop Unix privileges after binding DNS sockets")?;
+    {
+        let cfg = state.config.read().await;
+        crate::privileges::dropPrivileges(&cfg.run_as_user, &cfg.run_as_group)
+            .context("Failed to drop Unix privileges after binding DNS sockets")?;
+    }
 
     let handler = DnsHandler::new(state);
     let mut server = ServerFuture::new(handler);

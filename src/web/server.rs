@@ -7,14 +7,21 @@ use anyhow::Context;
 #[cfg(not(debug_assertions))]
 use axum::http::{header, HeaderValue, Method};
 use axum::{
+    extract::DefaultBodyLimit,
+    http::{header as http_header, HeaderName, HeaderValue as HV},
     routing::{delete, get, post, put},
     Router,
 };
 use tokio_util::sync::CancellationToken;
+use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::state::AppState;
 use crate::web::{auth, cache_api, dashboard, records_api, settings_api, stats_api, ws};
+
+/// Maximum allowed HTTP request body size (64 KiB).
+const MAX_BODY_BYTES: usize = 64 * 1024;
 
 /// Constructs the full Axum router and binds the HTTP server.
 pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Result<()> {
@@ -43,12 +50,36 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
         )
         .route("/cache/:name/:rtype", delete(cache_api::deleteCacheEntry));
 
+    let security_headers = ServiceBuilder::new()
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-content-type-options"),
+            HV::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("x-frame-options"),
+            HV::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_static("referrer-policy"),
+            HV::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            http_header::CONTENT_SECURITY_POLICY,
+            // Dashboard-appropriate CSP: allow same-origin scripts/styles,
+            // websocket connections back to self, and nothing else.
+            HV::from_static(
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:;",
+            ),
+        ));
+
     let app = Router::new()
         .route("/", get(dashboard::serveDashboard))
         .route("/style.css", get(dashboard::serveStyles))
         .route("/app.js", get(dashboard::serveScripts))
         .route("/ws", get(ws::wsHandler))
         .nest("/api/v1", api_routes)
+        .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
+        .layer(security_headers)
         .layer(cors)
         .with_state(state);
 

@@ -100,9 +100,10 @@ fn validate_name(raw: &str) -> Result<(), ApiError> {
 
 fn validate_record_type(raw: &str) -> Result<(), ApiError> {
     match raw.trim().to_ascii_uppercase().as_str() {
-        "A" | "AAAA" | "CNAME" | "MX" | "PTR" => Ok(()),
+        "A" | "AAAA" | "CNAME" | "MX" | "NS" | "PTR" | "TXT" => Ok(()),
         _ => Err(ApiError::BadRequest(
-            "Unsupported record type; supported types are A, AAAA, CNAME, MX, and PTR".into(),
+            "Unsupported record type; supported types are A, AAAA, CNAME, MX, NS, PTR, and TXT"
+                .into(),
         )),
     }
 }
@@ -132,16 +133,29 @@ fn validate_value(record_type: &str, value: &str) -> Result<(), ApiError> {
         "AAAA" => value.parse::<Ipv6Addr>().map(|_| ()).map_err(|_| {
             ApiError::BadRequest("AAAA record value must be a valid IPv6 address".into())
         }),
-        "CNAME" | "PTR" | "MX" => {
+        "CNAME" | "PTR" | "MX" | "NS" => {
             let target = value.trim_end_matches('.');
             if target.is_empty() {
                 return Err(ApiError::BadRequest(
                     "Record target must not be empty".into(),
                 ));
             }
-            format!("{}.", target).parse::<Name>().map_err(|_| {
+            format!("{target}.").parse::<Name>().map_err(|_| {
                 ApiError::BadRequest("Record target must be a valid DNS name".into())
             })?;
+            Ok(())
+        }
+        "TXT" => {
+            if value.is_empty() {
+                return Err(ApiError::BadRequest(
+                    "TXT record value must not be empty".into(),
+                ));
+            }
+            if value.len() > 255 {
+                return Err(ApiError::BadRequest(
+                    "TXT record value must not exceed 255 bytes".into(),
+                ));
+            }
             Ok(())
         }
         _ => unreachable!("record type validated before value"),
@@ -177,6 +191,8 @@ mod tests {
         assert!(validate_create_record(&create("AAAA", "2001:db8::1")).is_ok());
         assert!(validate_create_record(&create("CNAME", "target.local.")).is_ok());
         assert!(validate_create_record(&create("PTR", "host.local.")).is_ok());
+        assert!(validate_create_record(&create("NS", "ns1.example.com.")).is_ok());
+        assert!(validate_create_record(&create("TXT", "v=spf1 include:example.com ~all")).is_ok());
         let mut mx = create("MX", "mail.local.");
         mx.priority = Some(10);
         assert!(validate_create_record(&mx).is_ok());
@@ -192,7 +208,9 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_types_and_bad_ttls() {
-        assert!(validate_create_record(&create("TXT", "hello")).is_err());
+        // SRV and SPF are not supported record types.
+        assert!(validate_create_record(&create("SRV", "hello")).is_err());
+        assert!(validate_create_record(&create("SPF", "hello")).is_err());
         let mut invalid = create("A", "192.0.2.1");
         invalid.ttl = 0;
         assert!(validate_create_record(&invalid).is_err());
@@ -205,5 +223,17 @@ mod tests {
         let mut invalid = create("A", "192.0.2.1");
         invalid.priority = Some(10);
         assert!(validate_create_record(&invalid).is_err());
+    }
+
+    #[test]
+    fn rejects_oversized_txt_value() {
+        // 256 bytes exceeds the single-string limit.
+        let long_value = "x".repeat(256);
+        assert!(validate_create_record(&create("TXT", &long_value)).is_err());
+    }
+
+    #[test]
+    fn rejects_empty_txt_value() {
+        assert!(validate_create_record(&create("TXT", "")).is_err());
     }
 }

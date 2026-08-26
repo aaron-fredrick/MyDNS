@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // ── 6. Privilege check (post-config) ──────────────────────────────────────
+    // ── 5. Privilege check (post-config, pre-bind) ───────────────────────────
     privileges::checkAndExitIfInsufficient(cfg.dns_port, cfg.http_port);
 
     // ── 6. Seed admin user ────────────────────────────────────────────────────
@@ -94,24 +94,38 @@ async fn main() -> anyhow::Result<()> {
         db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await?;
         tracing::info!(username = %cfg.admin_username, "Admin user seeded");
     }
+    // Clear plaintext password from memory after seeding — it is never
+    // needed again and must not linger in configuration state.
+    cfg.admin_password.clear();
 
-    // ── 6. Build upstream resolver ────────────────────────────────────────────
+    // ── 7. Build upstream resolver ────────────────────────────────────────────
     let upstream = UpstreamResolver::fromConfig(
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
     )?;
 
-    // ── 7. Shared state ───────────────────────────────────────────────────────
+    // ── 8. Shared state ───────────────────────────────────────────────────────
     let cancel = CancellationToken::new();
     let state = state::AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone());
 
-    // ── 8. Background cache pruner ────────────────────────────────────────────
+    // ── 9. Background cache pruner ────────────────────────────────────────────
     cache::spawnPruner(Arc::clone(&state.cache), pool.clone(), cancel.clone());
 
-    // ── 9. Spawn DNS and HTTP servers with fate-sharing ───────────────────────
-    // The DNS server binds its privileged sockets before dropping Unix
-    // privileges. The process then continues with reduced privileges.
+    // ── 10. OS signal listener ────────────────────────────────────────────────
+    // Cancels all background tasks and servers on Ctrl+C / SIGINT / SIGTERM.
+    {
+        let signal_cancel = cancel.clone();
+        tokio::spawn(async move {
+            await_shutdown_signal().await;
+            tracing::info!("Shutdown signal received — stopping MyDNS");
+            signal_cancel.cancel();
+        });
+    }
+
+    // ── 11. Spawn DNS server ──────────────────────────────────────────────────
+    // The DNS server binds its privileged sockets first. On Unix, privileges
+    // are dropped after the socket is bound.
     let dns_state = Arc::clone(&state);
     let dns_cancel = cancel.clone();
     let dns_handle = tokio::spawn(async move {
@@ -122,16 +136,46 @@ async fn main() -> anyhow::Result<()> {
         dns_cancel.cancel();
     });
 
+    // (Privilege dropping happens inside the DNS server task after sockets are bound)
+
+    // ── 12. Spawn HTTP server ─────────────────────────────────────────────────
     let http_cancel = cancel.clone();
     let http_handle = tokio::spawn(async move {
-        if let Err(e) = web::server::run(Arc::clone(&state), http_cancel).await {
+        if let Err(e) = web::server::run(Arc::clone(&state), http_cancel.clone()).await {
             tracing::error!(error = %e, "HTTP server terminated with error");
         }
+        // Ensure DNS also exits if HTTP is the first to stop.
+        http_cancel.cancel();
     });
 
-    // Cancel propagates: whichever of DNS/HTTP exits first signals the other.
+    // Both servers share the same cancellation token; whichever exits first
+    // (or a signal arrives) causes the other to stop cleanly.
     let _ = tokio::join!(dns_handle, http_handle);
 
     tracing::info!("MyDNS shutdown complete");
     Ok(())
+}
+
+/// Resolves when the process receives a shutdown signal.
+///
+/// On Unix this waits for SIGINT or SIGTERM. On Windows it waits for Ctrl+C.
+async fn await_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut sigint =
+            signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
+        let mut sigterm =
+            signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+        tokio::select! {
+            _ = sigint.recv() => {}
+            _ = sigterm.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to register Ctrl+C handler");
+    }
 }

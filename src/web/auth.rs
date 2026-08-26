@@ -52,9 +52,14 @@ pub async fn login(
     let hash = findUserHash(&state.db, &body.username)
         .await
         .context("DB query failed")?
-        .ok_or_else(|| ApiError::Unauthorized("Invalid credentials".into()))?;
+        .ok_or_else(|| {
+            tracing::warn!(username = %body.username, "Login attempt with unknown username");
+            ApiError::Unauthorized("Invalid credentials".into())
+        })?;
 
-    verify_password(&body.password, &hash)?;
+    verify_password(&body.password, &hash).inspect_err(|_e| {
+        tracing::warn!(username = %body.username, "Login attempt with wrong password");
+    })?;
 
     let token = issue_token(&body.username, &state.config.read().await.jwt_secret)
         .context("Token issuance failed")?;

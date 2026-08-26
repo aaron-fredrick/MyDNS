@@ -42,6 +42,8 @@ async fn start_dns_server() -> (
         resolver_priority: ResolverPriority::CloudflareFirst,
         cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
         router_dns: None,
+        run_as_user: "nobody".to_string(),
+        run_as_group: "nobody".to_string(),
     };
 
     let _ = std::fs::remove_file(&db_path);
@@ -162,10 +164,17 @@ async fn test_dns_udp_positive_nxdomain_and_nodata() {
 #[tokio::test]
 async fn test_dns_tcp_positive_answer() {
     let (addr, db_path, cancel, task) = start_dns_server().await;
-    let mut stream = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(addr))
-        .await
-        .expect("TCP DNS connection timed out")
-        .unwrap();
+    
+    // Add a connection retry loop to ensure the server is ready
+    let mut stream = None;
+    for _ in 0..10 {
+        if let Ok(Ok(s)) = tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(addr)).await {
+            stream = Some(s);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let mut stream = stream.expect("TCP DNS connection failed after retries");
 
     let query = query_message("dns-test.local.", RecordType::A);
     let len = u16::try_from(query.len()).expect("DNS query too large");

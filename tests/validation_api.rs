@@ -23,6 +23,8 @@ async fn start_test_server() -> (String, String) {
         resolver_priority: mydns::config::ResolverPriority::CloudflareFirst,
         cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
         router_dns: None,
+        run_as_user: "nobody".to_string(),
+        run_as_group: "nobody".to_string(),
     };
 
     let _ = std::fs::remove_file(&db_path);
@@ -88,7 +90,7 @@ async fn test_record_api_rejects_invalid_inputs() {
         ),
         (
             "unsupported type",
-            json!({"name":"bad.local","record_type":"TXT","value":"hello","ttl":300}),
+            json!({"name":"bad.local","record_type":"SRV","value":"hello","ttl":300}),
         ),
         (
             "zero TTL",
@@ -167,7 +169,7 @@ async fn test_record_api_validates_effective_update_state() {
     let invalid_type = client
         .put(format!("{base}/api/v1/records/{id}"))
         .header("Authorization", &auth)
-        .json(&json!({"record_type":"TXT"}))
+        .json(&json!({"record_type":"SRV"}))
         .send()
         .await
         .unwrap();

@@ -66,6 +66,10 @@ pub struct AppConfig {
     pub cloudflare_dns: SocketAddr,
     /// Router/gateway DNS address (auto-detected on startup, can be overridden).
     pub router_dns: Option<SocketAddr>,
+    /// Target Unix user to run as after binding privileged sockets.
+    pub run_as_user: String,
+    /// Target Unix group to run as after binding privileged sockets.
+    pub run_as_group: String,
 }
 
 impl AppConfig {
@@ -125,6 +129,14 @@ impl AppConfig {
                 .map(|v| v.parse())
                 .transpose()
                 .map_err(|e| anyhow::anyhow!("Invalid router_dns: {}", e))?,
+            run_as_user: values
+                .get("run_as_user")
+                .cloned()
+                .unwrap_or_else(|| "nobody".to_string()),
+            run_as_group: values
+                .get("run_as_group")
+                .cloned()
+                .unwrap_or_else(|| "nobody".to_string()),
         })
     }
 }
