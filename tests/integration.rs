@@ -189,7 +189,100 @@ async fn test_records_full_crud_cycle() {
     let _ = std::fs::remove_file(db_path);
 }
 
-// ── stats ─────────────────────────────────────────────────────────────────────
+#[tokio::test]
+async fn test_persistent_cache_upsert_deduplicates_records() {
+    let (_base, db_path) = start_test_server().await;
+    let pool = db::init(&db_path).await.expect("Failed to reopen test DB");
+
+    db::records::insertCache(&pool, "cache.test.local", "A", "10.0.0.1", 60, None)
+        .await
+        .unwrap();
+    db::records::insertCache(&pool, "CACHE.TEST.LOCAL.", "a", "10.0.0.1", 120, None)
+        .await
+        .unwrap();
+
+    let rows = db::records::getCache(&pool, "cache.test.local.", "A")
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 1, "Identical cache records must be deduplicated");
+    assert_eq!(rows[0].ttl, 120, "Upsert should refresh TTL");
+
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[tokio::test]
+async fn test_cname_target_update_invalidates_dependent_cache() {
+    let (base, db_path) = start_test_server().await;
+    let c = client();
+    let token = loginToken(&c, &base).await;
+    let auth = format!("Bearer {}", token);
+
+    let target = c
+        .post(format!("{}/api/v1/records", &base))
+        .header("Authorization", &auth)
+        .json(&json!({
+            "name": "target.integration.local.",
+            "record_type": "A",
+            "value": "10.0.0.1",
+            "ttl": 300
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(target.status(), 200);
+    let target_id = target.json::<Value>().await.unwrap()["record"]["id"]
+        .as_i64()
+        .unwrap();
+
+    let alias = c
+        .post(format!("{}/api/v1/records", &base))
+        .header("Authorization", &auth)
+        .json(&json!({
+            "name": "alias.integration.local.",
+            "record_type": "CNAME",
+            "value": "target.integration.local.",
+            "ttl": 300
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(alias.status(), 200);
+
+    let pool = db::init(&db_path).await.expect("Failed to reopen test DB");
+    db::records::insertCache(
+        &pool,
+        "alias.integration.local",
+        "A",
+        "10.0.0.1",
+        300,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let before = db::records::getCache(&pool, "alias.integration.local", "A")
+        .await
+        .unwrap();
+    assert_eq!(before.len(), 1, "Expected dependent cache entry before update");
+
+    let res = c
+        .put(format!("{}/api/v1/records/{}", &base, target_id))
+        .header("Authorization", &auth)
+        .json(&json!({ "value": "10.0.0.2" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+
+    let after = db::records::getCache(&pool, "alias.integration.local", "A")
+        .await
+        .unwrap();
+    assert!(after.is_empty(), "Dependent CNAME cache must be invalidated");
+
+    let _ = std::fs::remove_file(db_path);
+}
+
+// ── stats ──────────────────────────────────────────────────────────────────────
 
 #[tokio::test]
 async fn test_stats_returned_without_auth() {
