@@ -8,6 +8,14 @@ use hickory_resolver::TokioAsyncResolver;
 
 use crate::config::ResolverPriority;
 
+#[derive(Debug)]
+pub enum UpstreamResolution {
+    Positive(Vec<Record>, u32),
+    Nodata,
+    NxDomain,
+    ServFail,
+}
+
 /// Attempts to detect the default gateway/router IP from the OS routing table.
 ///
 /// Returns the gateway IP as port-53 `SocketAddr`, or `None` if detection fails.
@@ -57,8 +65,6 @@ fn detectGatewayImpl() -> Option<IpAddr> {
     None
 }
 
-// ── resolver construction ─────────────────────────────────────────────────────
-
 #[allow(non_snake_case)]
 fn buildResolver(addr: SocketAddr) -> TokioAsyncResolver {
     let group = NameServerConfigGroup::from_ips_clear(&[addr.ip()], addr.port(), true);
@@ -69,16 +75,7 @@ fn buildResolver(addr: SocketAddr) -> TokioAsyncResolver {
     TokioAsyncResolver::tokio(config, opts)
 }
 
-// ── public struct ─────────────────────────────────────────────────────────────
-
 /// Forwards DNS queries to upstream servers in the configured priority order.
-///
-/// Resolution order depends on [`ResolverPriority`]:
-/// - `CloudflareFirst` → tries `1.1.1.1`, then the router gateway.
-/// - `RouterFirst`     → tries the router gateway, then `1.1.1.1`.
-///
-/// Successful responses are returned to the caller; caching at the correct TTL
-/// is done in [`crate::dns::handler`].
 pub struct UpstreamResolver {
     cloudflare: TokioAsyncResolver,
     router: Option<TokioAsyncResolver>,
@@ -90,8 +87,6 @@ pub struct UpstreamResolver {
 
 impl UpstreamResolver {
     #[allow(non_snake_case)]
-    /// Builds the resolver chain from config.  Gateway detection is attempted
-    /// here if `router_addr` is `None` in the config.
     pub fn fromConfig(
         priority: ResolverPriority,
         cloudflare_addr: SocketAddr,
@@ -117,22 +112,39 @@ impl UpstreamResolver {
         })
     }
 
-    /// Queries upstream servers in priority order. Returns the first successful
-    /// response as a tuple of `(records, ttl_seconds)`, or `None` if all fail.
-    pub async fn resolve(&self, name: &Name, rtype: RecordType) -> Option<(Vec<Record>, u32)> {
+    /// Queries upstream servers while preserving NXDOMAIN, NODATA and SERVFAIL.
+    pub async fn resolve(&self, name: &Name, rtype: RecordType) -> UpstreamResolution {
         let (first, second) = self.orderedResolvers();
 
-        if let Some(result) = queryResolver(first, name, rtype).await {
-            return Some(result);
+        match queryResolver(first, name, rtype).await {
+            UpstreamResolution::Positive(records, ttl) => return UpstreamResolution::Positive(records, ttl),
+            UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
+            UpstreamResolution::Nodata => {
+                if let Some(resolver) = second {
+                    match queryResolver(resolver, name, rtype).await {
+                        UpstreamResolution::Positive(records, ttl) => return UpstreamResolution::Positive(records, ttl),
+                        UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
+                        UpstreamResolution::Nodata => return UpstreamResolution::Nodata,
+                        UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
+                    }
+                }
+                return UpstreamResolution::Nodata;
+            }
+            UpstreamResolution::ServFail => {
+                if let Some(resolver) = second {
+                    match queryResolver(resolver, name, rtype).await {
+                        UpstreamResolution::Positive(records, ttl) => return UpstreamResolution::Positive(records, ttl),
+                        UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
+                        UpstreamResolution::Nodata => return UpstreamResolution::Nodata,
+                        UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
+                    }
+                }
+                return UpstreamResolution::ServFail;
+            }
         }
-        if let Some(resolver) = second {
-            return queryResolver(resolver, name, rtype).await;
-        }
-        None
     }
 
     #[allow(non_snake_case)]
-    /// Returns (primary, secondary) resolver references in priority order.
     fn orderedResolvers(&self) -> (&TokioAsyncResolver, Option<&TokioAsyncResolver>) {
         match self.priority {
             ResolverPriority::CloudflareFirst => (&self.cloudflare, self.router.as_ref()),
@@ -148,21 +160,31 @@ impl UpstreamResolver {
 }
 
 #[allow(non_snake_case)]
-/// Issues a lookup against a single resolver, returning `(records, min_ttl)`.
 async fn queryResolver(
     resolver: &TokioAsyncResolver,
     name: &Name,
     rtype: RecordType,
-) -> Option<(Vec<Record>, u32)> {
+) -> UpstreamResolution {
     match resolver.lookup(name.clone(), rtype).await {
         Ok(lookup) => {
             let records: Vec<Record> = lookup.records().to_vec();
+            if records.is_empty() {
+                return UpstreamResolution::Nodata;
+            }
             let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(300);
-            Some((records, ttl))
+            UpstreamResolution::Positive(records, ttl)
+        }
+        Err(e) if e.is_nx_domain() => {
+            tracing::info!(query = %name, "Upstream returned NXDOMAIN");
+            UpstreamResolution::NxDomain
+        }
+        Err(e) if e.is_no_records_found() => {
+            tracing::info!(query = %name, "Upstream returned NODATA");
+            UpstreamResolution::Nodata
         }
         Err(e) => {
-            tracing::warn!(query = %name, error = %e, "Upstream lookup failed");
-            None
+            tracing::warn!(query = %name, error = %e, "Upstream lookup failed; returning SERVFAIL");
+            UpstreamResolution::ServFail
         }
     }
 }
