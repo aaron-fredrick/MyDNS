@@ -1,12 +1,20 @@
 use anyhow::Context;
-use sqlx::SqlitePool;
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode},
+    SqlitePool,
+};
+use std::{str::FromStr, time::Duration};
 
 pub mod records;
 
 /// Initialises the SQLite connection pool and runs all DDL migrations.
 pub async fn init(db_path: &str) -> anyhow::Result<SqlitePool> {
-    let url = format!("sqlite://{}?mode=rwc", db_path);
-    let pool = SqlitePool::connect(&url)
+    let options = SqliteConnectOptions::from_str(&format!("sqlite://{}?mode=rwc", db_path))
+        .with_context(|| format!("Failed to parse SQLite database URL for '{}'", db_path))?
+        .journal_mode(SqliteJournalMode::Wal)
+        .busy_timeout(Duration::from_secs(5));
+
+    let pool = SqlitePool::connect_with(options)
         .await
         .with_context(|| format!("Failed to open SQLite database at '{}'", db_path))?;
 
