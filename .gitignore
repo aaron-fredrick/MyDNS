@@ -14,6 +14,9 @@ mydns.db-wal
 test_integration.db
 test_integration.db-shm
 test_integration.db-wal
+test_*.db
+test_*.db-shm
+test_*.db-wal
 .env
 logs/
 check_err.txt
