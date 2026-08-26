@@ -49,10 +49,22 @@ async fn start_dns_server() -> (
 
     for record in [
         ("dns-test.local", "A", "10.20.30.40"),
-        ("alias-one.dns-test.local", "CNAME", "alias-two.dns-test.local"),
+        (
+            "alias-one.dns-test.local",
+            "CNAME",
+            "alias-two.dns-test.local",
+        ),
         ("alias-two.dns-test.local", "CNAME", "dns-test.local"),
-        ("loop-one.dns-test.local", "CNAME", "loop-two.dns-test.local"),
-        ("loop-two.dns-test.local", "CNAME", "loop-one.dns-test.local"),
+        (
+            "loop-one.dns-test.local",
+            "CNAME",
+            "loop-two.dns-test.local",
+        ),
+        (
+            "loop-two.dns-test.local",
+            "CNAME",
+            "loop-one.dns-test.local",
+        ),
     ] {
         db::records::createRecord(
             &pool,
@@ -98,7 +110,12 @@ fn query_message(name: &str, record_type: RecordType) -> Vec<u8> {
     message.to_vec().expect("Failed to encode DNS query")
 }
 
-async fn udp_query(socket: &UdpSocket, addr: SocketAddr, name: &str, record_type: RecordType) -> Message {
+async fn udp_query(
+    socket: &UdpSocket,
+    addr: SocketAddr,
+    name: &str,
+    record_type: RecordType,
+) -> Message {
     socket
         .send_to(&query_message(name, record_type), addr)
         .await
@@ -117,20 +134,20 @@ async fn test_dns_udp_positive_nxdomain_and_nodata() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "dns-test.local.", RecordType::A).await;
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
     assert!(!response.answers().is_empty(), "Expected A answer");
 
     let response = udp_query(&socket, addr, "dns-test.local.", RecordType::AAAA).await;
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
     assert!(response.answers().is_empty(), "Expected NODATA response");
 
-    let response = udp_query(
-        &socket,
-        addr,
-        "missing.dns-test.local.",
-        RecordType::A,
-    )
-    .await;
+    let response = udp_query(&socket, addr, "missing.dns-test.local.", RecordType::A).await;
     assert_eq!(
         response.response_code(),
         hickory_proto::op::ResponseCode::NXDomain
@@ -187,15 +204,16 @@ async fn test_dns_udp_authoritative_cname_chain_and_cname_only() {
     let (addr, db_path, cancel, task) = start_dns_server().await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-    let response = udp_query(
-        &socket,
-        addr,
-        "alias-one.dns-test.local.",
-        RecordType::A,
-    )
-    .await;
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NoError);
-    assert_eq!(response.answers().len(), 3, "Expected two CNAMEs and the target A record");
+    let response = udp_query(&socket, addr, "alias-one.dns-test.local.", RecordType::A).await;
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert_eq!(
+        response.answers().len(),
+        3,
+        "Expected two CNAMEs and the target A record"
+    );
     assert_eq!(response.answers()[0].record_type(), RecordType::CNAME);
     assert_eq!(response.answers()[1].record_type(), RecordType::CNAME);
     assert_eq!(response.answers()[2].record_type(), RecordType::A);
@@ -207,8 +225,15 @@ async fn test_dns_udp_authoritative_cname_chain_and_cname_only() {
         RecordType::CNAME,
     )
     .await;
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NoError);
-    assert_eq!(response.answers().len(), 1, "Expected the requested CNAME only");
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert_eq!(
+        response.answers().len(),
+        1,
+        "Expected the requested CNAME only"
+    );
     assert_eq!(response.answers()[0].record_type(), RecordType::CNAME);
 
     cancel.cancel();
@@ -221,14 +246,11 @@ async fn test_dns_udp_authoritative_cname_loop_returns_servfail() {
     let (addr, db_path, cancel, task) = start_dns_server().await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-    let response = udp_query(
-        &socket,
-        addr,
-        "loop-one.dns-test.local.",
-        RecordType::A,
-    )
-    .await;
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::ServFail);
+    let response = udp_query(&socket, addr, "loop-one.dns-test.local.", RecordType::A).await;
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::ServFail
+    );
     assert!(response.answers().is_empty());
 
     cancel.cancel();
