@@ -94,10 +94,13 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
 
     tracing::info!(host = %config.http_host, port, "HTTP dashboard server listening");
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move { cancel.cancelled().await })
-        .await
-        .context("HTTP server error")?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move { cancel.cancelled().await })
+    .await
+    .context("HTTP server error")?;
 
     Ok(())
 }

@@ -52,7 +52,7 @@ None
 - [x] Complete Unix privilege dropping with deliberate UID/GID/groups handling and fail-closed behavior.
 - [x] Make DNS/HTTP shutdown propagation symmetric and handle OS termination signals cleanly.
 - [x] Decide and implement HTTPS deployment: documented TLS-terminating reverse proxy approach in `docs/https-deployment.md`.
-- [ ] Add login/API request-size limits and login abuse/rate limiting.
+- [x] Add login/API request-size limits and login abuse/rate limiting.
 
 ### P1 — DNS correctness
 

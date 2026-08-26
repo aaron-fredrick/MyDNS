@@ -8,6 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::cache::{CacheStats, DnsCache};
 use crate::config::AppConfig;
 use crate::dns::upstream::UpstreamResolver;
+use crate::web::auth::LoginRateLimiter;
 
 /// Central shared state threaded through all DNS and HTTP handlers via `Arc`.
 pub struct AppState {
@@ -26,6 +27,8 @@ pub struct AppState {
     pub config: Arc<RwLock<AppConfig>>,
     /// Upstream DNS resolver chain, rebuilt whenever settings change.
     pub upstream: Arc<RwLock<UpstreamResolver>>,
+    /// Login rate limiter to prevent brute force attacks.
+    pub login_rate_limiter: Arc<LoginRateLimiter>,
     /// Signals all background tasks and servers to stop.
     #[allow(dead_code)]
     pub cancel: CancellationToken,
@@ -48,6 +51,7 @@ impl AppState {
             start_time: Instant::now(),
             config: Arc::new(RwLock::new(config)),
             upstream: Arc::new(RwLock::new(upstream)),
+            login_rate_limiter: Arc::new(LoginRateLimiter::new()),
             cancel,
         })
     }

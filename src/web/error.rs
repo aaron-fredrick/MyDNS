@@ -15,6 +15,8 @@ pub enum ApiError {
     NotFound(String),
     #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Too many requests: {0}")]
+    TooManyRequests(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -25,6 +27,7 @@ impl IntoResponse for ApiError {
             Self::Unauthorized(m) => (StatusCode::UNAUTHORIZED, m.clone()),
             Self::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             Self::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
+            Self::TooManyRequests(m) => (StatusCode::TOO_MANY_REQUESTS, m.clone()),
             Self::Internal(e) => {
                 tracing::error!(error = %e, "Unhandled internal error");
                 (

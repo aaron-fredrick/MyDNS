@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,10 +14,67 @@ use axum::{
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use tokio::sync::RwLock;
 
 use crate::db::records::findUserHash;
 use crate::state::AppState;
 use crate::web::error::ApiError;
+
+// ── Login rate limiter ──────────────────────────────────────────────────────────
+
+const MAX_LOGIN_ATTEMPTS: u32 = 5;
+const LOGIN_WINDOW_SECONDS: u64 = 300; // 5 minutes
+
+#[derive(Clone)]
+struct LoginAttemptTracker {
+    attempts: u32,
+    window_start: u64,
+}
+
+pub struct LoginRateLimiter {
+    trackers: Arc<RwLock<HashMap<IpAddr, LoginAttemptTracker>>>,
+}
+
+impl LoginRateLimiter {
+    pub fn new() -> Self {
+        Self {
+            trackers: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn check_rate_limit(&self, ip: IpAddr) -> Result<(), ApiError> {
+        let now = epoch_now();
+        let mut trackers = self.trackers.write().await;
+
+        let tracker = trackers.entry(ip).or_insert(LoginAttemptTracker {
+            attempts: 0,
+            window_start: now,
+        });
+
+        // Reset if window expired
+        if now.saturating_sub(tracker.window_start) > LOGIN_WINDOW_SECONDS {
+            tracker.attempts = 0;
+            tracker.window_start = now;
+        }
+
+        // Check rate limit
+        if tracker.attempts >= MAX_LOGIN_ATTEMPTS {
+            tracing::warn!(ip = %ip, "Login rate limit exceeded");
+            return Err(ApiError::TooManyRequests(
+                "Too many login attempts. Please try again later.".into(),
+            ));
+        }
+
+        tracker.attempts += 1;
+        Ok(())
+    }
+}
+
+impl Default for LoginRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // ── JWT claims ────────────────────────────────────────────────────────────────
 
@@ -47,8 +106,11 @@ pub struct LoginResponse {
 #[allow(non_snake_case)]
 pub async fn login(
     axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+    axum::extract::ConnectInfo(addr): axum::extract::ConnectInfo<std::net::SocketAddr>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, ApiError> {
+    state.login_rate_limiter.check_rate_limit(addr.ip()).await?;
+
     let hash = findUserHash(&state.db, &body.username)
         .await
         .context("DB query failed")?
