@@ -163,3 +163,53 @@ fn epoch_now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn issued_token_validates_with_same_secret() {
+        let token = issue_token("admin", "test-secret").unwrap();
+        let claims = validate_token(&token, "test-secret").unwrap();
+        assert_eq!(claims.sub, "admin");
+    }
+
+    #[test]
+    fn tampered_token_is_rejected() {
+        let token = issue_token("admin", "test-secret").unwrap();
+        let tampered = format!("{}x", token);
+        assert!(validate_token(&tampered, "test-secret").is_err());
+    }
+
+    #[test]
+    fn token_signed_with_wrong_secret_is_rejected() {
+        let token = issue_token("admin", "test-secret").unwrap();
+        assert!(validate_token(&token, "wrong-secret").is_err());
+    }
+
+    #[test]
+    fn expired_token_is_rejected() {
+        let now = epoch_now();
+        let claims = Claims {
+            sub: "admin".to_string(),
+            iat: now.saturating_sub(7200),
+            exp: now.saturating_sub(3600),
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(b"test-secret"),
+        )
+        .unwrap();
+
+        assert!(validate_token(&token, "test-secret").is_err());
+    }
+
+    #[test]
+    fn password_hash_verifies_only_original_password() {
+        let hash = hashPassword("correct-password").unwrap();
+        assert!(verify_password("correct-password", &hash).is_ok());
+        assert!(verify_password("wrong-password", &hash).is_err());
+    }
+}
