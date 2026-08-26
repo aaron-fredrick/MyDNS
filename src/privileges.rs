@@ -22,11 +22,10 @@ pub fn checkAndExitIfInsufficient(dns_port: u16, http_port: u16) {
     }
 }
 
-/// Attempts to drop to a non-privileged user after the DNS socket has been
-/// bound. This limits the blast radius of any future exploit.
+/// Drops to a non-privileged user after the DNS socket has been bound.
 ///
-/// On Windows, privilege dropping is not implemented; the function logs a
-/// warning and returns normally.
+/// On Unix this is required for a production deployment when running as root:
+/// failure to drop privileges is returned to the caller so startup fails closed.
 #[allow(dead_code)]
 #[allow(non_snake_case)]
 pub fn dropPrivileges() -> anyhow::Result<()> {
@@ -110,9 +109,7 @@ fn dropPrivilegesImpl() -> anyhow::Result<()> {
             setuid(user.uid)?;
             tracing::info!(uid = %user.uid, "Dropped privileges to 'nobody'");
         }
-        None => {
-            tracing::warn!("User 'nobody' not found — not dropping privileges");
-        }
+        None => Err(anyhow::anyhow!("Required Unix user 'nobody' was not found"))?,
     }
     Ok(())
 }
