@@ -8,14 +8,15 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ## Current baseline
 
-- `cargo fmt --check` passes locally.
+- `cargo fmt --check` passes locally after the latest formatting cleanup.
 - `cargo check` passes locally.
 - `cargo clippy -- -D warnings` passes locally.
-- Unit tests: 18 passed.
-- HTTP/API integration tests: 7 passed in the last full local run.
-- DNS wire integration tests: 4 passed, covering UDP positive/NODATA/NXDOMAIN, TCP positive answers, CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
-- Persistent cache lifecycle integration tests: 5 passed in the last full local run, including restart persistence, negative-cache persistence, expiration/pruning, explicit clear, and concurrent upserts.
-- The repository now contains an API validation module and HTTP-level validation tests for the supported record types.
+- Unit tests: 22 passed in the latest reported full run.
+- HTTP/API integration tests: 7 passed in the latest reported full run.
+- DNS wire integration tests: 4 passed in the latest reported full run, covering UDP positive/NODATA/NXDOMAIN, TCP positive answers, CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
+- Persistent cache lifecycle integration tests: 4/5 passed in the latest full run; the concurrent-upsert test exposed an intermittent/contended SQLite `database is locked` failure.
+- API validation unit and HTTP-level tests pass.
+- A SQLite concurrency hardening change has been applied on `production-readiness`: WAL journaling plus a 5-second busy timeout. It is pending local verification before being marked complete.
 - `cargo audit` remains outstanding.
 - `production-readiness` is the active implementation branch.
 
@@ -36,6 +37,10 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] DNS record API validates names, supported record types, record values, TTL bounds, and MX priority before persistence.
 - [x] Record updates validate the effective post-update name/type/value/TTL/priority combination.
 - [x] HTTP integration coverage verifies malformed record inputs are rejected with `400` and valid updates still succeed.
+
+### In progress
+
+- [ ] Harden SQLite concurrent-write behavior and verify the concurrent persistent-cache test under contention. Current fix configures WAL mode and a bounded 5-second busy timeout; local test verification is still required.
 
 ## Remaining priority order
 
@@ -65,7 +70,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] Negative-cache restart persistence test.
 - [x] Expired-cache visibility/pruning test.
 - [x] Explicit persistent cache clear test.
-- [x] Concurrent identical cache-upsert test design, corrected to avoid false failures from 1-second TTL expiration.
+- [ ] Verify concurrent identical cache upserts with SQLite contention handling; do not mark complete until the focused test and full suite pass.
 - [ ] Integrate the lifecycle suite into the normal CI matrix.
 - [ ] Make all integration-test temporary database cleanup failure-safe.
 
@@ -172,16 +177,17 @@ A production release is complete only when:
 
 ## Immediate next steps
 
-1. Pull the latest `production-readiness` branch.
+1. Pull the latest `production-readiness` branch containing the SQLite concurrency hardening.
 2. Run `cargo fmt --check`.
 3. Run `cargo check`.
 4. Run `cargo clippy -- -D warnings`.
-5. Run `cargo test --test validation_api -- --nocapture` and confirm both API validation tests pass.
-6. Run `cargo test` and confirm the complete suite is green.
-7. Remove any generated `test_*.db` / `test_dns_*.db` artifacts left in the working tree; do not commit them.
-8. Review the validation behavior, then commit/push the validation tranche if clean.
-9. Next implementation tranche: **zone/ownership model + enforcement**, followed by privilege/shutdown hardening.
-10. Run `cargo audit` before the next release-security gate and record the advisory disposition in this plan.
+5. Run `cargo test --test cache_persistence -- --nocapture` and confirm all 5 persistence tests pass.
+6. Repeat the focused cache test several times to check that the lock failure is not intermittent.
+7. Run `cargo test` and confirm the complete suite is green.
+8. Remove generated `test_*.db` / `test_dns_*.db` artifacts; do not commit them.
+9. If all verification passes, commit/push the SQLite hardening and mark the cache concurrency item complete.
+10. Next implementation tranche: **zone/ownership model + enforcement**, followed by Unix privilege and shutdown hardening.
+11. Run `cargo audit` before the next release-security gate and record the advisory disposition in this plan.
 
 ## Execution order
 
