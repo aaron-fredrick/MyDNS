@@ -8,10 +8,21 @@ use hickory_proto::rr::{Record, RecordType};
 /// Key into the DNS cache: normalised lowercase domain name + record type.
 pub type CacheKey = (String, RecordType);
 
+/// The result represented by a cache entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheResult {
+    /// A successful DNS response containing records.
+    Positive,
+    /// A negative DNS response (NXDOMAIN/NODATA) with no answer records.
+    Negative,
+}
+
 /// A single cached DNS response.
 pub struct CacheEntry {
-    /// The answer records to return.
+    /// The answer records to return. Empty when `result` is `Negative`.
     pub records: Vec<Record>,
+    /// Whether this entry represents a negative DNS result.
+    pub result: CacheResult,
     /// Absolute point-in-time after which this entry is considered stale.
     pub expires_at: Instant,
 }
@@ -38,17 +49,33 @@ impl DnsCache {
         }
     }
 
-    /// Returns records for the key if present **and not expired**.
-    pub fn get(&self, name: &str, rtype: RecordType) -> Option<&Vec<Record>> {
+    /// Returns the cached result for the key if present and not expired.
+    pub fn get(&self, name: &str, rtype: RecordType) -> Option<(CacheResult, &Vec<Record>)> {
         let key = (name.to_lowercase(), rtype);
         self.inner
             .get(&key)
             .filter(|e| !e.isExpired())
-            .map(|e| &e.records)
+            .map(|e| (e.result, &e.records))
     }
 
-    /// Inserts or replaces a cache entry with the given TTL.
+    /// Inserts a positive cache entry with the given TTL.
     pub fn insert(&mut self, name: &str, rtype: RecordType, records: Vec<Record>, ttl: Duration) {
+        self.insertResult(name, rtype, CacheResult::Positive, records, ttl);
+    }
+
+    /// Inserts a negative cache entry with the given TTL.
+    pub fn insertNegative(&mut self, name: &str, rtype: RecordType, ttl: Duration) {
+        self.insertResult(name, rtype, CacheResult::Negative, Vec::new(), ttl);
+    }
+
+    fn insertResult(
+        &mut self,
+        name: &str,
+        rtype: RecordType,
+        result: CacheResult,
+        records: Vec<Record>,
+        ttl: Duration,
+    ) {
         let key = (name.to_lowercase(), rtype);
 
         // Simple cap to prevent memory bloat since we have DB persistence now
@@ -63,6 +90,7 @@ impl DnsCache {
             key,
             CacheEntry {
                 records,
+                result,
                 expires_at: Instant::now() + ttl,
             },
         );
