@@ -35,6 +35,7 @@ async fn start_dns_server() -> (
         http_host: "127.0.0.1".parse().unwrap(),
         http_port: port + 1,
         cors_domains: vec!["mydns.local".to_string()],
+        dashboard_domain: "mydns.local".to_string(),
         db_path: db_path.clone(),
         jwt_secret: mydns::config::generate_secret(64),
         admin_username: "admin".to_string(),

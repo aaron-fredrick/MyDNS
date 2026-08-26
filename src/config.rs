@@ -52,6 +52,8 @@ pub struct AppConfig {
     pub http_port: u16,
     /// Domains allowed as dashboard CORS origins. Defaults to `mydns.local`.
     pub cors_domains: Vec<String>,
+    /// The special dashboard hostname that resolves to the MyDNS server itself. Defaults to `mydns.local`.
+    pub dashboard_domain: String,
     /// Path to the SQLite database file.
     pub db_path: String,
     /// HMAC secret used to sign/verify JWTs.
@@ -105,6 +107,10 @@ impl AppConfig {
             http_host: parse_value(&values, "http_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
             http_port: parse_value(&values, "http_port", 8080)?,
             cors_domains,
+            dashboard_domain: values
+                .get("dashboard_domain")
+                .cloned()
+                .unwrap_or_else(|| "mydns.local".to_string()),
             db_path: values
                 .get("db_path")
                 .cloned()

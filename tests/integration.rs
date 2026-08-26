@@ -25,6 +25,7 @@ async fn start_test_server() -> (String, String) {
         http_host: "127.0.0.1".parse().unwrap(),
         http_port: port,
         cors_domains: vec!["mydns.local".to_string()],
+        dashboard_domain: "mydns.local".to_string(),
 
         db_path: db_path.clone(),
         jwt_secret: mydns::config::generate_secret(64),
