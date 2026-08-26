@@ -73,8 +73,8 @@ None
 - [x] Explicit persistent cache clear test.
 - [x] **Concurrent identical cache upserts pass reliably in the complete suite.** Fixed by setting `max_connections(1)` on SQLite pool.
 - [ ] Integrate the lifecycle suite into the normal CI matrix.
-- [ ] Make all integration-test temporary database cleanup failure-safe.
-- [ ] Ensure generated database/journal artifacts never remain in the repository working tree after tests.
+- [x] Make all integration-test temporary database cleanup failure-safe.
+- [x] Ensure generated database/journal artifacts never remain in the repository working tree after tests.
 
 ### P1 — Web/API hardening
 

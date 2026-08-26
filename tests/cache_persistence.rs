@@ -9,9 +9,10 @@ struct TestDb {
 
 impl TestDb {
     fn new() -> Self {
-        Self {
-            path: format!("test_cache_{}.db", generate_secret(8)),
-        }
+        let temp_dir = std::env::temp_dir();
+        let db_name = format!("test_cache_{}.db", generate_secret(8));
+        let path = temp_dir.join(db_name).to_string_lossy().to_string();
+        Self { path }
     }
 }
 
