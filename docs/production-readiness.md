@@ -50,10 +50,10 @@ Bring MyDNS to a production-ready baseline by addressing correctness, security, 
 - [x] Require authentication for the WebSocket dashboard endpoint.
 - [x] Invalidate persistent cache entries when DNS records are created, updated, or deleted.
 - [x] Make cache result states explicit so positive empty results and NXDOMAIN are not represented ambiguously by `Vec<Record>`.
-- [ ] Implement `config.ini` parsing as the canonical release configuration path.
-- [ ] Move DNS and HTTP bind configuration to `config.ini` with localhost-safe defaults.
-- [ ] Remove insecure default admin username/password behavior and fail fast when either credential is missing.
-- [ ] Restrict `.env` handling to debug/development builds only, if retained.
+- [x] Implement `config.ini` parsing as the canonical release configuration path.
+- [x] Move DNS and HTTP bind configuration to `config.ini` with localhost-safe defaults.
+- [x] Remove insecure default admin username/password behavior and fail fast when either credential is missing.
+- [x] Restrict `.env` handling to debug/development builds only.
 - [ ] Implement release CORS allowlist generation from bind address and configured domains.
 - [ ] Verify negative-cache persistence and invalidation across process restarts.
 - [ ] Review all privileged operations and privilege-drop ordering for startup/shutdown races.
@@ -124,9 +124,9 @@ A production-readiness pass is complete when:
 
 ## Execution order
 
-1. Implement `config.ini` parsing and configuration precedence.
+1. ~~Implement `config.ini` parsing and configuration precedence.~~ **Done.**
 2. Implement localhost-safe DNS/HTTP binding with explicit override support.
-3. Remove insecure admin credential defaults and add fail-fast validation.
+3. ~~Remove insecure admin credential defaults and add fail-fast validation.~~ **Done.**
 4. Implement debug/release CORS behavior and default/configured domain handling.
 5. Add configuration, binding, CORS, and authentication regression tests.
 6. Complete dependency vulnerability audit and targeted upgrades.
