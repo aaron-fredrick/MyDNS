@@ -204,7 +204,11 @@ async fn test_persistent_cache_upsert_deduplicates_records() {
     let rows = db::records::getCache(&pool, "cache.test.local.", "A")
         .await
         .unwrap();
-    assert_eq!(rows.len(), 1, "Identical cache records must be deduplicated");
+    assert_eq!(
+        rows.len(),
+        1,
+        "Identical cache records must be deduplicated"
+    );
     assert_eq!(rows[0].ttl, 120, "Upsert should refresh TTL");
 
     let _ = std::fs::remove_file(db_path);
@@ -249,21 +253,18 @@ async fn test_cname_target_update_invalidates_dependent_cache() {
     assert_eq!(alias.status(), 200);
 
     let pool = db::init(&db_path).await.expect("Failed to reopen test DB");
-    db::records::insertCache(
-        &pool,
-        "alias.integration.local",
-        "A",
-        "10.0.0.1",
-        300,
-        None,
-    )
-    .await
-    .unwrap();
+    db::records::insertCache(&pool, "alias.integration.local", "A", "10.0.0.1", 300, None)
+        .await
+        .unwrap();
 
     let before = db::records::getCache(&pool, "alias.integration.local", "A")
         .await
         .unwrap();
-    assert_eq!(before.len(), 1, "Expected dependent cache entry before update");
+    assert_eq!(
+        before.len(),
+        1,
+        "Expected dependent cache entry before update"
+    );
 
     let res = c
         .put(format!("{}/api/v1/records/{}", &base, target_id))
@@ -277,7 +278,10 @@ async fn test_cname_target_update_invalidates_dependent_cache() {
     let after = db::records::getCache(&pool, "alias.integration.local", "A")
         .await
         .unwrap();
-    assert!(after.is_empty(), "Dependent CNAME cache must be invalidated");
+    assert!(
+        after.is_empty(),
+        "Dependent CNAME cache must be invalidated"
+    );
 
     let _ = std::fs::remove_file(db_path);
 }

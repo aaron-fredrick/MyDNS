@@ -11,7 +11,7 @@ use crate::state::AppState;
 use crate::web::auth::JwtClaims;
 use crate::web::error::ApiError;
 
-async fn cacheInvalidationNames(
+async fn cache_invalidation_names(
     pool: &sqlx::SqlitePool,
     names: &[String],
 ) -> anyhow::Result<Vec<String>> {
@@ -26,8 +26,8 @@ async fn cacheInvalidationNames(
     Ok(invalidation.into_iter().collect())
 }
 
-async fn invalidateCaches(state: &Arc<AppState>, names: &[String]) -> anyhow::Result<()> {
-    let names = cacheInvalidationNames(&state.db, names).await?;
+async fn invalidate_caches(state: &Arc<AppState>, names: &[String]) -> anyhow::Result<()> {
+    let names = cache_invalidation_names(&state.db, names).await?;
     for name in &names {
         records::deleteCacheForName(&state.db, name).await?;
         state.cache.write().await.removeName(name);
@@ -55,7 +55,7 @@ pub async fn createRecord(
     body.name = body.name.trim_end_matches('.').to_lowercase();
 
     let row = records::createRecord(&state.db, &body).await?;
-    invalidateCaches(&state, std::slice::from_ref(&body.name)).await?;
+    invalidate_caches(&state, std::slice::from_ref(&body.name)).await?;
 
     tracing::info!(name = %row.name, r#type = %row.record_type, "DNS record created");
     let _ = state.log_tx.send(format!(
@@ -82,7 +82,7 @@ pub async fn updateRecord(
     // Capture dependents before the mutation because changing a CNAME target
     // can remove the old dependency from dns_records.
     let mut invalidation_names =
-        cacheInvalidationNames(&state.db, std::slice::from_ref(&old_name)).await?;
+        cache_invalidation_names(&state.db, std::slice::from_ref(&old_name)).await?;
 
     let mut body = body;
     if let Some(ref mut name) = body.name {
@@ -93,10 +93,9 @@ pub async fn updateRecord(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
-    invalidation_names.extend(
-        cacheInvalidationNames(&state.db, std::slice::from_ref(&updated.name)).await?,
-    );
-    invalidateCaches(&state, &invalidation_names).await?;
+    invalidation_names
+        .extend(cache_invalidation_names(&state.db, std::slice::from_ref(&updated.name)).await?);
+    invalidate_caches(&state, &invalidation_names).await?;
 
     tracing::info!(id, name = %updated.name, "DNS record updated");
     let _ = state.log_tx.send(format!("[CRUD] UPDATE record id={}", id));
@@ -117,14 +116,14 @@ pub async fn deleteRecord(
 
     // Capture CNAME dependents before deleting the authoritative record.
     let invalidation_names =
-        cacheInvalidationNames(&state.db, std::slice::from_ref(&row.name)).await?;
+        cache_invalidation_names(&state.db, std::slice::from_ref(&row.name)).await?;
 
     let deleted = records::deleteRecord(&state.db, id).await?;
     if !deleted {
         return Err(ApiError::NotFound(format!("Record {} not found", id)));
     }
 
-    invalidateCaches(&state, &invalidation_names).await?;
+    invalidate_caches(&state, &invalidation_names).await?;
 
     tracing::info!(id, "DNS record deleted");
     let _ = state.log_tx.send(format!("[CRUD] DELETE record id={}", id));
