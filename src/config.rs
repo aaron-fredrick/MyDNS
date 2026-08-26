@@ -50,6 +50,8 @@ pub struct AppConfig {
     pub http_host: IpAddr,
     /// HTTP port for the management dashboard.
     pub http_port: u16,
+    /// Domains allowed as dashboard CORS origins. Defaults to `mydns.local`.
+    pub cors_domains: Vec<String>,
     /// Path to the SQLite database file.
     pub db_path: String,
     /// HMAC secret used to sign/verify JWTs.
@@ -80,11 +82,25 @@ impl AppConfig {
         let admin_username = required(&values, "admin_username")?;
         let admin_password = required(&values, "admin_password")?;
 
+        let cors_domains = values
+            .get("cors_domains")
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|domain| !domain.is_empty())
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .filter(|domains| !domains.is_empty())
+            .unwrap_or_else(|| vec!["mydns.local".to_string()]);
+
         Ok(Self {
             bind_host: parse_value(&values, "bind_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
             dns_port: parse_value(&values, "dns_port", 53)?,
             http_host: parse_value(&values, "http_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
             http_port: parse_value(&values, "http_port", 8080)?,
+            cors_domains,
             db_path: values
                 .get("db_path")
                 .cloned()
@@ -123,6 +139,7 @@ impl AppConfig {
             dns_port: envParse("DNS_PORT", 53),
             http_host: envParse("HTTP_HOST", IpAddr::V4(Ipv4Addr::LOCALHOST)),
             http_port: envParse("HTTP_PORT", 8080),
+            cors_domains: vec!["mydns.local".to_string()],
             db_path: std::env::var("DB_PATH").unwrap_or_else(|_| "mydns.db".to_string()),
             jwt_secret,
             admin_username: std::env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string()),
