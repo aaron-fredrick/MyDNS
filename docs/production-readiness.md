@@ -8,13 +8,13 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ## Current baseline
 
-- `cargo fmt --check` passes on the latest verified local baseline.
-- `cargo check` passes on the latest verified local baseline.
-- `cargo clippy -- -D warnings` passes on the latest verified local baseline.
+- `cargo fmt --check` passes after the latest local formatting verification.
+- `cargo check` passes.
+- `cargo clippy -- -D warnings` passes.
 - Unit tests: 18 passed.
 - HTTP/API integration tests: 7 passed.
 - DNS wire integration tests: 4 passed, covering UDP positive/NODATA/NXDOMAIN, TCP positive answers, CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
-- Persistent cache lifecycle integration tests have now been added; local verification is required after pulling this commit.
+- Persistent cache lifecycle integration tests: 5 tests exist; 4 pass on the previous local run, while the concurrent-upsert test exposed a test timing flaw caused by 1-second TTLs under SQLite contention. The test has been corrected to use 300+ second TTLs so it verifies deduplication rather than expiration timing.
 - `cargo audit` remains outstanding.
 - `production-readiness` is the active implementation branch.
 
@@ -61,8 +61,8 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] Negative-cache restart persistence test.
 - [x] Expired-cache visibility/pruning test.
 - [x] Explicit persistent cache clear test.
-- [x] Concurrent identical cache-upsert test.
-- [ ] Integrate the lifecycle tests into the normal CI matrix after local verification.
+- [x] Concurrent identical cache-upsert test design, corrected to avoid false failures from 1-second TTL expiration.
+- [ ] Verify the corrected lifecycle suite locally and integrate it into the normal CI matrix.
 - [ ] Make all integration-test temporary database cleanup failure-safe.
 
 ### P1 — Web/API hardening
@@ -172,10 +172,11 @@ A production release is complete only when:
 2. Run `cargo fmt --check`.
 3. Run `cargo check`.
 4. Run `cargo clippy -- -D warnings`.
-5. Run `cargo test --test cache_persistence -- --nocapture`.
-6. Run `cargo test`.
-7. If clean, commit/push only if local Git shows the expected clean verification state.
-8. Then move to **P0 DNS/API input validation and zone/ownership enforcement** before spending time on packaging/release work.
+5. Run `cargo test --test cache_persistence -- --nocapture` and confirm all 5 lifecycle tests pass with the corrected TTLs.
+6. Run `cargo test` and confirm the complete suite is green.
+7. Remove any generated `test_*.db` / `test_dns_*.db` artifacts left in the working tree; do not commit them.
+8. If clean, commit/push only the intended changes.
+9. Then start the next implementation tranche: **P0 DNS/API input validation and zone/ownership enforcement**.
 
 ## Execution order
 
