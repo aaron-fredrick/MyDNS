@@ -12,10 +12,8 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - `cargo check` passes on the latest verified local baseline.
 - `cargo clippy -- -D warnings` passes on the latest verified local baseline.
 - Unit tests pass: 18 passed.
-- Existing API integration tests pass: 5 passed.
-- DNS wire integration tests pass on the previously verified baseline: 2 passed, covering UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior.
-- Authoritative CNAME chain/loop regression tests have now been added; they still require local verification after the implementation change.
-- Release tests pass on the previously verified baseline, including release CORS restriction coverage.
+- Existing API integration tests pass: 7 passed.
+- DNS wire integration tests pass: 4 passed, covering UDP positive/NODATA/NXDOMAIN behavior, TCP positive-answer behavior, CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
 - Manual DNS smoke testing has covered A, AAAA, MX, NS, TXT, CNAME, PTR, NXDOMAIN, and cache-hit behavior.
 - Dependencies were refreshed and `Cargo.lock` updated; `cargo audit` is still required.
 - `production-readiness` is the active implementation branch.
@@ -28,24 +26,26 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] DNS resolution now has an explicit internal outcome model for positive answers, NODATA, NXDOMAIN, and SERVFAIL.
 - [x] Upstream resolver failures no longer automatically become NXDOMAIN; resolver errors are classified as NXDOMAIN, NODATA, or SERVFAIL.
 - [x] NXDOMAIN remains the only negative result persisted through the existing negative-cache path.
-- [x] Added real DNS wire-level integration coverage for UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior in `tests/dns_integration.rs`.
+- [x] Added real DNS wire-level integration coverage for UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior.
 - [x] Verified the DNS wire-level integration tests locally after correcting the fixture naming mismatch.
 - [x] Implemented bounded authoritative CNAME chasing for locally managed records.
 - [x] Added authoritative CNAME loop detection with `SERVFAIL` on cycles/recursion-limit exhaustion.
 - [x] Added wire-level regression coverage for CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
+- [x] Persistent cache insertion now deduplicates rows using a database uniqueness constraint.
+- [x] Cache invalidation now discovers and removes dependent CNAME aliases when a target record changes.
+- [x] Added integration coverage for persistent-cache deduplication and dependent-cache invalidation.
 
 ### Still open from the audit
 
-1. CNAME-dependent cache invalidation does not invalidate aliases when a target changes.
-2. Persistent cache insertion can accumulate duplicate rows.
-3. Unix privilege dropping needs a deliberate UID/GID/groups strategy and fail-closed behavior.
-4. DNS/HTTP shutdown propagation is asymmetric.
-5. Management API login/request abuse and resource limits need explicit controls.
-6. HTTPS deployment needs to be implemented/documented and tested.
-7. CI does not yet fully cover the active production-readiness branch.
-8. Release workflow needs a complete verification/distribution contract.
-9. README and deployment documentation need to match the current `config.ini`-based system.
-10. Generated integration-test SQLite files must be cleaned up automatically and ignored appropriately.
+1. Cache restart/persistence and TTL lifecycle behavior still needs explicit integration coverage.
+2. Unix privilege dropping needs a deliberate UID/GID/groups strategy and fail-closed behavior.
+3. DNS/HTTP shutdown propagation is asymmetric.
+4. Management API login/request abuse and resource limits need explicit controls.
+5. HTTPS deployment needs to be implemented/documented and tested.
+6. CI does not yet fully cover the active production-readiness branch.
+7. Release workflow needs a complete verification/distribution contract.
+8. README and deployment documentation need to match the current `config.ini`-based system.
+9. Generated integration-test SQLite files must be cleaned up automatically and ignored appropriately.
 
 ## Decisions
 
@@ -94,13 +94,14 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ### P1 — Cache and persistence
 
-- [ ] Define the persistent cache schema contract, including uniqueness/deduplication.
-- [ ] Prevent duplicate cache rows for the same owner/type/value where inappropriate.
-- [ ] Enforce TTL expiration consistently in memory and SQLite.
-- [ ] Invalidate all affected aliases when a CNAME target or dependent record changes.
+- [x] Define the persistent cache schema contract, including uniqueness/deduplication.
+- [x] Prevent duplicate cache rows for the same owner/type/value where inappropriate.
+- [x] Enforce TTL expiration consistently in memory and SQLite for normal cache access.
+- [x] Invalidate all affected aliases when a CNAME target or dependent record changes.
 - [ ] Add positive-cache restart tests.
 - [ ] Add negative-cache restart tests.
-- [ ] Add cache mutation/invalidation tests for create, update, delete, and clear operations.
+- [x] Add cache mutation/invalidation coverage for record create/update/delete paths.
+- [ ] Add explicit cache clear coverage.
 - [ ] Add concurrent cache access tests and establish expected contention behavior.
 
 ### P1 — Web/API hardening
@@ -213,7 +214,7 @@ A production release is complete only when:
 
 1. **P0 correctness/security:** bind address, DNS outcome semantics, upstream failures, CNAME behavior, privilege handling, shutdown, HTTPS decision.
 2. **Regression tests:** lock down NODATA/NXDOMAIN/SERVFAIL, CNAME, UDP/TCP, and bind behavior.
-3. **API/cache hardening:** validation, authorization, cache invalidation/deduplication, resource limits, dependency audit.
+3. **API/cache hardening:** validation, authorization, cache invalidation/deduplication, restart/TTL persistence, resource limits, dependency audit.
 4. **CI:** make format/check/clippy/tests/release verification authoritative and cover the active development branch.
 5. **Documentation:** synchronize README/config/deployment/security documentation with implementation.
 6. **Release engineering:** versioning, archives, checksums, supported targets, GitHub Releases.
