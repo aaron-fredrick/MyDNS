@@ -8,6 +8,12 @@ use crate::web::error::ApiError;
 /// `GET /api/v1/stats`
 ///
 /// Returns server uptime, cache hit/miss counts, cache size, and record count.
+///
+/// DESIGN DECISION: This endpoint is intentionally unauthenticated to allow
+/// external monitoring systems (e.g. Prometheus, Datadog, Uptime Kuma) and
+/// load balancer health checks to easily query server health and metrics
+/// without needing long-lived static API tokens (which MyDNS does not support).
+/// The data exposed is aggregate metrics and poses no risk of PII/credential leakage.
 #[allow(non_snake_case)]
 pub async fn getStats(
     State(state): State<Arc<AppState>>,

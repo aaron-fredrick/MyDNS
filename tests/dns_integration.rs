@@ -63,11 +63,15 @@ async fn start_dns_server() -> (
             "CNAME",
             "loop-two.dns-test.local",
         ),
-        (
-            "loop-two.dns-test.local",
-            "CNAME",
-            "loop-one.dns-test.local",
-        ),
+        ("loop-two.dns-test.local", "CNAME", "loop-one.dns-test.local"),
+        // AAAA record
+        ("dns6-test.local", "AAAA", "2001:db8::1"),
+        // MX record
+        ("mail-test.local", "MX", "mail.example.com"),
+        // NS record
+        ("ns-test.local", "NS", "ns1.example.com"),
+        // TXT record
+        ("txt-test.local", "TXT", "v=spf1 include:_spf.example.com ~all"),
     ] {
         db::records::createRecord(
             &pool,
@@ -78,7 +82,7 @@ async fn start_dns_server() -> (
                 record_type: record.1.to_string(),
                 value: record.2.to_string(),
                 ttl: 60,
-                priority: None,
+                priority: if record.1 == "MX" { Some(10) } else { None },
             },
         )
         .await
@@ -102,7 +106,13 @@ async fn start_dns_server() -> (
         let _ = dns::server::run(server_state, server_cancel).await;
     });
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Wait for the server to bind its sockets
+    for _ in 0..50 {
+        if tokio::net::TcpStream::connect(addr).await.is_ok() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
     (addr, db_path, cancel, task)
 }
 
@@ -165,11 +175,13 @@ async fn test_dns_udp_positive_nxdomain_and_nodata() {
 #[tokio::test]
 async fn test_dns_tcp_positive_answer() {
     let (addr, db_path, cancel, task) = start_dns_server().await;
-    
+
     // Add a connection retry loop to ensure the server is ready
     let mut stream = None;
     for _ in 0..10 {
-        if let Ok(Ok(s)) = tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(addr)).await {
+        if let Ok(Ok(s)) =
+            tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(addr)).await
+        {
             stream = Some(s);
             break;
         }
@@ -262,6 +274,77 @@ async fn test_dns_udp_authoritative_cname_loop_returns_servfail() {
         hickory_proto::op::ResponseCode::ServFail
     );
     assert!(response.answers().is_empty());
+
+    cancel.cancel();
+    let _ = task.await;
+    let _ = std::fs::remove_file(db_path);
+}
+#[tokio::test]
+async fn test_dns_udp_aaaa_record() {
+    let (addr, db_path, cancel, task) = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let response = udp_query(&socket, addr, "dns6-test.local.", RecordType::AAAA).await;
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert_eq!(response.answers().len(), 1);
+    assert_eq!(response.answers()[0].record_type(), RecordType::AAAA);
+
+    cancel.cancel();
+    let _ = task.await;
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[tokio::test]
+async fn test_dns_udp_mx_record() {
+    let (addr, db_path, cancel, task) = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let response = udp_query(&socket, addr, "mail-test.local.", RecordType::MX).await;
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert_eq!(response.answers().len(), 1);
+    assert_eq!(response.answers()[0].record_type(), RecordType::MX);
+
+    cancel.cancel();
+    let _ = task.await;
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[tokio::test]
+async fn test_dns_udp_ns_record() {
+    let (addr, db_path, cancel, task) = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let response = udp_query(&socket, addr, "ns-test.local.", RecordType::NS).await;
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert_eq!(response.answers().len(), 1);
+    assert_eq!(response.answers()[0].record_type(), RecordType::NS);
+
+    cancel.cancel();
+    let _ = task.await;
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[tokio::test]
+async fn test_dns_udp_txt_record() {
+    let (addr, db_path, cancel, task) = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let response = udp_query(&socket, addr, "txt-test.local.", RecordType::TXT).await;
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert_eq!(response.answers().len(), 1);
+    assert_eq!(response.answers()[0].record_type(), RecordType::TXT);
 
     cancel.cancel();
     let _ = task.await;

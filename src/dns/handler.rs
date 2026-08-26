@@ -329,11 +329,11 @@ impl DnsHandler {
         Some(ResolutionResult::ServFail)
     }
 
-    async fn handle_dashboard_domain(
+    async fn querySpecialRecords(
         &self,
         name: &str,
         rtype: RecordType,
-        ip: IpAddr,
+        src: SocketAddr,
     ) -> Option<Vec<Record>> {
         let dashboard_domain = {
             let cfg = self.state.config.read().await;
@@ -343,8 +343,9 @@ impl DnsHandler {
         if name != dashboard_domain || (rtype != RecordType::A && rtype != RecordType::AAAA) {
             return None;
         }
-        let target_ip = self.getLocalInterfaceIpForClient(ip);
+        let target_ip = self.getLocalInterfaceIpForClient(src.ip());
         if let Some(record) = buildRecord(name, rtype, &target_ip, 60, None) {
+            let _ = self.state.log_tx.send(format!(
                 "[SPECIAL] client={} query={} type={} value=[{}]",
                 src, name, rtype, target_ip
             ));

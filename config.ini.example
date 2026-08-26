@@ -9,7 +9,11 @@ dns_port = 53
 http_host = 127.0.0.1
 http_port = 8080
 
-# SQLite database.
+# The special dashboard hostname that resolves to the MyDNS server itself.
+# dashboard_domain = mydns.local
+
+# SQLite database. Stores zones, users, and cache.
+# Supported DNS record types: A, AAAA, CNAME, MX, NS, TXT, PTR
 db_path = mydns.db
 
 # Optional. If omitted, MyDNS generates and persists a JWT secret.
