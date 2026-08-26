@@ -4,133 +4,218 @@ Branch: `production-readiness`
 
 ## Objective
 
-Bring MyDNS to a production-ready baseline by addressing correctness, security, reliability, operational hardening, and regression coverage without weakening existing DNS behavior.
+Bring MyDNS from a feature-complete development server to a defensible production release by addressing DNS correctness, API/security hardening, persistence, reliability, test coverage, CI/CD, packaging, deployment, and operational documentation.
 
 ## Current baseline
 
 - `cargo fmt --check` passes.
 - `cargo check` passes.
 - `cargo clippy -- -D warnings` passes.
-- Unit and integration tests pass: 18 total tests, 0 failures.
+- Unit/integration tests currently pass; the existing plan records 18 tests with 0 failures.
 - Release tests pass, including release CORS restriction coverage.
 - Manual DNS smoke testing has covered A, AAAA, MX, NS, TXT, CNAME, PTR, NXDOMAIN, and cache-hit behavior.
-- Manual release CORS testing confirms the configured HTTP origin is accepted and an unrelated origin is rejected.
-- `production-readiness` is the active implementation branch; work continues on this branch.
+- Dependency versions were recently refreshed and `Cargo.lock` was updated; the dependency tree still needs an explicit vulnerability/advisory audit before this is considered complete.
+- `production-readiness` is the active implementation branch.
+
+## Important code-audit findings
+
+The current codebase is **not yet production-ready**, even though the basic checks pass. The following are concrete gaps found by reviewing the current branch:
+
+1. **Configured DNS bind address is not actually used.** `AppConfig` exposes `bind_host`, but `src/dns/server.rs` binds UDP and TCP to `0.0.0.0` unconditionally. This contradicts the localhost-safe default and is a P0 correctness/security issue.
+2. **Authoritative/manual CNAME resolution is incomplete.** Persistent-cache lookup chases CNAMEs, but the normal database-record path only looks up the requested record type. A locally configured CNAME therefore does not consistently resolve the target for A/AAAA/etc. queries.
+3. **NXDOMAIN and NODATA are still conflated at the DNS protocol boundary.** The cache has explicit positive/negative states, but the request handler ultimately represents both missing records and empty upstream lookups as `Vec<Record>` and emits NXDOMAIN for an empty result. NODATA must produce `NOERROR` with an empty answer, while NXDOMAIN means the name does not exist.
+4. **Upstream failure semantics are underspecified.** Upstream resolver errors currently collapse into `None`, after which the handler creates an NXDOMAIN cache entry. Timeouts/unreachable upstreams should not be advertised to clients as NXDOMAIN; SERVFAIL behavior needs explicit handling.
+5. **Cache invalidation does not cover dependent CNAME aliases.** Name-wide invalidation is good for mutations to the owner, but changing a CNAME target can leave cached answers for aliases pointing at the old target.
+6. **Persistent cache insertion can accumulate duplicate rows.** There is an index but no uniqueness/deduplication constraint and `insertCache` always inserts. The schema and insertion strategy need review.
+7. **Privilege dropping is incomplete on Unix.** The current implementation changes UID to `nobody` but does not establish a complete least-privilege identity/group setup, and failure to find `nobody` merely logs a warning and continues privileged.
+8. **Shutdown fate-sharing is asymmetric.** DNS cancellation propagates to HTTP, but HTTP termination does not cancel the DNS server. The comment in `main.rs` claims either server can trigger shutdown, which is not currently true.
+9. **The management API is authenticated but not meaningfully rate-limited.** Login abuse/brute-force protection and request-size/resource limits need an explicit production decision.
+10. **The dashboard is HTTP-only.** JWT credentials/tokens must not be sent over an untrusted network in cleartext. Production deployment therefore needs HTTPS termination (reverse proxy) or built-in TLS, with the chosen deployment model documented and tested.
+11. **Current CI does not exercise the production-readiness branch.** `test.yml` and `codeql.yml` trigger on `main` and pull requests targeting `main`, so pushes to `production-readiness` do not receive the same checks.
+12. **Release workflow builds binaries but does not run the full verification gate or publish a complete distribution contract.** It needs release tests, checksums, reproducible/versioned archives, and documented artifacts/targets.
+13. **README is stale.** It still instructs users to copy `.env.example` and configure `.env`, while release configuration has moved to `config.ini`; it also understates the supported DNS records and deployment model.
+14. **Generated test databases are not covered by the ignore rules.** The existing integration tests create random `test_*.db` files, and those can appear as untracked working-tree artifacts after tests.
+
+These findings should be resolved before packaging/deployment work is treated as a production release.
 
 ## Decisions
 
-### Configuration
+### Configuration and exposure
 
 - `config.ini` is the canonical runtime configuration source for release builds.
-- Do not use environment variables as the primary production configuration mechanism.
-- `.env` may be used only for debug/development builds and must never provide release credentials implicitly.
-- DNS and HTTP bind addresses default to localhost (`127.0.0.1`) unless explicitly overridden in `config.ini`.
-- An explicit `0.0.0.0` bind is treated as an intentional request to expose the service on all interfaces.
-- Missing admin username or password is a fatal startup configuration error. There is no insecure default admin credential.
+- `.env` is debug/development-only and must never implicitly supply release credentials.
+- DNS and HTTP default to localhost; configured bind addresses must be honored exactly.
+- An explicit `0.0.0.0` bind is an intentional request to expose the service on all interfaces.
+- Missing admin username/password is a fatal startup configuration error.
+- Production management traffic must use HTTPS directly or through a documented TLS-terminating reverse proxy.
 
-### Web/CORS
+### DNS behavior
 
-- Debug builds may continue to use `CorsLayer::permissive()` for development convenience.
-- Release builds use an explicit CORS allowlist; `permissive()` is not allowed.
-- By default, release CORS origins are derived from the configured HTTP bind address plus the default dashboard hostname `mydns.local` where applicable.
-- If HTTP binds to `0.0.0.0`, release CORS may include the machine's usable local interface IP origins plus `mydns.local`.
-- If a domain list is configured, that list is authoritative for domain-based origins rather than automatically allowing arbitrary hostnames.
-- CORS remains separate from authentication/authorization; protected APIs must still require valid credentials.
+- Distinguish `NOERROR/NODATA`, `NXDOMAIN`, and `SERVFAIL` internally and on the wire.
+- Locally authoritative records must take precedence over upstream results.
+- CNAME chaining must be bounded, loop-safe, and consistent between authoritative records and cached records.
+- Supported record types and their validation rules must be explicit rather than inferred from whatever `hickory` happens to parse.
 
-### Default dashboard hostname
+### Web/API
 
-- The default dashboard hostname is `mydns.local`.
-- CORS acceptance of `mydns.local` does not imply that MyDNS must implement mDNS or automatically modify the OS hosts file.
-- Actual name resolution for `mydns.local` is a separate concern and may be addressed later.
+- Protected APIs and WebSocket endpoints require authentication.
+- CORS is an additional browser policy, not an authorization mechanism.
+- Login and API endpoints need bounded request sizes and basic abuse/rate-limit protection before Internet-facing deployment.
+- Internal errors must be logged server-side without exposing implementation details to clients.
 
 ## Work plan
 
-### P0 — Configuration, network exposure, and security
+### P0 — Correctness and security blockers
 
-- [x] Bind DNS sockets before dropping Unix privileges.
-- [x] Require authentication for the WebSocket dashboard endpoint.
-- [x] Invalidate persistent cache entries when DNS records are created, updated, or deleted.
-- [x] Make cache result states explicit so positive empty results and NXDOMAIN are not represented ambiguously by `Vec<Record>`.
-- [x] Implement `config.ini` parsing as the canonical release configuration path.
-- [x] Move DNS and HTTP bind configuration to `config.ini` with localhost-safe defaults.
-- [x] Remove insecure default admin username/password behavior and fail fast when either credential is missing.
-- [x] Restrict `.env` handling to debug/development builds only.
-- [x] Implement release CORS allowlist generation from bind address and configured domains.
-- [ ] Verify negative-cache persistence and invalidation across process restarts.
-- [ ] Review all privileged operations and privilege-drop ordering for startup/shutdown races.
+- [ ] Fix DNS UDP/TCP binding to honor `config.ini` `bind_host`.
+- [ ] Implement a typed DNS resolution outcome so `NOERROR/NODATA`, `NXDOMAIN`, and `SERVFAIL` cannot collapse into the same empty vector.
+- [ ] Fix upstream error handling so timeouts/unavailable resolvers produce `SERVFAIL`, not NXDOMAIN.
+- [ ] Implement consistent authoritative CNAME chasing, including bounded chains and loop detection.
+- [ ] Add validation for DNS names, record types, record values, TTL bounds, and MX priority.
+- [ ] Define and enforce zone/ownership rules for records managed through the API.
+- [ ] Complete Unix privilege dropping with a deliberate UID/GID/groups strategy; fail closed if the requested least-privilege transition cannot be completed.
+- [ ] Make shutdown propagation symmetric between DNS and HTTP and handle OS termination signals cleanly.
+- [ ] Decide and implement HTTPS deployment: built-in TLS or a supported reverse-proxy topology.
+- [ ] Add login/API request-size limits and login abuse/rate limiting appropriate for an admin service.
 
 ### P1 — Web/API hardening
 
-- [ ] Review admin authentication/bootstrap behavior and secret handling after the configuration migration.
-- [x] Replace release `CorsLayer::permissive()` with explicit origin/method/header policy.
-- [ ] Validate DNS record names, types, values, TTLs, and zone boundaries consistently at the API/database boundary.
-- [ ] Review error responses for information leakage and consistent HTTP status handling.
-- [ ] Add authorization tests for every protected API surface.
-- [x] Add regression tests for debug-permissive versus release-restricted CORS behavior.
+- [ ] Review admin bootstrap, password handling, JWT secret lifecycle, token lifetime, and secret rotation/recovery behavior.
+- [ ] Add authorization tests for every protected route, including records, settings, cache, and WebSocket.
+- [ ] Standardize HTTP status codes and error payloads; never leak internal errors in production responses.
+- [ ] Add security headers appropriate for the dashboard deployment.
+- [ ] Add audit logging for authentication and destructive/admin operations without logging passwords or JWTs.
+- [ ] Add bounded request/body handling and concurrency/resource controls.
 
-### P1 — DNS correctness and resolver behavior
+### P1 — DNS feature correctness
 
-- [ ] Audit CNAME handling, including CNAME-only responses and chained resolution.
-- [ ] Verify NXDOMAIN versus NODATA semantics for all supported record types.
-- [ ] Verify PTR handling and reverse-name normalization.
-- [ ] Verify upstream failures/timeouts and SERVFAIL behavior.
-- [ ] Verify TCP DNS behavior alongside UDP.
-- [ ] Add regression tests for cache key normalization and record-type separation.
+- [ ] Add authoritative handling/tests for A, AAAA, CNAME, MX, NS, TXT, and PTR.
+- [ ] Test CNAME-only responses and multi-hop CNAME chains.
+- [ ] Test CNAME loops and recursion limits.
+- [ ] Verify NXDOMAIN versus NODATA for every supported query type.
+- [ ] Verify PTR normalization and reverse-name behavior.
+- [ ] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
+- [ ] Verify UDP and TCP DNS behavior independently.
+- [ ] Verify query-name case normalization, trailing-dot normalization, and record-type separation.
+- [ ] Verify response flags/authority behavior and TTL propagation against expected DNS semantics.
 
-### P2 — Cache and persistence
+### P1 — Cache and persistence
 
-- [ ] Review persistent cache schema and deduplication behavior.
-- [ ] Ensure cache expiration is enforced consistently in memory and SQLite.
-- [ ] Ensure record mutations invalidate all affected cached names/types.
-- [ ] Add restart-persistence tests for positive and negative responses.
-- [ ] Confirm cache behavior under concurrent requests.
+- [ ] Define the persistent cache schema contract, including uniqueness/deduplication.
+- [ ] Prevent duplicate cache rows for the same owner/type/value where inappropriate.
+- [ ] Enforce TTL expiration consistently in memory and SQLite.
+- [ ] Invalidate all affected aliases when a CNAME target or dependent record changes.
+- [ ] Add positive-cache restart tests.
+- [ ] Add negative-cache restart tests.
+- [ ] Add cache mutation/invalidation tests for create, update, delete, and clear operations.
+- [ ] Add concurrent cache access tests and establish expected contention behavior.
 
-### P2 — Dependency and operational security
+### P1 — Dependency and supply-chain security
 
-- [ ] Audit GitHub/Dependabot dependency findings and map each advisory to the actual Cargo dependency tree.
-- [ ] Upgrade vulnerable dependencies where practical without unnecessary breaking changes.
-- [ ] Review logging for useful structured context without sensitive data leakage.
-- [ ] Review configuration defaults and startup validation.
-- [ ] Add graceful shutdown coverage.
-- [ ] Verify filesystem/database permissions and failure modes.
-- [ ] Document deployment requirements, ports, privileges, database location, and `config.ini` configuration.
-- [ ] Add a repeatable release smoke-test procedure.
+- [ ] Run `cargo audit` and review every advisory against the actual dependency graph.
+- [ ] Review Dependabot findings and close/upgrade/justify each finding.
+- [ ] Keep direct dependency requirements intentional rather than relying on broad accidental transitive upgrades.
+- [ ] Add dependency/license policy documentation if required for distribution.
+- [ ] Consider SBOM generation for releases.
+- [ ] Pin/verify GitHub Actions versions according to the project's supply-chain policy.
 
-### P2 — Test and CI coverage
+### P1 — Test suite expansion
 
-- [ ] Add integration coverage for every supported DNS record type.
-- [ ] Add explicit cache-hit/miss and invalidation assertions.
-- [ ] Add negative-cache regression coverage.
-- [ ] Add authenticated/unauthenticated WebSocket tests.
-- [ ] Add API validation and authorization tests.
-- [ ] Add configuration parsing and fail-fast startup tests.
-- [ ] Add bind-address/default-exposure tests.
-- [x] Add release CORS origin-generation tests.
-- [ ] Add CI workflow covering format, check, clippy, tests, and release build.
-- [x] Run the complete release smoke test against `target/release/mydns.exe`.
+- [ ] Add API validation tests for malformed names, unsupported types, invalid values, TTLs, and priorities.
+- [ ] Add complete CRUD update coverage, including rename/type/value/TTL changes and cache invalidation.
+- [ ] Add protected-route authorization tests for records/settings/cache/WebSocket.
+- [ ] Add configuration parsing tests, including missing credentials and malformed values.
+- [ ] Add bind-address tests for localhost and explicit interface/all-interface configuration.
+- [ ] Add startup/shutdown and signal handling tests.
+- [ ] Add DNS integration tests for every supported record type.
+- [ ] Add NODATA/NXDOMAIN/SERVFAIL regression tests.
+- [ ] Add cache restart/persistence tests.
+- [ ] Add WebSocket authentication and disconnect/lag handling tests.
+- [ ] Make integration tests clean up all temporary SQLite files automatically, including failure paths.
+- [ ] Add a deterministic test-data/temp-directory strategy so test artifacts never pollute the repository root.
+
+### P1 — CI quality gates
+
+- [ ] Run `cargo fmt --check` on every push/PR.
+- [ ] Run `cargo check` on every push/PR.
+- [ ] Run `cargo clippy -- -D warnings` on every push/PR.
+- [ ] Run the complete test suite on Linux and Windows.
+- [ ] Add a release-profile build/test job.
+- [ ] Add CodeQL coverage to the active development/PR path.
+- [ ] Add dependency auditing to CI.
+- [ ] Upload test/build artifacts only when useful for diagnosis.
+- [ ] Configure branch protection so required CI checks gate merges to `main`.
+
+### P2 — Release engineering and distributions
+
+- [ ] Define the supported release targets and test each target rather than assuming every cross target works.
+- [ ] Build versioned release archives containing the binary plus required example/config/documentation files.
+- [ ] Generate SHA-256 checksums for every release artifact.
+- [ ] Publish GitHub Releases from version tags with a clear artifact naming convention.
+- [ ] Verify release binaries on clean machines/containers.
+- [ ] Add release notes/changelog generation.
+- [ ] Add optional SBOM/signing/provenance once the basic release pipeline is stable.
+- [ ] Decide whether Linux distributions need `.deb`, `.rpm`, or tarball-only support for the first production release.
+- [ ] Decide whether Windows distribution needs ZIP-only or an installer/service registration package.
+
+### P2 — Containerisation
+
+- [ ] Add a minimal production Dockerfile using a multi-stage build.
+- [ ] Run the container as a non-root user where the chosen DNS binding strategy permits it.
+- [ ] If port 53 requires host privileges/capabilities, document the exact container capability/network mode rather than using unrestricted `--privileged`.
+- [ ] Keep the SQLite database and configuration outside the image via volumes/bind mounts.
+- [ ] Add a container healthcheck suitable for the selected deployment topology.
+- [ ] Add a `docker-compose.yml`/Compose example for local deployment where useful.
+- [ ] Scan the built image for known vulnerabilities.
+
+### P2 — Service deployment
+
+- [ ] Provide a Linux systemd unit with least-privilege settings, restart policy, limits, writable paths, and dependency ordering.
+- [ ] Provide a Windows service/install procedure if Windows is a supported production target.
+- [ ] Document DNS port 53 UDP/TCP and management HTTP(S) port requirements.
+- [ ] Document firewall rules, filesystem permissions, database backup/restore, and log rotation.
+- [ ] Define a backup strategy for SQLite and a recovery procedure.
+- [ ] Define health/readiness checks and operational failure behavior.
+
+### P2 — Documentation and release UX
+
+- [ ] Rewrite README Quick Start for `config.ini`; remove stale `.env.example` instructions.
+- [ ] Document supported DNS record types and actual resolver behavior.
+- [ ] Document production topology, HTTPS requirement, ports, privileges, database/log locations, and backups.
+- [ ] Add a deployment guide with native and containerized options.
+- [ ] Add a configuration reference with every supported key and default.
+- [ ] Add a release/upgrade guide covering database compatibility and rollback.
+- [ ] Add a changelog/release notes file.
+- [ ] Document security model and threat assumptions.
 
 ## Acceptance criteria
 
-A production-readiness pass is complete when:
+A production release is complete only when:
 
-1. Formatting, compilation, clippy, unit tests, and integration tests all pass with zero warnings/errors.
-2. DNS behavior is correct for supported record types, including CNAME, NXDOMAIN/NODATA, PTR, and upstream failure cases.
-3. Cache invalidation is correct after record mutations and across process restarts.
-4. Protected web/API/WebSocket surfaces require appropriate authentication and authorization.
-5. Release configuration comes from `config.ini`, missing admin credentials fail fast, and default network exposure is localhost-only.
-6. Release CORS is explicit and does not use `CorsLayer::permissive()`.
-7. Privilege handling does not require unnecessary runtime privileges.
-8. A clean release build passes the scripted DNS smoke test.
-9. No generated test databases or other runtime artifacts remain in the working tree after tests.
+1. Format, check, clippy, unit tests, integration tests, and release-profile verification pass with zero warnings/errors.
+2. DNS correctly distinguishes positive answers, NODATA, NXDOMAIN, and SERVFAIL.
+3. All documented record types behave correctly over both UDP and TCP.
+4. Authoritative CNAME chains are correct, bounded, and loop-safe.
+5. Cache persistence, expiration, deduplication, and invalidation are verified across restarts and mutations.
+6. All management surfaces are authenticated/authorized as intended, with abuse/resource limits and no credential/token leakage.
+7. Default exposure is localhost-only and configured bind addresses are actually honored.
+8. Production dashboard traffic is protected by HTTPS.
+9. Unix privilege handling fails closed and does not leave the service unnecessarily privileged.
+10. CI gates pull requests and releases; dependency/security checks are automated.
+11. Release artifacts are versioned, checksummed, tested, and published with documented supported targets.
+12. At least one documented native deployment and one documented container deployment are reproducible.
+13. README and deployment/configuration documentation match the actual implementation.
+14. A clean test run leaves no generated database/log/runtime artifacts in the working tree.
+15. A final clean-tree audit is performed before tagging the production release.
 
 ## Execution order
 
-1. ~~Implement `config.ini` parsing and configuration precedence.~~ **Done.**
-2. ~~Implement localhost-safe DNS/HTTP binding with explicit override support.~~ **Done.**
-3. ~~Remove insecure admin credential defaults and add fail-fast validation.~~ **Done.**
-4. ~~Implement debug/release CORS behavior and default/configured domain handling.~~ **Done.**
-5. ~~Add configuration, binding, CORS, and authentication regression tests.~~ **CORS/auth coverage done; configuration/binding test expansion remains.**
-6. **Next: complete the dependency vulnerability audit and targeted upgrades.**
-7. Continue DNS/cache correctness, persistence, privilege, and operational hardening.
-8. Verify CI and release smoke testing.
-9. Run a final clean-tree audit and tag the production-ready commit.
+1. **Fix P0 code correctness/security blockers first:** bind address, DNS outcome semantics, CNAME behavior, upstream failures, privilege handling, shutdown, and HTTPS deployment decision.
+2. **Expand tests around those fixes** so the intended behavior is locked down before further packaging work.
+3. **Finish API/cache hardening** and run the dependency/security audit.
+4. **Make CI authoritative** for format/check/clippy/tests/release verification and ensure the active branch is covered.
+5. **Bring documentation in sync** with the real configuration and feature set.
+6. **Implement release engineering:** versioning, archives, checksums, GitHub Releases, supported target validation.
+7. **Implement deployment options:** native service plus container/Compose, with least privilege and persistent storage.
+8. **Run clean-machine smoke tests** for native and container distributions.
+9. **Final gate:** full test suite, security/dependency review, clean-tree audit, release artifacts, release notes, then tag the production-ready commit.
