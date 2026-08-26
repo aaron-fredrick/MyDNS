@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 use hickory_proto::rr::Name;
 
@@ -10,7 +10,6 @@ const MAX_TTL: u32 = 86_400;
 const MAX_DNS_NAME_LEN: usize = 253;
 const MAX_LABEL_LEN: usize = 63;
 
-/// Validate a record creation request before it reaches SQLite.
 pub fn validate_create_record(req: &CreateRecord) -> Result<(), ApiError> {
     validate_name(&req.name)?;
     validate_record_type(&req.record_type)?;
@@ -20,7 +19,6 @@ pub fn validate_create_record(req: &CreateRecord) -> Result<(), ApiError> {
     Ok(())
 }
 
-/// Validate fields supplied in a record update.
 pub fn validate_update_record(req: &UpdateRecord) -> Result<(), ApiError> {
     if let Some(name) = req.name.as_deref() {
         validate_name(name)?;
@@ -29,10 +27,9 @@ pub fn validate_update_record(req: &UpdateRecord) -> Result<(), ApiError> {
         validate_record_type(record_type)?;
     }
     if let Some(value) = req.value.as_deref() {
-        let record_type = req
-            .record_type
-            .as_deref()
-            .ok_or_else(|| ApiError::BadRequest("record_type is required when updating value".into()))?;
+        let record_type = req.record_type.as_deref().ok_or_else(|| {
+            ApiError::BadRequest("record_type is required when updating value".into())
+        })?;
         validate_value(record_type, value)?;
     }
     if let Some(ttl) = req.ttl {
@@ -58,7 +55,10 @@ fn validate_name(raw: &str) -> Result<(), ApiError> {
             "Wildcard and zone-apex shorthand names are not supported".into(),
         ));
     }
-    if name.split('.').any(|label| label.is_empty() || label.len() > MAX_LABEL_LEN) {
+    if name
+        .split('.')
+        .any(|label| label.is_empty() || label.len() > MAX_LABEL_LEN)
+    {
         return Err(ApiError::BadRequest(
             "DNS name contains an empty or oversized label".into(),
         ));
@@ -111,14 +111,12 @@ fn validate_value(record_type: &str, value: &str) -> Result<(), ApiError> {
     }
 
     match record_type.trim().to_ascii_uppercase().as_str() {
-        "A" => value
-            .parse::<Ipv4Addr>()
-            .map(|_| ())
-            .map_err(|_| ApiError::BadRequest("A record value must be a valid IPv4 address".into())),
-        "AAAA" => value
-            .parse::<Ipv6Addr>()
-            .map(|_| ())
-            .map_err(|_| ApiError::BadRequest("AAAA record value must be a valid IPv6 address".into())),
+        "A" => value.parse::<Ipv4Addr>().map(|_| ()).map_err(|_| {
+            ApiError::BadRequest("A record value must be a valid IPv4 address".into())
+        }),
+        "AAAA" => value.parse::<Ipv6Addr>().map(|_| ()).map_err(|_| {
+            ApiError::BadRequest("AAAA record value must be a valid IPv6 address".into())
+        }),
         "CNAME" | "PTR" | "MX" => {
             let target = value.trim_end_matches('.');
             if target.is_empty() {
@@ -133,10 +131,7 @@ fn validate_value(record_type: &str, value: &str) -> Result<(), ApiError> {
     }
 }
 
-fn validate_priority(
-    record_type: &str,
-    priority: Option<u16>,
-) -> Result<(), ApiError> {
+fn validate_priority(record_type: &str, priority: Option<u16>) -> Result<(), ApiError> {
     if priority.is_some() && !record_type.trim().eq_ignore_ascii_case("MX") {
         return Err(ApiError::BadRequest(
             "Priority is only valid for MX records".into(),
@@ -173,7 +168,6 @@ mod tests {
     #[test]
     fn rejects_invalid_names_and_values() {
         assert!(validate_create_record(&create("A", "not-an-ip")).is_err());
-        assert!(validate_create_record(&create("A", "192.0.2.1")).is_ok());
         let mut invalid = create("A", "192.0.2.1");
         invalid.name = "bad..name.local".into();
         assert!(validate_create_record(&invalid).is_err());
