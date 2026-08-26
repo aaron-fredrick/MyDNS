@@ -8,13 +8,14 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ## Current baseline
 
-- `cargo fmt --check` passes.
-- `cargo check` passes.
-- `cargo clippy -- -D warnings` passes.
+- `cargo fmt --check` passes on the latest verified local baseline.
+- `cargo check` passes on the latest verified local baseline.
+- `cargo clippy -- -D warnings` passes on the latest verified local baseline.
 - Unit tests pass: 18 passed.
 - Existing API integration tests pass: 5 passed.
-- New DNS wire integration tests pass: 2 passed, covering UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior.
-- Release tests pass, including release CORS restriction coverage.
+- DNS wire integration tests pass on the previously verified baseline: 2 passed, covering UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior.
+- Authoritative CNAME chain/loop regression tests have now been added; they still require local verification after the implementation change.
+- Release tests pass on the previously verified baseline, including release CORS restriction coverage.
 - Manual DNS smoke testing has covered A, AAAA, MX, NS, TXT, CNAME, PTR, NXDOMAIN, and cache-hit behavior.
 - Dependencies were refreshed and `Cargo.lock` updated; `cargo audit` is still required.
 - `production-readiness` is the active implementation branch.
@@ -29,20 +30,22 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] NXDOMAIN remains the only negative result persisted through the existing negative-cache path.
 - [x] Added real DNS wire-level integration coverage for UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior in `tests/dns_integration.rs`.
 - [x] Verified the DNS wire-level integration tests locally after correcting the fixture naming mismatch.
+- [x] Implemented bounded authoritative CNAME chasing for locally managed records.
+- [x] Added authoritative CNAME loop detection with `SERVFAIL` on cycles/recursion-limit exhaustion.
+- [x] Added wire-level regression coverage for CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
 
 ### Still open from the audit
 
-1. Authoritative/manual CNAME resolution is incomplete and needs consistent bounded chasing and loop detection.
-2. CNAME-dependent cache invalidation does not invalidate aliases when a target changes.
-3. Persistent cache insertion can accumulate duplicate rows.
-4. Unix privilege dropping needs a deliberate UID/GID/groups strategy and fail-closed behavior.
-5. DNS/HTTP shutdown propagation is asymmetric.
-6. Management API login/request abuse and resource limits need explicit controls.
-7. HTTPS deployment needs to be implemented/documented and tested.
-8. CI does not yet fully cover the active production-readiness branch.
-9. Release workflow needs a complete verification/distribution contract.
-10. README and deployment documentation need to match the current `config.ini`-based system.
-11. Generated integration-test SQLite files must be cleaned up automatically and ignored appropriately.
+1. CNAME-dependent cache invalidation does not invalidate aliases when a target changes.
+2. Persistent cache insertion can accumulate duplicate rows.
+3. Unix privilege dropping needs a deliberate UID/GID/groups strategy and fail-closed behavior.
+4. DNS/HTTP shutdown propagation is asymmetric.
+5. Management API login/request abuse and resource limits need explicit controls.
+6. HTTPS deployment needs to be implemented/documented and tested.
+7. CI does not yet fully cover the active production-readiness branch.
+8. Release workflow needs a complete verification/distribution contract.
+9. README and deployment documentation need to match the current `config.ini`-based system.
+10. Generated integration-test SQLite files must be cleaned up automatically and ignored appropriately.
 
 ## Decisions
 
@@ -70,7 +73,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] Fix DNS UDP/TCP binding to honor `config.ini` `bind_host`.
 - [x] Implement a typed DNS resolution outcome so `NOERROR/NODATA`, `NXDOMAIN`, and `SERVFAIL` cannot collapse into the same empty vector.
 - [x] Fix upstream error handling so timeouts/unavailable resolvers produce `SERVFAIL`, not NXDOMAIN.
-- [ ] Implement consistent authoritative CNAME chasing, including bounded chains and loop detection.
+- [x] Implement consistent authoritative CNAME chasing, including bounded chains and loop detection.
 - [ ] Add validation for DNS names, record types, record values, TTL bounds, and MX priority.
 - [ ] Define and enforce zone/ownership rules for records managed through the API.
 - [ ] Complete Unix privilege dropping with a deliberate UID/GID/groups strategy; fail closed if the requested least-privilege transition cannot be completed.
@@ -81,8 +84,8 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 ### P1 — DNS feature correctness
 
 - [ ] Add authoritative handling/tests for A, AAAA, CNAME, MX, NS, TXT, and PTR.
-- [ ] Test CNAME-only responses and multi-hop CNAME chains.
-- [ ] Test CNAME loops and recursion limits.
+- [x] Test CNAME-only responses and multi-hop CNAME chains.
+- [x] Test CNAME loops and recursion limits.
 - [x] Verify the new DNS outcome model over the real wire for positive answers, NODATA, and NXDOMAIN (UDP), plus positive answers over TCP.
 - [ ] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
 - [x] Verify UDP and TCP DNS listener behavior independently at the socket level and with wire-level integration tests.
