@@ -10,6 +10,7 @@ use crate::db::records::{self, CreateRecord, UpdateRecord};
 use crate::state::AppState;
 use crate::web::auth::JwtClaims;
 use crate::web::error::ApiError;
+use crate::web::validation;
 
 async fn cache_invalidation_names(
     pool: &sqlx::SqlitePool,
@@ -52,7 +53,10 @@ pub async fn createRecord(
     State(state): State<Arc<AppState>>,
     Json(mut body): Json<CreateRecord>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    validation::validate_create_record(&body)?;
     body.name = body.name.trim_end_matches('.').to_lowercase();
+    body.record_type = body.record_type.trim().to_ascii_uppercase();
+    body.value = body.value.trim().to_string();
 
     let row = records::createRecord(&state.db, &body).await?;
     invalidate_caches(&state, std::slice::from_ref(&body.name)).await?;
@@ -79,14 +83,48 @@ pub async fn updateRecord(
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
     let old_name = old.name.clone();
-    // Capture dependents before the mutation because changing a CNAME target
-    // can remove the old dependency from dns_records.
     let mut invalidation_names =
         cache_invalidation_names(&state.db, std::slice::from_ref(&old_name)).await?;
 
+    validation::validate_update_record(&body)?;
+
+    let new_name = body
+        .name
+        .as_deref()
+        .unwrap_or(&old.name)
+        .trim_end_matches('.')
+        .to_lowercase();
+    let new_type = body
+        .record_type
+        .as_deref()
+        .unwrap_or(&old.record_type)
+        .trim()
+        .to_ascii_uppercase();
+    let new_value = body.value.as_deref().unwrap_or(&old.value).trim().to_string();
+    let new_ttl = body.ttl.unwrap_or(old.ttl as u32);
+    let new_priority = if new_type == "MX" {
+        body.priority.or(old.priority.map(|value| value as u16))
+    } else {
+        None
+    };
+
+    validation::validate_record(
+        &new_name,
+        &new_type,
+        &new_value,
+        new_ttl,
+        new_priority,
+    )?;
+
     let mut body = body;
     if let Some(ref mut name) = body.name {
-        *name = name.trim_end_matches('.').to_lowercase();
+        *name = new_name;
+    }
+    if let Some(ref mut record_type) = body.record_type {
+        *record_type = new_type;
+    }
+    if let Some(ref mut value) = body.value {
+        *value = new_value;
     }
 
     let updated = records::updateRecord(&state.db, id, &body)
@@ -114,7 +152,6 @@ pub async fn deleteRecord(
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
-    // Capture CNAME dependents before deleting the authoritative record.
     let invalidation_names =
         cache_invalidation_names(&state.db, std::slice::from_ref(&row.name)).await?;
 
