@@ -71,21 +71,20 @@ impl AppConfig {
     ///
     /// Admin credentials are deliberately mandatory and are never defaulted. This
     /// prevents a production deployment from silently starting with known credentials.
-    pub fn fromConfigFile() -> anyhow::Result<Self> {
+    pub fn from_config_file() -> anyhow::Result<Self> {
         let path = Path::new("config.ini");
-        let contents = std::fs::read_to_string(path).map_err(|e| {
-            anyhow::anyhow!("Failed to read {}: {}", path.display(), e)
-        })?;
-        let values = parseIni(&contents)?;
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path.display(), e))?;
+        let values = parse_ini(&contents)?;
 
         let admin_username = required(&values, "admin_username")?;
         let admin_password = required(&values, "admin_password")?;
 
         Ok(Self {
-            bind_host: parseValue(&values, "bind_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
-            dns_port: parseValue(&values, "dns_port", 53)?,
-            http_host: parseValue(&values, "http_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
-            http_port: parseValue(&values, "http_port", 8080)?,
+            bind_host: parse_value(&values, "bind_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
+            dns_port: parse_value(&values, "dns_port", 53)?,
+            http_host: parse_value(&values, "http_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
+            http_port: parse_value(&values, "http_port", 8080)?,
             db_path: values
                 .get("db_path")
                 .cloned()
@@ -95,12 +94,12 @@ impl AppConfig {
             jwt_secret: values.get("jwt_secret").cloned().unwrap_or_default(),
             admin_username,
             admin_password,
-            resolver_priority: parseValue(
+            resolver_priority: parse_value(
                 &values,
                 "resolver_priority",
                 ResolverPriority::default(),
             )?,
-            cloudflare_dns: parseValue(
+            cloudflare_dns: parse_value(
                 &values,
                 "cloudflare_dns",
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 53),
@@ -114,7 +113,7 @@ impl AppConfig {
     }
 
     /// Compatibility helper for tests and callers that previously used the environment.
-    /// Prefer [`Self::fromConfigFile`] for application startup.
+    /// Prefer [`Self::from_config_file`] for application startup.
     #[allow(non_snake_case)]
     pub fn fromEnv() -> Self {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| generateSecret(64));
@@ -144,23 +143,33 @@ impl AppConfig {
     }
 }
 
-fn parseIni(contents: &str) -> anyhow::Result<std::collections::HashMap<String, String>> {
+fn parse_ini(contents: &str) -> anyhow::Result<std::collections::HashMap<String, String>> {
     let mut values = std::collections::HashMap::new();
 
     for (line_number, raw_line) in contents.lines().enumerate() {
         let line = raw_line.trim();
-        if line.is_empty() || line.starts_with('#') || line.starts_with(';') || line.starts_with('[') {
+        if line.is_empty()
+            || line.starts_with('#')
+            || line.starts_with(';')
+            || line.starts_with('[')
+        {
             continue;
         }
 
         let (key, value) = line.split_once('=').ok_or_else(|| {
-            anyhow::anyhow!("Invalid config.ini line {}: expected key=value", line_number + 1)
+            anyhow::anyhow!(
+                "Invalid config.ini line {}: expected key=value",
+                line_number + 1
+            )
         })?;
         let key = key.trim().to_lowercase();
         let value = value.trim().trim_matches('"').to_string();
 
         if key.is_empty() {
-            return Err(anyhow::anyhow!("Invalid config.ini line {}: empty key", line_number + 1));
+            return Err(anyhow::anyhow!(
+                "Invalid config.ini line {}: empty key",
+                line_number + 1
+            ));
         }
         values.insert(key, value);
     }
@@ -168,14 +177,20 @@ fn parseIni(contents: &str) -> anyhow::Result<std::collections::HashMap<String, 
     Ok(values)
 }
 
-fn required(values: &std::collections::HashMap<String, String>, key: &str) -> anyhow::Result<String> {
+fn required(
+    values: &std::collections::HashMap<String, String>,
+    key: &str,
+) -> anyhow::Result<String> {
     match values.get(key).map(|v| v.trim()).filter(|v| !v.is_empty()) {
         Some(value) => Ok(value.to_string()),
-        None => Err(anyhow::anyhow!("Missing required config.ini value: {}", key)),
+        None => Err(anyhow::anyhow!(
+            "Missing required config.ini value: {}",
+            key
+        )),
     }
 }
 
-fn parseValue<T: FromStr>(
+fn parse_value<T: FromStr>(
     values: &std::collections::HashMap<String, String>,
     key: &str,
     default: T,

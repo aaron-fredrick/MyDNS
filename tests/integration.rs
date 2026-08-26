@@ -19,8 +19,12 @@ async fn start_test_server() -> (String, String) {
     let port = rand::random::<u16>() % 10000 + 20000; // Use a random high port
 
     let cfg = AppConfig {
+        bind_host: "127.0.0.1".parse().unwrap(),
         dns_port: port + 1,
+
+        http_host: "127.0.0.1".parse().unwrap(),
         http_port: port,
+
         db_path: db_path.clone(),
         jwt_secret: mydns::config::generateSecret(64),
         admin_username: "admin".to_string(),

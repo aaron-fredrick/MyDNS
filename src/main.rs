@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     // ── 3. Configuration ──────────────────────────────────────────────────────
     // Production configuration is explicit and fail-fast. In particular,
     // admin credentials must be present in config.ini; there are no defaults.
-    let mut cfg = AppConfig::fromConfigFile()?;
+    let mut cfg = AppConfig::from_config_file()?;
     tracing::info!(
         bind_host = %cfg.bind_host,
         dns_port = cfg.dns_port,
