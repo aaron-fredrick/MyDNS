@@ -6,4 +6,5 @@ pub mod records_api;
 pub mod server;
 pub mod settings_api;
 pub mod stats_api;
+pub mod validation;
 pub mod ws;
