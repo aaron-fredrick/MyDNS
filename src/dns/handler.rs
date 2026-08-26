@@ -26,18 +26,12 @@ pub struct DnsHandler {
 
 #[allow(non_snake_case)]
 impl DnsHandler {
-    pub fn new(state: Arc<AppState>) -> Self {
-        Self { state }
-    }
+    pub fn new(state: Arc<AppState>) -> Self { Self { state } }
 }
 
 #[async_trait]
 impl RequestHandler for DnsHandler {
-    async fn handle_request<R: ResponseHandler>(
-        &self,
-        request: &Request,
-        mut response_handle: R,
-    ) -> ResponseInfo {
+    async fn handle_request<R: ResponseHandler>(&self, request: &Request, mut response_handle: R) -> ResponseInfo {
         let src = request.src();
         let query = request.query();
         let name_fqdn = query.name().to_string();
@@ -45,7 +39,6 @@ impl RequestHandler for DnsHandler {
         let name = name_fqdn.trim_end_matches('.').to_lowercase();
 
         tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, "DNS query received");
-
         let result = self.processResolution(&name, rtype, src).await;
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
@@ -92,12 +85,8 @@ impl RequestHandler for DnsHandler {
 #[allow(non_snake_case)]
 impl DnsHandler {
     async fn processResolution(&self, name: &str, rtype: RecordType, src: SocketAddr) -> ResolutionResult {
-        if let Some(result) = self.queryMemoryCache(name, rtype, src).await {
-            return result;
-        }
-        if let Some(result) = self.queryPersistentCache(name, rtype).await {
-            return result;
-        }
+        if let Some(result) = self.queryMemoryCache(name, rtype, src).await { return result; }
+        if let Some(result) = self.queryPersistentCache(name, rtype).await { return result; }
         if let Some(result) = self.queryDatabase(name, rtype).await {
             if let ResolutionResult::Positive(records) = &result {
                 self.logResolution(src, name, rtype, records, "DB");
@@ -106,14 +95,13 @@ impl DnsHandler {
             }
             return result;
         }
-        if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
-            return ResolutionResult::Positive(records);
-        }
+        if let Some(records) = self.querySpecialRecords(name, rtype, src).await { return ResolutionResult::Positive(records); }
 
         match self.queryUpstream(name, rtype, src).await {
-            ResolutionResult::Positive(records, ttl) => {
+            ResolutionResult::Positive(records) => {
+                let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(300);
                 self.saveToAllCaches(name, rtype, records.clone(), ttl).await;
-                ResolutionResult::Positive(records, ttl)
+                ResolutionResult::Positive(records)
             }
             ResolutionResult::Nodata => {
                 tracing::info!(client = %src, query = %name, r#type = %rtype, "NODATA");
@@ -175,16 +163,11 @@ impl DnsHandler {
                 self.handleCachedNegativeResult(name, rtype, rows[0].expires_at).await;
                 return Some(ResolutionResult::NxDomain);
             }
-
             let mut records = Vec::new();
             for row in &rows {
-                if let Some(record) = buildRecord(name, rtype, &row.value, row.ttl as u32, row.priority) {
-                    records.push(record);
-                }
+                if let Some(record) = buildRecord(name, rtype, &row.value, row.ttl as u32, row.priority) { records.push(record); }
             }
-            if !records.is_empty() {
-                return Some(ResolutionResult::Positive(records));
-            }
+            if !records.is_empty() { return Some(ResolutionResult::Positive(records)); }
         }
 
         if rtype != RecordType::CNAME {
@@ -209,28 +192,17 @@ impl DnsHandler {
 
     async fn queryDatabase(&self, name: &str, rtype: RecordType) -> Option<ResolutionResult> {
         let rows = crate::db::records::findByName(&self.state.db, name).await.ok()?;
-        if rows.is_empty() {
-            return None;
-        }
-
+        if rows.is_empty() { return None; }
         let rtype_str = rtype.to_string().to_uppercase();
         let mut records = Vec::new();
         for row in rows.iter().filter(|r| r.record_type == rtype_str) {
-            if let Some(record) = buildRecord(name, rtype, &row.value, row.ttl as u32, row.priority) {
-                records.push(record);
-            }
+            if let Some(record) = buildRecord(name, rtype, &row.value, row.ttl as u32, row.priority) { records.push(record); }
         }
-        if records.is_empty() {
-            Some(ResolutionResult::Nodata)
-        } else {
-            Some(ResolutionResult::Positive(records))
-        }
+        if records.is_empty() { Some(ResolutionResult::Nodata) } else { Some(ResolutionResult::Positive(records)) }
     }
 
     async fn querySpecialRecords(&self, name: &str, rtype: RecordType, src: SocketAddr) -> Option<Vec<Record>> {
-        if name != "mydns.local" || (rtype != RecordType::A && rtype != RecordType::AAAA) {
-            return None;
-        }
+        if name != "mydns.local" || (rtype != RecordType::A && rtype != RecordType::AAAA) { return None; }
         let target_ip = self.getLocalInterfaceIpForClient(src.ip());
         if let Some(record) = buildRecord(name, rtype, &target_ip, 60, None) {
             let _ = self.state.log_tx.send(format!("[SPECIAL] client={} query={} type={} value=[{}]", src, name, rtype, target_ip));
@@ -249,17 +221,15 @@ impl DnsHandler {
                 return ResolutionResult::ServFail;
             }
         };
-
         let upstream = self.state.upstream.read().await;
         let result = upstream.resolve(&parsed_name, rtype).await;
         let addr = self.getUpstreamAddressString(&upstream).await;
-
         match result {
-            UpstreamResolution::Positive(records, ttl) => {
+            UpstreamResolution::Positive(records, _ttl) => {
                 let values = self.getRecordValuesString(&records);
                 tracing::info!(client = %src, query = %name, r#type = %rtype, value = %values, upstream = %addr, "Upstream resolve hit");
                 let _ = self.state.log_tx.send(format!("[UPSTREAM] client={} query={} type={} value=[{}] server={}", src, name, rtype, values, addr));
-                ResolutionResult::Positive(records, ttl)
+                ResolutionResult::Positive(records)
             }
             UpstreamResolution::Nodata => ResolutionResult::Nodata,
             UpstreamResolution::NxDomain => ResolutionResult::NxDomain,
@@ -283,10 +253,7 @@ impl DnsHandler {
         for r in &records {
             let owner = r.name().to_string().trim_end_matches('.').to_lowercase();
             if let Some(val) = r.data().map(|d| d.to_string()) {
-                let prio = match r.data() {
-                    Some(RData::MX(mx)) => Some(mx.preference() as i64),
-                    _ => None,
-                };
+                let prio = match r.data() { Some(RData::MX(mx)) => Some(mx.preference() as i64), _ => None };
                 let _ = crate::db::records::insertCache(&self.state.db, &owner, &r.record_type().to_string(), &val, ttl, prio).await;
             }
         }
@@ -330,12 +297,8 @@ impl DnsHandler {
     }
 
     fn getLocalInterfaceIpForClient(&self, client_ip: IpAddr) -> String {
-        if client_ip.is_loopback() {
-            return "127.0.0.1".to_string();
-        }
-        if isPrivateIp(client_ip) {
-            return local_ip_address::local_ip().map(|ip| ip.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
-        }
+        if client_ip.is_loopback() { return "127.0.0.1".to_string(); }
+        if isPrivateIp(client_ip) { return local_ip_address::local_ip().map(|ip| ip.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string()); }
         local_ip_address::local_ip().map(|ip| ip.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string())
     }
 }
