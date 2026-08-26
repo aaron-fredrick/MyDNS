@@ -1,4 +1,4 @@
-use super::DnsCache;
+use super::{CacheResult, DnsCache};
 use hickory_proto::rr::RecordType;
 use std::time::Duration;
 
@@ -11,7 +11,27 @@ fn insert_and_hit() {
         vec![],
         Duration::from_secs(300),
     );
-    assert!(cache.get("example.com.", RecordType::A).is_some());
+    let (result, records) = cache
+        .get("example.com.", RecordType::A)
+        .expect("cache entry should exist");
+    assert_eq!(result, CacheResult::Positive);
+    assert!(records.is_empty());
+}
+
+#[test]
+fn negative_entry_is_distinguishable_from_empty_positive_response() {
+    let mut cache = DnsCache::new();
+    cache.insertNegative(
+        "missing.example.",
+        RecordType::A,
+        Duration::from_secs(60),
+    );
+
+    let (result, records) = cache
+        .get("missing.example.", RecordType::A)
+        .expect("negative cache entry should exist");
+    assert_eq!(result, CacheResult::Negative);
+    assert!(records.is_empty());
 }
 
 #[test]
