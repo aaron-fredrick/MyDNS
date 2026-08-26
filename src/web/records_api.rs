@@ -100,7 +100,12 @@ pub async fn updateRecord(
         .unwrap_or(&old.record_type)
         .trim()
         .to_ascii_uppercase();
-    let new_value = body.value.as_deref().unwrap_or(&old.value).trim().to_string();
+    let new_value = body
+        .value
+        .as_deref()
+        .unwrap_or(&old.value)
+        .trim()
+        .to_string();
     let new_ttl = body.ttl.unwrap_or(old.ttl as u32);
     let new_priority = if new_type == "MX" {
         body.priority.or(old.priority.map(|value| value as u16))
@@ -108,13 +113,7 @@ pub async fn updateRecord(
         None
     };
 
-    validation::validate_record(
-        &new_name,
-        &new_type,
-        &new_value,
-        new_ttl,
-        new_priority,
-    )?;
+    validation::validate_record(&new_name, &new_type, &new_value, new_ttl, new_priority)?;
 
     let mut body = body;
     if let Some(ref mut name) = body.name {

@@ -11,7 +11,13 @@ const MAX_DNS_NAME_LEN: usize = 253;
 const MAX_LABEL_LEN: usize = 63;
 
 pub fn validate_create_record(req: &CreateRecord) -> Result<(), ApiError> {
-    validate_record(&req.name, &req.record_type, &req.value, req.ttl, req.priority)
+    validate_record(
+        &req.name,
+        &req.record_type,
+        &req.value,
+        req.ttl,
+        req.priority,
+    )
 }
 
 pub fn validate_update_record(req: &UpdateRecord) -> Result<(), ApiError> {
@@ -53,7 +59,9 @@ fn validate_name(raw: &str) -> Result<(), ApiError> {
         return Err(ApiError::BadRequest("DNS name must not be empty".into()));
     }
     if name.len() > MAX_DNS_NAME_LEN {
-        return Err(ApiError::BadRequest("DNS name exceeds 253 characters".into()));
+        return Err(ApiError::BadRequest(
+            "DNS name exceeds 253 characters".into(),
+        ));
     }
     if name == "@" || name.contains('*') {
         return Err(ApiError::BadRequest(
@@ -112,7 +120,9 @@ fn validate_ttl(ttl: u32) -> Result<(), ApiError> {
 fn validate_value(record_type: &str, value: &str) -> Result<(), ApiError> {
     let value = value.trim();
     if value.is_empty() {
-        return Err(ApiError::BadRequest("Record value must not be empty".into()));
+        return Err(ApiError::BadRequest(
+            "Record value must not be empty".into(),
+        ));
     }
 
     match record_type.trim().to_ascii_uppercase().as_str() {
@@ -125,11 +135,13 @@ fn validate_value(record_type: &str, value: &str) -> Result<(), ApiError> {
         "CNAME" | "PTR" | "MX" => {
             let target = value.trim_end_matches('.');
             if target.is_empty() {
-                return Err(ApiError::BadRequest("Record target must not be empty".into()));
+                return Err(ApiError::BadRequest(
+                    "Record target must not be empty".into(),
+                ));
             }
-            format!("{}.", target)
-                .parse::<Name>()
-                .map_err(|_| ApiError::BadRequest("Record target must be a valid DNS name".into()))?;
+            format!("{}.", target).parse::<Name>().map_err(|_| {
+                ApiError::BadRequest("Record target must be a valid DNS name".into())
+            })?;
             Ok(())
         }
         _ => unreachable!("record type validated before value"),

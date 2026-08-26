@@ -70,14 +70,38 @@ async fn test_record_api_rejects_invalid_inputs() {
     let auth = format!("Bearer {}", login(&client, &base).await);
 
     let cases = [
-        ("empty name", json!({"name":"","record_type":"A","value":"192.0.2.1","ttl":300})),
-        ("bad A value", json!({"name":"bad.local","record_type":"A","value":"not-an-ip","ttl":300})),
-        ("bad AAAA value", json!({"name":"bad.local","record_type":"AAAA","value":"not-an-ip","ttl":300})),
-        ("bad CNAME target", json!({"name":"bad.local","record_type":"CNAME","value":"not..a..name","ttl":300})),
-        ("unsupported type", json!({"name":"bad.local","record_type":"TXT","value":"hello","ttl":300})),
-        ("zero TTL", json!({"name":"bad.local","record_type":"A","value":"192.0.2.1","ttl":0})),
-        ("excessive TTL", json!({"name":"bad.local","record_type":"A","value":"192.0.2.1","ttl":86401})),
-        ("priority on A", json!({"name":"bad.local","record_type":"A","value":"192.0.2.1","ttl":300,"priority":10})),
+        (
+            "empty name",
+            json!({"name":"","record_type":"A","value":"192.0.2.1","ttl":300}),
+        ),
+        (
+            "bad A value",
+            json!({"name":"bad.local","record_type":"A","value":"not-an-ip","ttl":300}),
+        ),
+        (
+            "bad AAAA value",
+            json!({"name":"bad.local","record_type":"AAAA","value":"not-an-ip","ttl":300}),
+        ),
+        (
+            "bad CNAME target",
+            json!({"name":"bad.local","record_type":"CNAME","value":"not..a..name","ttl":300}),
+        ),
+        (
+            "unsupported type",
+            json!({"name":"bad.local","record_type":"TXT","value":"hello","ttl":300}),
+        ),
+        (
+            "zero TTL",
+            json!({"name":"bad.local","record_type":"A","value":"192.0.2.1","ttl":0}),
+        ),
+        (
+            "excessive TTL",
+            json!({"name":"bad.local","record_type":"A","value":"192.0.2.1","ttl":86401}),
+        ),
+        (
+            "priority on A",
+            json!({"name":"bad.local","record_type":"A","value":"192.0.2.1","ttl":300,"priority":10}),
+        ),
     ];
 
     for (label, body) in cases {

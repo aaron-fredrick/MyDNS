@@ -137,5 +137,9 @@ async fn test_concurrent_cache_upserts_remain_deduplicated() {
     let rows = db::records::getCache(&pool, "concurrent.test.local.", "A")
         .await
         .unwrap();
-    assert_eq!(rows.len(), 1, "Concurrent identical writes must deduplicate");
+    assert_eq!(
+        rows.len(),
+        1,
+        "Concurrent identical writes must deduplicate"
+    );
 }
