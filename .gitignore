@@ -35,3 +35,5 @@ Thumbs.db
 .agentic/
 .gemini/
 .antigravity/
+
+config.ini
