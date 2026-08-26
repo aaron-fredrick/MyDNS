@@ -103,7 +103,10 @@ async fn test_persistent_cache_clear_removes_all_entries() {
 
     db::records::clearCache(&pool).await.unwrap();
 
-    assert!(db::records::listCacheEntries(&pool).await.unwrap().is_empty());
+    assert!(db::records::listCacheEntries(&pool)
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -112,7 +115,7 @@ async fn test_concurrent_cache_upserts_remain_deduplicated() {
     let pool = Arc::new(db::init(&test_db.path).await.unwrap());
     let mut tasks = Vec::new();
 
-    for ttl in 1..=32u32 {
+    for ttl in 300..=331u32 {
         let pool = Arc::clone(&pool);
         tasks.push(tokio::spawn(async move {
             db::records::insertCache(
