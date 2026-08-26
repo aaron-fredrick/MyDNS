@@ -11,7 +11,8 @@ use dns::upstream::UpstreamResolver;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load environment variables from .env if present
+    // `.env` is a developer convenience only. Release builds never load it.
+    #[cfg(debug_assertions)]
     dotenvy::dotenv().ok();
 
     // ── 2. Logging setup ──────────────────────────────────────────────────────
@@ -39,7 +40,16 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(log_file = %log_filename, "MyDNS starting");
 
     // ── 3. Configuration ──────────────────────────────────────────────────────
-    let mut cfg = AppConfig::fromEnv();
+    // Production configuration is explicit and fail-fast. In particular,
+    // admin credentials must be present in config.ini; there are no defaults.
+    let mut cfg = AppConfig::fromConfigFile()?;
+    tracing::info!(
+        bind_host = %cfg.bind_host,
+        dns_port = cfg.dns_port,
+        http_host = %cfg.http_host,
+        http_port = cfg.http_port,
+        "Configuration loaded"
+    );
 
     // ── 4. Database ───────────────────────────────────────────────────────────
     let pool = db::init(&cfg.db_path).await?;
@@ -60,12 +70,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // ── 5. JWT secret persistence ─────────────────────────────────────────────
-    // If NOT set via environment, try to load from DB to maintain sessions
-    // across restarts. If not in DB either, generate and save.
-    if std::env::var("JWT_SECRET").is_err() {
+    // If no secret was explicitly configured, persist the generated secret so
+    // existing sessions remain valid across restarts.
+    if cfg.jwt_secret.is_empty() {
         if let Some(saved_secret) = db::getSetting(&pool, "jwt_secret").await? {
             cfg.jwt_secret = saved_secret;
         } else {
+            cfg.jwt_secret = config::generateSecret(64);
             db::setSetting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
             tracing::info!("Generated and persisted new JWT secret");
         }
@@ -124,5 +135,3 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("MyDNS shutdown complete");
     Ok(())
 }
-
-// ── Database persistence helpers omitted (moved to db/mod.rs) ────────────────
