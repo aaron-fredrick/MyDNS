@@ -120,9 +120,9 @@ impl UpstreamResolver {
 
         match queryResolver(first, name, rtype).await {
             UpstreamResolution::Positive(records, ttl) => {
-                return UpstreamResolution::Positive(records, ttl)
+                UpstreamResolution::Positive(records, ttl)
             }
-            UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
+            UpstreamResolution::NxDomain => UpstreamResolution::NxDomain,
             UpstreamResolution::Nodata => {
                 if let Some(resolver) = second {
                     match queryResolver(resolver, name, rtype).await {
@@ -134,7 +134,7 @@ impl UpstreamResolver {
                         UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
                     }
                 }
-                return UpstreamResolution::Nodata;
+                UpstreamResolution::Nodata
             }
             UpstreamResolution::ServFail => {
                 if let Some(resolver) = second {
@@ -147,7 +147,7 @@ impl UpstreamResolver {
                         UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
                     }
                 }
-                return UpstreamResolution::ServFail;
+                UpstreamResolution::ServFail
             }
         }
     }
@@ -184,7 +184,8 @@ async fn queryResolver(
         }
         Err(e) => match e.kind() {
             ResolveErrorKind::NoRecordsFound { response_code, .. }
-                if *response_code == ResponseCode::NXDomain => {
+                if *response_code == ResponseCode::NXDomain =>
+            {
                 tracing::info!(query = %name, "Upstream returned NXDOMAIN");
                 UpstreamResolution::NxDomain
             }
