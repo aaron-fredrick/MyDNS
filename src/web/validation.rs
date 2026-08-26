@@ -5,18 +5,13 @@ use hickory_proto::rr::Name;
 use crate::db::records::{CreateRecord, UpdateRecord};
 use crate::web::error::ApiError;
 
-const MIN_TTL: u32 = 1;
-const MAX_TTL: u32 = 86_400;
+pub const MIN_TTL: u32 = 1;
+pub const MAX_TTL: u32 = 86_400;
 const MAX_DNS_NAME_LEN: usize = 253;
 const MAX_LABEL_LEN: usize = 63;
 
 pub fn validate_create_record(req: &CreateRecord) -> Result<(), ApiError> {
-    validate_name(&req.name)?;
-    validate_record_type(&req.record_type)?;
-    validate_ttl(req.ttl)?;
-    validate_value(&req.record_type, &req.value)?;
-    validate_priority(&req.record_type, req.priority)?;
-    Ok(())
+    validate_record(&req.name, &req.record_type, &req.value, req.ttl, req.priority)
 }
 
 pub fn validate_update_record(req: &UpdateRecord) -> Result<(), ApiError> {
@@ -26,19 +21,29 @@ pub fn validate_update_record(req: &UpdateRecord) -> Result<(), ApiError> {
     if let Some(record_type) = req.record_type.as_deref() {
         validate_record_type(record_type)?;
     }
-    if let Some(value) = req.value.as_deref() {
-        let record_type = req.record_type.as_deref().ok_or_else(|| {
-            ApiError::BadRequest("record_type is required when updating value".into())
-        })?;
-        validate_value(record_type, value)?;
-    }
     if let Some(ttl) = req.ttl {
         validate_ttl(ttl)?;
     }
     if let Some(priority) = req.priority {
-        let record_type = req.record_type.as_deref().unwrap_or("MX");
-        validate_priority(record_type, Some(priority))?;
+        if let Some(record_type) = req.record_type.as_deref() {
+            validate_priority(record_type, Some(priority))?;
+        }
     }
+    Ok(())
+}
+
+pub fn validate_record(
+    name: &str,
+    record_type: &str,
+    value: &str,
+    ttl: u32,
+    priority: Option<u16>,
+) -> Result<(), ApiError> {
+    validate_name(name)?;
+    validate_record_type(record_type)?;
+    validate_ttl(ttl)?;
+    validate_value(record_type, value)?;
+    validate_priority(record_type, priority)?;
     Ok(())
 }
 
