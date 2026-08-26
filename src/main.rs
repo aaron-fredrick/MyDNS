@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
         if let Some(saved_secret) = db::getSetting(&pool, "jwt_secret").await? {
             cfg.jwt_secret = saved_secret;
         } else {
-            cfg.jwt_secret = config::generateSecret(64);
+            cfg.jwt_secret = config::generate_secret(64);
             db::setSetting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
             tracing::info!("Generated and persisted new JWT secret");
         }

@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 async fn start_test_server() -> (String, String) {
-    let test_id = mydns::config::generateSecret(8);
+    let test_id = mydns::config::generate_secret(8);
     let db_path = format!("test_{}.db", test_id);
     let port = rand::random::<u16>() % 10000 + 20000; // Use a random high port
 
@@ -27,7 +27,7 @@ async fn start_test_server() -> (String, String) {
         cors_domains: vec!["mydns.local".to_string()],
 
         db_path: db_path.clone(),
-        jwt_secret: mydns::config::generateSecret(64),
+        jwt_secret: mydns::config::generate_secret(64),
         admin_username: "admin".to_string(),
         admin_password: "changeme123".to_string(),
         resolver_priority: mydns::config::ResolverPriority::CloudflareFirst,
