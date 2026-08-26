@@ -1,12 +1,15 @@
-use std::net::IpAddr;
 use std::sync::Arc;
+
+#[cfg(not(debug_assertions))]
+use std::net::IpAddr;
 
 use anyhow::Context;
 use axum::{
-    http::{header, HeaderValue, Method},
     routing::{delete, get, post, put},
     Router,
 };
+#[cfg(not(debug_assertions))]
+use axum::http::{header, HeaderValue, Method};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 
