@@ -82,18 +82,17 @@ impl AppConfig {
         let admin_password = required(&values, "admin_password")?;
 
         Ok(Self {
-            bind_host: parseValue(&values, "bind_host", "127.0.0.1")?,
+            bind_host: parseValue(&values, "bind_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
             dns_port: parseValue(&values, "dns_port", 53)?,
-            http_host: parseValue(&values, "http_host", "127.0.0.1")?,
+            http_host: parseValue(&values, "http_host", IpAddr::V4(Ipv4Addr::LOCALHOST))?,
             http_port: parseValue(&values, "http_port", 8080)?,
             db_path: values
                 .get("db_path")
                 .cloned()
                 .unwrap_or_else(|| "mydns.db".to_string()),
-            jwt_secret: values
-                .get("jwt_secret")
-                .cloned()
-                .unwrap_or_else(|| generateSecret(64)),
+            // Empty means "not explicitly configured". main.rs then restores a
+            // persisted secret or generates and persists one for first startup.
+            jwt_secret: values.get("jwt_secret").cloned().unwrap_or_default(),
             admin_username,
             admin_password,
             resolver_priority: parseValue(
