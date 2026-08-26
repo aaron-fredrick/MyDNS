@@ -116,6 +116,54 @@ None
 - [ ] Add dependency auditing to CI.
 - [ ] Configure branch protection so required checks gate merges to `main`.
 
+### P2 — Frontend and UI production build
+
+The current repository already has a browser UI under `src/assets` consisting of `dashboard.html`, `style.css`, and `app.js`. fileciteturn6file0L1-L2 The backend is an Axum 0.7 HTTP/WebSocket service, so the frontend should remain a static client served by the Rust binary rather than introducing a second runtime server. fileciteturn4file0L1-L2
+
+#### Recommended frontend stack
+
+- [ ] Migrate the existing UI to **React + TypeScript + Vite**.
+- [ ] Use Vite only as the development/build tool; production output must be static assets served by MyDNS/Axum.
+- [ ] Keep application state/API integration lightweight: React state/hooks for local UI state, native `fetch` for mutations, and a small API/query abstraction for server state. Avoid adding a large state-management framework unless real complexity requires it.
+- [ ] Use native WebSocket handling for live DNS/log/status streams, with explicit reconnect/backoff and connection-state UI.
+- [ ] Use a small icon library such as Lucide rather than shipping a large UI component framework.
+- [ ] Keep the visual system in project-owned CSS/design tokens so the My Systems/MyDNS brand is not locked to a third-party component theme.
+- [ ] Use semantic HTML, keyboard-accessible controls, visible focus states, reduced-motion support, and WCAG-conscious contrast.
+- [ ] Add responsive layouts for desktop, tablet, and narrow/mobile management views.
+- [ ] Build production assets with hashed filenames and a deterministic Node/npm or pnpm build step in CI.
+- [ ] Decide and document the Rust-to-frontend asset handoff: preferred approach is a dedicated frontend source directory (for example `web/`) compiled to a static `dist/` directory consumed/served by Axum; do not make the Rust backend depend on Node at runtime.
+- [ ] Add frontend lint/type-check/build checks to CI.
+- [ ] Add browser-level smoke tests for authentication, navigation, CRUD record flows, protected routes, and WebSocket reconnect behavior.
+- [ ] Ensure production frontend assets are reproducible and no development source maps/debug endpoints are exposed unintentionally.
+
+#### Version-controlled UI design artifact
+
+Figma MCP exhaustion must not block UI design or implementation. The repository will maintain a version-controlled visual specification/prototype that can later be transferred into Figma without redesigning the product.
+
+- [ ] Create `docs/ui/README.md` as the authoritative UI/design specification.
+- [ ] Create `docs/ui/design-system.css` containing reusable design tokens and component styling used by the prototype.
+- [ ] Create `docs/ui/prototype.html` as a high-fidelity clickable dashboard prototype.
+- [ ] Include prototype states for login, dashboard, DNS records, cache, live logs, settings, search/filtering, record-type badges, status indicators, modals, toasts, empty/loading/error states, destructive confirmations, and WebSocket disconnected/reconnecting states.
+- [ ] Base terminology, navigation, data fields, and workflows on the actual MyDNS backend/API rather than inventing Figma-only functionality.
+- [ ] Use the My Systems brand profile as the visual source of truth for brand treatment while keeping implementation tokens in-repository.
+- [ ] Treat the prototype and design-system files as the visual specification for the eventual `src/assets`/frontend implementation.
+- [ ] When Figma MCP availability returns, optionally reproduce the approved repository design in Figma; Figma is a secondary design surface, not a blocker or the sole source of truth.
+
+#### Frontend implementation sequence
+
+1. [ ] Audit the existing `src/assets` HTML/CSS/JS against the actual API and current production-readiness requirements.
+2. [ ] Freeze the information architecture and core workflows in `docs/ui/prototype.html`.
+3. [ ] Establish My Systems/MyDNS design tokens, typography, spacing, surfaces, controls, status semantics, and responsive rules in the repository design system.
+4. [ ] Scaffold the React/TypeScript/Vite frontend without changing Rust/backend behavior.
+5. [ ] Implement authentication and application shell/navigation.
+6. [ ] Implement dashboard and live service/status views.
+7. [ ] Implement DNS record CRUD with validation/error handling matching the backend API.
+8. [ ] Implement cache and logs views, including live WebSocket behavior and reconnect states.
+9. [ ] Implement settings and destructive/admin confirmation flows.
+10. [ ] Add loading, empty, error, unauthorized, session-expired, and disconnected states across all views.
+11. [ ] Run accessibility, responsive, browser smoke, lint, type-check, and production-build verification.
+12. [ ] Replace the legacy `src/assets` implementation only after the new build is functionally and visually verified.
+
 ### P2 — Release engineering
 
 - [ ] Define supported release targets.
@@ -176,6 +224,8 @@ A production release is complete only when:
 13. README and deployment/configuration documentation match the implementation.
 14. A clean test run leaves no generated database/log/runtime artifacts in the working tree.
 15. A final clean-tree audit is performed before tagging the production release.
+16. The production frontend is a reproducible static build served by MyDNS, with browser smoke coverage and no required Node runtime in production.
+17. The approved UI design is represented in version-controlled repository documentation/prototype and matches the implemented frontend workflows.
 
 ## Immediate next steps
 
@@ -193,6 +243,8 @@ A production release is complete only when:
 12. Commit and push the verified SQLite fix.
 13. Only after the cache gate is genuinely stable, proceed to the next P0 item: **zone/ownership enforcement**.
 14. Run `cargo audit` as the next security gate and record advisory dispositions in this document.
+15. In parallel with backend hardening, begin the repository UI design artifact under `docs/ui/`; UI work must not be blocked by Figma MCP quota.
+16. After the visual prototype is approved, scaffold the React/TypeScript/Vite frontend and plan the CI/build handoff into Axum's static asset serving.
 
 ## Handoff state
 
@@ -213,6 +265,7 @@ Recommended investigation order:
 2. **P1 DNS/cache:** complete DNS record-type behavior and upstream failure coverage; finish cache CI integration.
 3. **P1 API/security:** authorization, error handling, headers, audit logging, resource limits.
 4. **P1 CI/security:** audit dependencies, harden CI, enable branch protection.
-5. **P2 deployment:** native service, container, HTTPS topology, backups.
-6. **P2 release:** artifacts, checksums, supported targets, clean-machine verification, release notes.
-7. **Final gate:** complete security review, clean-tree audit, reproducible deployment verification, then tag the production-ready commit.
+5. **P2 UI foundation:** repository design system/prototype, then React/TypeScript/Vite frontend migration and browser smoke coverage.
+6. **P2 deployment:** native service, container, HTTPS topology, backups.
+7. **P2 release:** artifacts, checksums, supported targets, clean-machine verification, release notes.
+8. **Final gate:** complete security review, clean-tree audit, reproducible deployment verification, frontend production-build verification, then tag the production-ready commit.
