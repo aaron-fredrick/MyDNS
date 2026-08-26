@@ -15,27 +15,26 @@ use crate::state::AppState;
 /// On Unix the sockets are bound before privileges are dropped. This is
 /// necessary when the configured DNS port is below 1024 (for example, 53).
 pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Result<()> {
-    let port = {
+    let (bind_host, port) = {
         let cfg = state.config.read().await;
-        cfg.dns_port
+        (cfg.bind_host, cfg.dns_port)
     };
 
-    let udp = UdpSocket::bind(("0.0.0.0", port))
+    let udp = UdpSocket::bind((bind_host, port))
         .await
-        .with_context(|| format!("Failed to bind UDP socket on port {}", port))?;
+        .with_context(|| format!("Failed to bind UDP socket on {}:{}", bind_host, port))?;
 
-    let tcp = TcpListener::bind(("0.0.0.0", port))
+    let tcp = TcpListener::bind((bind_host, port))
         .await
-        .with_context(|| format!("Failed to bind TCP socket on port {}", port))?;
+        .with_context(|| format!("Failed to bind TCP socket on {}:{}", bind_host, port))?;
 
-    tracing::info!(port, "DNS server bound (UDP + TCP)");
+    tracing::info!(%bind_host, port, "DNS server bound (UDP + TCP)");
 
     // The privileged bind must happen before this process drops its Unix
     // privileges. The sockets remain usable by the unprivileged process.
     #[cfg(unix)]
-    if let Err(e) = crate::privileges::dropPrivileges() {
-        tracing::warn!(error = %e, "Privilege drop failed — continuing with current privileges");
-    }
+    crate::privileges::dropPrivileges()
+        .context("Failed to drop Unix privileges after binding DNS sockets")?;
 
     let handler = DnsHandler::new(state);
     let mut server = ServerFuture::new(handler);
