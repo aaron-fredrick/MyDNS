@@ -62,6 +62,28 @@ async fn runMigrations(pool: &SqlitePool) -> anyhow::Result<()> {
     .execute(pool)
     .await?;
 
+    // Cache rows are one row per returned record, so identity includes the
+    // value and MX priority rather than only name/type. Remove legacy
+    // duplicates before enforcing that identity for future writes.
+    sqlx::query(
+        r#"
+        DELETE FROM dns_cache
+        WHERE id NOT IN (
+            SELECT MAX(id)
+            FROM dns_cache
+            GROUP BY lower(name), upper(record_type), value, COALESCE(priority, -1)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cache_identity ON dns_cache(lower(name), upper(record_type), value, COALESCE(priority, -1))",
+    )
+    .execute(pool)
+    .await?;
+
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_cache_name_type ON dns_cache(name, record_type)")
         .execute(pool)
         .await?;
