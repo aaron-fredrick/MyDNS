@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::net::IpAddr;
 
 use anyhow::Context;
+#[cfg(not(debug_assertions))]
+use axum::http::{header, HeaderValue, Method};
 use axum::{
     routing::{delete, get, post, put},
     Router,
 };
-#[cfg(not(debug_assertions))]
-use axum::http::{header, HeaderValue, Method};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors::CorsLayer;
 
@@ -75,7 +75,7 @@ fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Result<CorsLay
     #[cfg(debug_assertions)]
     {
         let _ = config;
-        return Ok(CorsLayer::permissive());
+        Ok(CorsLayer::permissive())
     }
 
     #[cfg(not(debug_assertions))]
