@@ -8,13 +8,14 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ## Current baseline
 
-- `cargo fmt --check` passes after the latest local formatting verification.
-- `cargo check` passes.
-- `cargo clippy -- -D warnings` passes.
+- `cargo fmt --check` passes locally.
+- `cargo check` passes locally.
+- `cargo clippy -- -D warnings` passes locally.
 - Unit tests: 18 passed.
-- HTTP/API integration tests: 7 passed.
+- HTTP/API integration tests: 7 passed in the last full local run.
 - DNS wire integration tests: 4 passed, covering UDP positive/NODATA/NXDOMAIN, TCP positive answers, CNAME-only responses, multi-hop CNAME chains, and CNAME loops.
-- Persistent cache lifecycle integration tests: 5 tests exist; 4 pass on the previous local run, while the concurrent-upsert test exposed a test timing flaw caused by 1-second TTLs under SQLite contention. The test has been corrected to use 300+ second TTLs so it verifies deduplication rather than expiration timing.
+- Persistent cache lifecycle integration tests: 5 passed in the last full local run, including restart persistence, negative-cache persistence, expiration/pruning, explicit clear, and concurrent upserts.
+- The repository now contains an API validation module and HTTP-level validation tests for the supported record types.
 - `cargo audit` remains outstanding.
 - `production-readiness` is the active implementation branch.
 
@@ -32,12 +33,15 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] CNAME-dependent persistent cache invalidation is implemented.
 - [x] API integration coverage verifies cache deduplication and dependent invalidation.
 - [x] Persistent cache lifecycle test target added in `tests/cache_persistence.rs`, covering restart persistence, negative-cache persistence, expiration/pruning, explicit clear, and concurrent upserts.
+- [x] DNS record API validates names, supported record types, record values, TTL bounds, and MX priority before persistence.
+- [x] Record updates validate the effective post-update name/type/value/TTL/priority combination.
+- [x] HTTP integration coverage verifies malformed record inputs are rejected with `400` and valid updates still succeed.
 
 ## Remaining priority order
 
 ### P0 — Correctness and security blockers
 
-- [ ] Add validation for DNS names, record types, record values, TTL bounds, and MX priority.
+- [x] Add validation for DNS names, record types, record values, TTL bounds, and MX priority.
 - [ ] Define and enforce zone/ownership rules for API-managed records.
 - [ ] Complete Unix privilege dropping with deliberate UID/GID/groups handling and fail-closed behavior.
 - [ ] Make DNS/HTTP shutdown propagation symmetric and handle OS termination signals cleanly.
@@ -46,7 +50,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ### P1 — DNS correctness
 
-- [ ] Add authoritative wire-level coverage for A, AAAA, CNAME, MX, NS, TXT, and PTR.
+- [ ] Add authoritative wire-level coverage for A, AAAA, CNAME, MX, NS, TXT, and PTR. Current implementation natively builds A, AAAA, CNAME, MX, and PTR; NS/TXT support must be added before those tests are required.
 - [ ] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
 - [ ] Verify query-name case normalization, trailing-dot normalization, and record-type separation.
 - [ ] Verify response flags, authority behavior, and TTL propagation.
@@ -62,7 +66,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] Expired-cache visibility/pruning test.
 - [x] Explicit persistent cache clear test.
 - [x] Concurrent identical cache-upsert test design, corrected to avoid false failures from 1-second TTL expiration.
-- [ ] Verify the corrected lifecycle suite locally and integrate it into the normal CI matrix.
+- [ ] Integrate the lifecycle suite into the normal CI matrix.
 - [ ] Make all integration-test temporary database cleanup failure-safe.
 
 ### P1 — Web/API hardening
@@ -84,7 +88,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 
 ### P1 — Test-suite expansion
 
-- [ ] Add API validation tests for malformed names, unsupported types, invalid values, TTLs, and priorities.
+- [x] Add API validation tests for malformed names, unsupported types, invalid values, TTLs, and priorities.
 - [ ] Add complete CRUD update coverage, including rename/type/value/TTL changes and invalidation.
 - [ ] Add protected-route authorization coverage for records/settings/cache/WebSocket.
 - [ ] Add configuration parsing tests, including missing credentials and malformed values.
@@ -172,11 +176,12 @@ A production release is complete only when:
 2. Run `cargo fmt --check`.
 3. Run `cargo check`.
 4. Run `cargo clippy -- -D warnings`.
-5. Run `cargo test --test cache_persistence -- --nocapture` and confirm all 5 lifecycle tests pass with the corrected TTLs.
+5. Run `cargo test --test validation_api -- --nocapture` and confirm both API validation tests pass.
 6. Run `cargo test` and confirm the complete suite is green.
 7. Remove any generated `test_*.db` / `test_dns_*.db` artifacts left in the working tree; do not commit them.
-8. If clean, commit/push only the intended changes.
-9. Then start the next implementation tranche: **P0 DNS/API input validation and zone/ownership enforcement**.
+8. Review the validation behavior, then commit/push the validation tranche if clean.
+9. Next implementation tranche: **zone/ownership model + enforcement**, followed by privilege/shutdown hardening.
+10. Run `cargo audit` before the next release-security gate and record the advisory disposition in this plan.
 
 ## Execution order
 
