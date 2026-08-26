@@ -5,11 +5,10 @@
 
 use hickory_proto::op::{Message, Query};
 use hickory_proto::rr::{Name, RecordType};
-use hickory_proto::serialize::binary::{BinDecodable, BinEncodable};
+use hickory_proto::serialize::binary::BinDecodable;
 use mydns::{
     config::{AppConfig, ResolverPriority},
-    db,
-    dns,
+    db, dns,
     state::AppState,
 };
 use std::net::SocketAddr;
@@ -19,7 +18,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, UdpSocket};
 use tokio_util::sync::CancellationToken;
 
-async fn start_dns_server() -> (SocketAddr, String, CancellationToken, tokio::task::JoinHandle<()>) {
+async fn start_dns_server() -> (
+    SocketAddr,
+    String,
+    CancellationToken,
+    tokio::task::JoinHandle<()>,
+) {
     let test_id = mydns::config::generate_secret(8);
     let db_path = format!("test_dns_{}.db", test_id);
     let port = rand::random::<u16>() % 10000 + 30000;
@@ -46,7 +50,9 @@ async fn start_dns_server() -> (SocketAddr, String, CancellationToken, tokio::ta
     db::records::createRecord(
         &pool,
         &db::records::CreateRecord {
-            name: "dns-test.local.".to_string(),
+            // The DNS handler normalizes query names by removing the trailing
+            // root label separator before looking them up in SQLite.
+            name: "dns-test.local".to_string(),
             record_type: "A".to_string(),
             value: "10.20.30.40".to_string(),
             ttl: 60,
@@ -99,14 +105,14 @@ async fn test_dns_udp_positive_nxdomain_and_nodata() {
         .expect("UDP DNS response timed out")
         .unwrap();
     let response = Message::from_bytes(&buf[..len]).expect("Invalid DNS response");
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
     assert!(!response.answers().is_empty(), "Expected A answer");
 
     socket
-        .send_to(
-            &query_message("dns-test.local.", RecordType::AAAA),
-            addr,
-        )
+        .send_to(&query_message("dns-test.local.", RecordType::AAAA), addr)
         .await
         .unwrap();
     let (len, _) = tokio::time::timeout(Duration::from_secs(2), socket.recv_from(&mut buf))
@@ -114,7 +120,10 @@ async fn test_dns_udp_positive_nxdomain_and_nodata() {
         .expect("UDP NODATA response timed out")
         .unwrap();
     let response = Message::from_bytes(&buf[..len]).expect("Invalid DNS response");
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
     assert!(response.answers().is_empty(), "Expected NODATA response");
 
     socket
@@ -129,7 +138,10 @@ async fn test_dns_udp_positive_nxdomain_and_nodata() {
         .expect("UDP NXDOMAIN response timed out")
         .unwrap();
     let response = Message::from_bytes(&buf[..len]).expect("Invalid DNS response");
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NXDomain);
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NXDomain
+    );
     assert!(response.answers().is_empty());
 
     cancel.cancel();
@@ -166,7 +178,10 @@ async fn test_dns_tcp_positive_answer() {
     .unwrap();
 
     let response = Message::from_bytes(&response_bytes).expect("Invalid TCP DNS response");
-    assert_eq!(response.response_code(), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(
+        response.response_code(),
+        hickory_proto::op::ResponseCode::NoError
+    );
     assert!(!response.answers().is_empty(), "Expected A answer over TCP");
 
     cancel.cancel();
