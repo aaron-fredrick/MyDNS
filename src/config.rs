@@ -1,4 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::Path;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
@@ -35,22 +36,25 @@ impl FromStr for ResolverPriority {
     }
 }
 
-/// Runtime-configurable application settings.
+/// Runtime configuration loaded from `config.ini`.
 ///
-/// Values are loaded from environment variables with sensible defaults.
-/// Runtime-mutable fields (resolver priority, upstream IPs) live inside
-/// [`crate::state::AppState`] behind an `Arc<RwLock<AppConfig>>`.
+/// `.env` is intentionally limited to debug builds and is loaded by `main` only
+/// as a developer convenience. Production configuration comes from `config.ini`.
 #[derive(Debug, Clone)]
 pub struct AppConfig {
+    /// Address the DNS server binds to. Defaults to localhost.
+    pub bind_host: IpAddr,
     /// UDP/TCP port the DNS server binds to. Requires elevated privileges for port 53.
     pub dns_port: u16,
+    /// HTTP bind address. Defaults to localhost.
+    pub http_host: IpAddr,
     /// HTTP port for the management dashboard.
     pub http_port: u16,
     /// Path to the SQLite database file.
     pub db_path: String,
     /// HMAC secret used to sign/verify JWTs.
     pub jwt_secret: String,
-    /// Dashboard admin username (seeded into DB on first run).
+    /// Dashboard admin username (required in config.ini).
     pub admin_username: String,
     /// Dashboard admin plaintext password (hashed on first run; not stored in plain text).
     pub admin_password: String,
@@ -63,13 +67,63 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
+    /// Loads configuration from `config.ini`, applying safe defaults for optional values.
+    ///
+    /// Admin credentials are deliberately mandatory and are never defaulted. This
+    /// prevents a production deployment from silently starting with known credentials.
+    pub fn fromConfigFile() -> anyhow::Result<Self> {
+        let path = Path::new("config.ini");
+        let contents = std::fs::read_to_string(path).map_err(|e| {
+            anyhow::anyhow!("Failed to read {}: {}", path.display(), e)
+        })?;
+        let values = parseIni(&contents)?;
+
+        let admin_username = required(&values, "admin_username")?;
+        let admin_password = required(&values, "admin_password")?;
+
+        Ok(Self {
+            bind_host: parseValue(&values, "bind_host", "127.0.0.1")?,
+            dns_port: parseValue(&values, "dns_port", 53)?,
+            http_host: parseValue(&values, "http_host", "127.0.0.1")?,
+            http_port: parseValue(&values, "http_port", 8080)?,
+            db_path: values
+                .get("db_path")
+                .cloned()
+                .unwrap_or_else(|| "mydns.db".to_string()),
+            jwt_secret: values
+                .get("jwt_secret")
+                .cloned()
+                .unwrap_or_else(|| generateSecret(64)),
+            admin_username,
+            admin_password,
+            resolver_priority: parseValue(
+                &values,
+                "resolver_priority",
+                ResolverPriority::default(),
+            )?,
+            cloudflare_dns: parseValue(
+                &values,
+                "cloudflare_dns",
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)), 53),
+            )?,
+            router_dns: values
+                .get("router_dns")
+                .map(|v| v.parse())
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid router_dns: {}", e))?,
+        })
+    }
+
+    /// Compatibility helper for tests and callers that previously used the environment.
+    /// Prefer [`Self::fromConfigFile`] for application startup.
     #[allow(non_snake_case)]
-    /// Builds configuration from environment variables, falling back to sensible defaults.
     pub fn fromEnv() -> Self {
         let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| generateSecret(64));
 
         Self {
+            bind_host: envParse("BIND_HOST", IpAddr::V4(Ipv4Addr::LOCALHOST)),
             dns_port: envParse("DNS_PORT", 53),
+            http_host: envParse("HTTP_HOST", IpAddr::V4(Ipv4Addr::LOCALHOST)),
             http_port: envParse("HTTP_PORT", 8080),
             db_path: std::env::var("DB_PATH").unwrap_or_else(|_| "mydns.db".to_string()),
             jwt_secret,
@@ -88,6 +142,53 @@ impl AppConfig {
                 .ok()
                 .and_then(|s| s.parse().ok()),
         }
+    }
+}
+
+fn parseIni(contents: &str) -> anyhow::Result<std::collections::HashMap<String, String>> {
+    let mut values = std::collections::HashMap::new();
+
+    for (line_number, raw_line) in contents.lines().enumerate() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') || line.starts_with('[') {
+            continue;
+        }
+
+        let (key, value) = line.split_once('=').ok_or_else(|| {
+            anyhow::anyhow!("Invalid config.ini line {}: expected key=value", line_number + 1)
+        })?;
+        let key = key.trim().to_lowercase();
+        let value = value.trim().trim_matches('"').to_string();
+
+        if key.is_empty() {
+            return Err(anyhow::anyhow!("Invalid config.ini line {}: empty key", line_number + 1));
+        }
+        values.insert(key, value);
+    }
+
+    Ok(values)
+}
+
+fn required(values: &std::collections::HashMap<String, String>, key: &str) -> anyhow::Result<String> {
+    match values.get(key).map(|v| v.trim()).filter(|v| !v.is_empty()) {
+        Some(value) => Ok(value.to_string()),
+        None => Err(anyhow::anyhow!("Missing required config.ini value: {}", key)),
+    }
+}
+
+fn parseValue<T: FromStr>(
+    values: &std::collections::HashMap<String, String>,
+    key: &str,
+    default: T,
+) -> anyhow::Result<T>
+where
+    T::Err: std::fmt::Display,
+{
+    match values.get(key) {
+        Some(value) => value
+            .parse()
+            .map_err(|e| anyhow::anyhow!("Invalid {}: {}", key, e)),
+        None => Ok(default),
     }
 }
 
