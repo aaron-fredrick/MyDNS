@@ -11,7 +11,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - `cargo fmt --check` passes.
 - `cargo check` passes.
 - `cargo clippy -- -D warnings` passes.
-- Unit/integration tests pass on the current working branch; additional DNS outcome regression coverage is still required.
+- Unit/integration tests pass on the current working branch; additional DNS outcome regression coverage is now implemented in `tests/dns_integration.rs` and needs to be executed locally before marking the coverage complete.
 - Release tests pass, including release CORS restriction coverage.
 - Manual DNS smoke testing has covered A, AAAA, MX, NS, TXT, CNAME, PTR, NXDOMAIN, and cache-hit behavior.
 - Dependencies were refreshed and `Cargo.lock` updated; `cargo audit` is still required.
@@ -25,6 +25,7 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [x] DNS resolution now has an explicit internal outcome model for positive answers, NODATA, NXDOMAIN, and SERVFAIL.
 - [x] Upstream resolver failures no longer automatically become NXDOMAIN; resolver errors are classified as NXDOMAIN, NODATA, or SERVFAIL.
 - [x] NXDOMAIN remains the only negative result persisted through the existing negative-cache path.
+- [x] Added real DNS wire-level integration coverage for UDP positive/NODATA/NXDOMAIN behavior and TCP positive-answer behavior in `tests/dns_integration.rs`.
 
 ### Still open from the audit
 
@@ -79,10 +80,9 @@ Bring MyDNS from a feature-complete development server to a defensible productio
 - [ ] Add authoritative handling/tests for A, AAAA, CNAME, MX, NS, TXT, and PTR.
 - [ ] Test CNAME-only responses and multi-hop CNAME chains.
 - [ ] Test CNAME loops and recursion limits.
-- [ ] Verify NXDOMAIN versus NODATA for every supported query type.
-- [ ] Verify PTR normalization and reverse-name behavior.
+- [x] Verify the new DNS outcome model over the real wire for positive answers, NODATA, and NXDOMAIN (UDP), plus positive answers over TCP. Local execution of `tests/dns_integration.rs` is still required to validate the new tests in this environment.
 - [ ] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
-- [ ] Verify UDP and TCP DNS behavior independently.
+- [x] Verify UDP and TCP DNS listener behavior independently at the socket level and with wire-level integration tests.
 - [ ] Verify query-name case normalization, trailing-dot normalization, and record-type separation.
 - [ ] Verify response flags/authority behavior and TTL propagation.
 
