@@ -24,6 +24,7 @@ async fn start_test_server() -> (String, String) {
 
         http_host: "127.0.0.1".parse().unwrap(),
         http_port: port,
+        cors_domains: vec!["mydns.local".to_string()],
 
         db_path: db_path.clone(),
         jwt_secret: mydns::config::generateSecret(64),
@@ -203,5 +204,62 @@ async fn test_stats_returned_without_auth() {
     let body: Value = res.json().await.unwrap();
     assert!(body["uptime_secs"].is_number());
     assert!(body["cache_hits"].is_number());
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[cfg(debug_assertions)]
+#[tokio::test]
+async fn test_debug_cors_is_permissive() {
+    let (base, db_path) = start_test_server().await;
+    let c = client();
+    let res = c
+        .get(format!("{}/api/v1/stats", base))
+        .header("Origin", "http://evil.example")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    assert_eq!(
+        res.headers()
+            .get("access-control-allow-origin")
+            .and_then(|value| value.to_str().ok()),
+        Some("*")
+    );
+    let _ = std::fs::remove_file(db_path);
+}
+
+#[cfg(not(debug_assertions))]
+#[tokio::test]
+async fn test_release_cors_is_restricted() {
+    let (base, db_path) = start_test_server().await;
+    let c = client();
+
+    let trusted = c
+        .get(format!("{}/api/v1/stats", base))
+        .header("Origin", &base)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(trusted.status(), 200);
+    assert_eq!(
+        trusted
+            .headers()
+            .get("access-control-allow-origin")
+            .and_then(|value| value.to_str().ok()),
+        Some(base.as_str())
+    );
+
+    let untrusted = c
+        .get(format!("{}/api/v1/stats", base))
+        .header("Origin", "http://evil.example")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(untrusted.status(), 200);
+    assert!(untrusted
+        .headers()
+        .get("access-control-allow-origin")
+        .is_none());
+
     let _ = std::fs::remove_file(db_path);
 }
