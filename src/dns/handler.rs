@@ -8,6 +8,7 @@ use hickory_proto::rr::{Name, RData, Record, RecordType};
 use hickory_server::authority::MessageResponseBuilder;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 
+use crate::cache::CacheResult;
 use crate::state::AppState;
 
 /// Implements the hickory-server [`RequestHandler`] trait.
@@ -144,13 +145,22 @@ impl DnsHandler {
         src: SocketAddr,
     ) -> Option<Vec<Record>> {
         let cache = self.state.cache.read().await;
-        if let Some(records) = cache.get(name, rtype) {
+        if let Some((result, records)) = cache.get(name, rtype) {
             self.state.cache_stats.recordHit();
-            self.logResolution(src, name, rtype, records, "memory");
-            return Some(records.clone());
+            match result {
+                CacheResult::Positive => {
+                    self.logResolution(src, name, rtype, records, "memory");
+                    Some(records.clone())
+                }
+                CacheResult::Negative => {
+                    self.logNegativeCacheHit(src, name, rtype, "memory");
+                    Some(Vec::new())
+                }
+            }
+        } else {
+            self.state.cache_stats.recordMiss();
+            None
         }
-        self.state.cache_stats.recordMiss();
-        None
     }
 
     /// Query functionality for persistent DB cache.
@@ -353,7 +363,7 @@ impl DnsHandler {
 
     async fn saveNegativeCache(&self, name: &str, rtype: RecordType, ttl: u32) {
         let mut cache = self.state.cache.write().await;
-        cache.insert(name, rtype, vec![], Duration::from_secs(ttl as u64));
+        cache.insertNegative(name, rtype, Duration::from_secs(ttl as u64));
         let _ = crate::db::records::insertCache(
             &self.state.db,
             name,
@@ -373,7 +383,8 @@ impl DnsHandler {
     ) -> Option<Vec<Record>> {
         let ttl = (expires_at - chrono::Utc::now().timestamp()).max(0) as u32;
         if ttl > 0 {
-            self.saveToMemoryCache(name, rtype, vec![], ttl).await;
+            let mut cache = self.state.cache.write().await;
+            cache.insertNegative(name, rtype, Duration::from_secs(ttl as u64));
         }
         Some(vec![])
     }
@@ -394,6 +405,14 @@ impl DnsHandler {
             src, name, rtype, values, source
         ));
         tracing::info!(client = %src, query = %name, r#type = %rtype, value = %values, "Cache hit ({})", source);
+    }
+
+    fn logNegativeCacheHit(&self, src: SocketAddr, name: &str, rtype: RecordType, source: &str) {
+        let _ = self.state.log_tx.send(format!(
+            "[CACHE HIT] client={} query={} type={} NXDOMAIN ({})",
+            src, name, rtype, source
+        ));
+        tracing::info!(client = %src, query = %name, r#type = %rtype, "Negative cache hit ({})", source);
     }
 
     fn getRecordValuesString(&self, records: &[Record]) -> String {
