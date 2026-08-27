@@ -44,7 +44,7 @@ impl RequestHandler for DnsHandler {
             Ok(info) => info,
             Err(e) => {
                 tracing::warn!(client = %src, error = %e, "Invalid DNS request");
-                let response = failedResponseInfo(request);
+                let response = failed_response_info(request);
                 return response;
             }
         };
@@ -68,7 +68,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send DNS response");
-                        failedResponseInfo(request)
+                        failed_response_info(request)
                     })
             }
             ResolutionResult::Nodata => {
@@ -80,7 +80,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send NODATA response");
-                        failedResponseInfo(request)
+                        failed_response_info(request)
                     })
             }
             ResolutionResult::NxDomain => {
@@ -91,7 +91,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send NXDOMAIN response");
-                        failedResponseInfo(request)
+                        failed_response_info(request)
                     })
             }
             ResolutionResult::ServFail => {
@@ -102,7 +102,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send SERVFAIL response");
-                        failedResponseInfo(request)
+                        failed_response_info(request)
                     })
             }
         }
@@ -228,7 +228,7 @@ impl DnsHandler {
             let mut records = Vec::new();
             for row in &rows {
                 if let Some(record) =
-                    buildRecord(name, rtype, &row.value, row.ttl as u32, row.priority)
+                    build_record(name, rtype, &row.value, row.ttl as u32, row.priority)
                 {
                     records.push(record);
                 }
@@ -249,7 +249,7 @@ impl DnsHandler {
                         .await
                     {
                         Some(ResolutionResult::Positive(mut target_recs)) => {
-                            if let Some(cname_rec) = buildRecord(
+                            if let Some(cname_rec) = build_record(
                                 name,
                                 RecordType::CNAME,
                                 &cname_rows[0].value,
@@ -288,7 +288,7 @@ impl DnsHandler {
             let mut records = Vec::new();
             for row in rows.iter().filter(|r| r.record_type == rtype_str) {
                 if let Some(record) =
-                    buildRecord(&current, rtype, &row.value, row.ttl as u32, row.priority)
+                    build_record(&current, rtype, &row.value, row.ttl as u32, row.priority)
                 {
                     records.push(record);
                 }
@@ -321,7 +321,7 @@ impl DnsHandler {
                 };
             };
 
-            let Some(cname_record) = buildRecord(
+            let Some(cname_record) = build_record(
                 &current,
                 RecordType::CNAME,
                 &cname_row.value,
@@ -353,7 +353,7 @@ impl DnsHandler {
             return None;
         }
         let target_ip = self.getLocalInterfaceIpForClient(src.ip());
-        if let Some(record) = buildRecord(name, rtype, &target_ip, 60, None) {
+        if let Some(record) = build_record(name, rtype, &target_ip, 60, None) {
             let _ = self.state.log_tx.send(format!(
                 "[SPECIAL] client={} query={} type={} value=[{}]",
                 src, name, rtype, target_ip
@@ -531,7 +531,7 @@ impl DnsHandler {
     }
 }
 
-pub fn buildRecord(
+pub fn build_record(
     name: &str,
     rtype: RecordType,
     value: &str,
@@ -553,7 +553,7 @@ pub fn buildRecord(
     Some(Record::from_rdata(fqdn, ttl, rdata))
 }
 
-fn failedResponseInfo(request: &Request) -> ResponseInfo {
+fn failed_response_info(request: &Request) -> ResponseInfo {
     let mut metadata = Metadata::response_from_request(&request.metadata);
     metadata.response_code = ResponseCode::ServFail;
     ResponseInfo::from(Header {
