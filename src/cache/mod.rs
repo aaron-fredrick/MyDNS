@@ -146,11 +146,7 @@ impl DnsCache {
                     .unwrap_or_default()
                     .as_secs() as u32;
 
-                let values = entry
-                    .records
-                    .iter()
-                    .map(|r| r.data.to_string())
-                    .collect();
+                let values = entry.records.iter().map(|r| r.data.to_string()).collect();
 
                 (key.0.clone(), key.1, ttl_remaining, values)
             })

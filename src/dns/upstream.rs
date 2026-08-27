@@ -70,11 +70,8 @@ fn detectGatewayImpl() -> Option<IpAddr> {
 
 #[allow(non_snake_case)]
 fn buildResolver(addr: SocketAddr) -> anyhow::Result<TokioResolver> {
-    let config = ResolverConfig::from_parts(
-        None,
-        vec![],
-        vec![NameServerConfig::udp_and_tcp(addr.ip())],
-    );
+    let config =
+        ResolverConfig::from_parts(None, vec![], vec![NameServerConfig::udp_and_tcp(addr.ip())]);
     let mut opts = ResolverOpts::default();
     opts.timeout = Duration::from_secs(3);
     opts.attempts = 2;
