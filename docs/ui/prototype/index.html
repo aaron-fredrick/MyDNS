@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyDNS UI Prototype</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><img src="../../../../brand/icons/mydns.svg" alt="MyDNS compass"><span>MyDNS</span></div>
+      <nav class="nav" aria-label="Primary navigation">
+        <a class="active" data-nav href="pages/dashboard.html">Dashboard</a>
+        <a data-nav href="pages/records.html">DNS Records</a>
+        <a data-nav href="pages/cache.html">Cache</a>
+        <a data-nav href="pages/logs.html">Live Logs</a>
+        <a data-nav href="pages/settings.html">Settings</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="topbar"><span class="muted">UI / UX concept</span><button class="button" data-theme-toggle type="button">Toggle theme</button></header>
+      <section class="content">
+        <div class="page-header"><div><h1>MyDNS</h1><p>DNS infrastructure management interface.</p></div><span class="badge success">● Operational</span></div>
+        <div class="grid grid-4">
+          <div class="card"><span class="muted">Queries / min</span><div class="stat-value">1,284</div></div>
+          <div class="card"><span class="muted">Cache hit rate</span><div class="stat-value">92.4%</div></div>
+          <div class="card"><span class="muted">Zones</span><div class="stat-value">12</div></div>
+          <div class="card"><span class="muted">Upstream</span><div class="stat-value">24 ms</div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="js/app.js"></script>
+  <script src="js/navigation.js"></script>
+  <script src="js/prototype.js"></script>
+</body>
+</html>
