@@ -1,34 +1,35 @@
-# Rust-specific
-target/
-node_modules/
-**/*.rs.bk
+# Rust
+/target/
+*.rs.bk
 
-# Compiled Binary
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Compiled binaries
 /mydns
 /mydns.exe
 
-# DB and Logs
-mydns.db
-mydns.db-shm
-mydns.db-wal
-test_integration.db
-test_integration.db-shm
-test_integration.db-wal
-test_*.db
-test_*.db-shm
-test_*.db-wal
-auth_cov_*.db
-auth_cov_*.db-shm
-auth_cov_*.db-wal
-dns_*.db
-dns_*.db-shm
-dns_*.db-wal
-.env
+# Databases and database journals
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Runtime logs
 logs/
-check_err.txt
 *.log
 
-# IDEs
+# Local configuration / secrets
+.env
+config.ini
+
+# Generated / temporary analysis output
+metadata.json
+check_err.txt
+screenshots/temp/
+
+# IDE / editor state
 .vscode/
 .idea/
 *.swp
@@ -38,11 +39,9 @@ check_err.txt
 .DS_Store
 Thumbs.db
 
-# Agent/AI tools
+# Agent / AI tool state
 .agents/
 .agent/
 .agentic/
 .gemini/
 .antigravity/
-
-config.ini
