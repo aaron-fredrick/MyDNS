@@ -1,6 +1,9 @@
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 
+#[cfg(unix)]
+use std::net::Ipv4Addr;
+
 use hickory_proto::rr::{Name, Record, RecordType};
 use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
