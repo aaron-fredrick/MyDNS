@@ -40,7 +40,15 @@ impl RequestHandler for DnsHandler {
         mut response_handle: R,
     ) -> ResponseInfo {
         let src = request.src();
-        let query = request.request_info().query;
+        let request_info = match request.request_info() {
+            Ok(info) => info,
+            Err(e) => {
+                tracing::warn!(client = %src, error = %e, "Invalid DNS request");
+                let response = failedResponseInfo(request);
+                return response;
+            }
+        };
+        let query = request_info.query;
         let name_fqdn = query.name().to_string();
         let rtype = query.query_type();
         let name = name_fqdn.trim_end_matches('.').to_lowercase();
@@ -48,16 +56,13 @@ impl RequestHandler for DnsHandler {
         tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, "DNS query received");
         let result = self.processResolution(&name, rtype, src).await;
         let builder = MessageResponseBuilder::from_message_request(&*request);
-        let mut header = Header {
-            metadata: Metadata::response_from_request(&request.metadata),
-            counts: HeaderCounts::default(),
-        };
+        let mut metadata = Metadata::response_from_request(&request.metadata);
 
         match result {
             ResolutionResult::Positive(records) => {
-                header.set_response_code(ResponseCode::NoError);
-                header.set_authoritative(false);
-                let response = builder.build(header, records.iter(), &[], &[], &[]);
+                metadata.response_code = ResponseCode::NoError;
+                metadata.authoritative = false;
+                let response = builder.build(metadata, records.iter(), &[], &[], &[]);
                 response_handle
                     .send_response(response)
                     .await
@@ -67,9 +72,9 @@ impl RequestHandler for DnsHandler {
                     })
             }
             ResolutionResult::Nodata => {
-                header.set_response_code(ResponseCode::NoError);
-                header.set_authoritative(false);
-                let response = builder.build_no_records(header);
+                metadata.response_code = ResponseCode::NoError;
+                metadata.authoritative = false;
+                let response = builder.build_no_records(metadata);
                 response_handle
                     .send_response(response)
                     .await
@@ -79,8 +84,8 @@ impl RequestHandler for DnsHandler {
                     })
             }
             ResolutionResult::NxDomain => {
-                header.set_response_code(ResponseCode::NXDomain);
-                let response = builder.build_no_records(header);
+                metadata.response_code = ResponseCode::NXDomain;
+                let response = builder.build_no_records(metadata);
                 response_handle
                     .send_response(response)
                     .await
@@ -90,8 +95,8 @@ impl RequestHandler for DnsHandler {
                     })
             }
             ResolutionResult::ServFail => {
-                header.set_response_code(ResponseCode::ServFail);
-                let response = builder.build_no_records(header);
+                metadata.response_code = ResponseCode::ServFail;
+                let response = builder.build_no_records(metadata);
                 response_handle
                     .send_response(response)
                     .await
@@ -436,38 +441,52 @@ impl DnsHandler {
                 RData::MX(mx) => Some(mx.preference as i64),
                 _ => None,
             };
-            let _ = crate::db::records::insertCache(
+            let _ = crate::db::records::upsertCache(
                 &self.state.db,
                 &owner,
-                &r.record_type().to_string(),
+                &rtype.to_string(),
                 &val,
-                ttl,
+                r.ttl as i64,
                 prio,
             )
             .await;
         }
     }
 
-    async fn saveNegativeCache(&self, name: &str, rtype: RecordType, ttl: u32) {
-        let mut cache = self.state.cache.write().await;
-        cache.insertNegative(name, rtype, Duration::from_secs(ttl as u64));
-        let _ = crate::db::records::insertCache(
-            &self.state.db,
-            name,
-            &rtype.to_string(),
-            "NX",
-            ttl,
-            None,
-        )
-        .await;
+    fn getLocalInterfaceIpForClient(&self, client_ip: IpAddr) -> String {
+        if isPrivateIp(client_ip) {
+            self.getLocalInterfaceIp().to_string()
+        } else {
+            "127.0.0.1".to_string()
+        }
     }
 
-    async fn handleCachedNegativeResult(&self, name: &str, rtype: RecordType, expires_at: i64) {
-        let ttl = (expires_at - chrono::Utc::now().timestamp()).max(0) as u32;
-        if ttl > 0 {
-            let mut cache = self.state.cache.write().await;
-            cache.insertNegative(name, rtype, Duration::from_secs(ttl as u64));
+    fn getLocalInterfaceIp(&self) -> IpAddr {
+        self.state
+            .config
+            .try_read()
+            .ok()
+            .and_then(|cfg| cfg.local_ip.parse().ok())
+            .unwrap_or(IpAddr::from([127, 0, 0, 1]))
+    }
+
+    async fn getUpstreamAddressString(
+        &self,
+        upstream: &crate::dns::upstream::UpstreamResolver,
+    ) -> String {
+        if let Some(addr) = upstream.router_addr {
+            format!("{} (router)", addr)
+        } else {
+            format!("{} (cloudflare)", upstream.cloudflare_addr)
         }
+    }
+
+    fn getRecordValuesString(&self, records: &[Record]) -> String {
+        records
+            .iter()
+            .map(|r| r.data.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     fn logResolution(
@@ -480,58 +499,38 @@ impl DnsHandler {
     ) {
         let values = self.getRecordValuesString(records);
         let _ = self.state.log_tx.send(format!(
-            "[CACHE HIT] client={} query={} type={} value=[{}] ({})",
+            "[CACHE] client={} query={} type={} value=[{}] source={}",
             src, name, rtype, values, source
         ));
-        tracing::info!(client = %src, query = %name, r#type = %rtype, value = %values, "Cache hit ({})", source);
     }
 
     fn logNegativeCacheHit(&self, src: SocketAddr, name: &str, rtype: RecordType, source: &str) {
         let _ = self.state.log_tx.send(format!(
-            "[CACHE HIT] client={} query={} type={} NXDOMAIN ({})",
+            "[NEGATIVE CACHE] client={} query={} type={} source={}",
             src, name, rtype, source
         ));
-        tracing::info!(client = %src, query = %name, r#type = %rtype, "Negative cache hit ({})", source);
     }
 
-    fn getRecordValuesString(&self, records: &[Record]) -> String {
-        records
-            .iter()
-            .map(|r| r.data.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
+    async fn handleCachedNegativeResult(&self, name: &str, rtype: RecordType, expires_at: i64) {
+        let _ = self.state.log_tx.send(format!(
+            "[NEGATIVE CACHE] query={} type={} expires_at={}",
+            name, rtype, expires_at
+        ));
     }
 
-    async fn getUpstreamAddressString(
-        &self,
-        upstream: &crate::dns::upstream::UpstreamResolver,
-    ) -> String {
-        let cfg = self.state.config.read().await;
-        match upstream.priority {
-            crate::config::ResolverPriority::CloudflareFirst => cfg.cloudflare_dns.to_string(),
-            crate::config::ResolverPriority::RouterFirst => upstream
-                .router_addr
-                .map(|a| a.to_string())
-                .unwrap_or_else(|| cfg.cloudflare_dns.to_string()),
-        }
-    }
-
-    fn getLocalInterfaceIpForClient(&self, client_ip: IpAddr) -> String {
-        if client_ip.is_loopback() {
-            return "127.0.0.1".to_string();
-        }
-        if isPrivateIp(client_ip) {
-            return local_ip_address::local_ip()
-                .map(|ip| ip.to_string())
-                .unwrap_or_else(|_| "127.0.0.1".to_string());
-        }
-        local_ip_address::local_ip()
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|_| "127.0.0.1".to_string())
+    async fn saveNegativeCache(&self, name: &str, rtype: RecordType, ttl: i64) {
+        let _ = crate::db::records::upsertCache(
+            &self.state.db,
+            name,
+            &rtype.to_string(),
+            "NX",
+            ttl,
+            None,
+        )
+        .await;
     }
 }
 
-#[allow(non_snake_case)]
 pub fn buildRecord(
     name: &str,
     rtype: RecordType,
@@ -555,12 +554,12 @@ pub fn buildRecord(
 }
 
 fn failedResponseInfo(request: &Request) -> ResponseInfo {
-    let mut header = Header {
-        metadata: Metadata::response_from_request(&request.metadata),
+    let mut metadata = Metadata::response_from_request(&request.metadata);
+    metadata.response_code = ResponseCode::ServFail;
+    ResponseInfo::from(Header {
+        metadata,
         counts: HeaderCounts::default(),
-    };
-    header.set_response_code(ResponseCode::ServFail);
-    ResponseInfo::from(header)
+    })
 }
 
 #[allow(non_snake_case)]
