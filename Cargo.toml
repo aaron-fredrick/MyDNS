@@ -31,7 +31,9 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"
 
 # Auth
 argon2       = "0.5"
-jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+# Use AWS-LC-RS instead of jsonwebtoken's RustCrypto backend so RSA JWT
+# operations do not pull in the vulnerable rsa 0.9.x implementation.
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 
 # Logging / tracing
 tracing             = "0.1"
