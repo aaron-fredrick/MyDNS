@@ -1,11 +1,16 @@
 /* Page-specific layout only. Shared components belong in components.css. */
-.page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-4); margin:0 0 var(--space-5); }
+.page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-4); margin:0 0 var(--space-6); }
 .page-header h1 { margin:0; font-size:28px; line-height:1.2; }
 .page-header p { margin:var(--space-2) 0 0; color:var(--text-muted); }
+.section-heading { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:var(--space-4); }
+.section-heading h2 { margin:0; font-size:18px; line-height:1.3; }
+.section-heading p { margin:var(--space-1) 0 0; }
+.dashboard-section { margin-top:var(--space-7); }
+.dashboard-section:first-of-type { margin-top:0; }
 .stat-value { margin-top:var(--space-1); font-size:28px; line-height:1.2; font-weight:700; }
 .metric-trend { display:block; margin-top:var(--space-2); font-size:12px; }
 .metric-trend.positive { color:var(--success); }
-.dashboard-secondary-metrics { margin-top:var(--space-4); }
+.dashboard-secondary-metrics { margin-top:var(--space-3); }
 .performance-summary { margin-top:var(--space-4); display:flex; align-items:center; justify-content:space-between; gap:var(--space-5); }
 .performance-summary h2 { margin:var(--space-2) 0; }
 .dashboard-charts { margin-top:var(--space-4); }
@@ -20,6 +25,11 @@
 .chart-line-secondary { stroke:var(--accent); }
 .chart-labels text { fill:var(--text-muted); font:12px var(--font-mono); }
 .chart-legend { display:flex; flex-wrap:wrap; gap:var(--space-4); margin-top:var(--space-3); color:var(--text-muted); font-size:12px; }
+.chart-legend span { display:inline-flex; align-items:center; gap:var(--space-2); }
+.chart-legend strong { color:var(--text); font-family:var(--font-mono); font-weight:600; }
+.series-marker { width:20px; height:3px; border-radius:2px; display:inline-block; background:var(--primary); }
+.series-p95 { background:var(--accent); }
+.series-p99 { background:var(--text-muted); }
 .donut-wrap { display:flex; align-items:center; justify-content:center; gap:var(--space-7); min-height:220px; }
 .donut { width:170px; height:170px; flex:0 0 auto; border-radius:50%; display:grid; place-items:center; background:conic-gradient(var(--primary) 0 92.4%, var(--surface-2) 92.4% 100%); position:relative; }
 .donut::before { content:""; position:absolute; width:118px; height:118px; border-radius:50%; background:var(--surface); }
@@ -39,4 +49,4 @@
 .log-line { display:grid; grid-template-columns:100px 70px minmax(0,1fr); gap:var(--space-3); padding:var(--space-2) 0; border-bottom:1px solid var(--border); }
 .settings-section { margin-bottom:var(--space-5); }
 .settings-section:last-child { margin-bottom:0; }
-@media (max-width:700px) { .performance-summary { align-items:flex-start; flex-direction:column; } .donut-wrap { flex-direction:column; gap:var(--space-5); } .upstream-stats { grid-template-columns:1fr; } }
+@media (max-width:700px) { .performance-summary { align-items:flex-start; flex-direction:column; } .donut-wrap { flex-direction:column; gap:var(--space-5); } .upstream-stats { grid-template-columns:1fr; } .dashboard-section { margin-top:var(--space-6); } }
