@@ -1,30 +1,30 @@
 # MyDNS UI Brand Integration
 
-This document translates the My Systems Brand Profile into implementation rules for the MyDNS web UI.
+This document translates the canonical **My Systems Brand Profile** into implementation rules for the MyDNS web UI.
 
 ## Product identity
 
-MyDNS is the networking/DNS product in the My Systems family. Its system accent is **blue / network**. The shared My Systems identity remains primary; MyDNS should not become a visually independent brand.
+MyDNS is the DNS/networking product in the My Systems family. Its system identity is **blue / network**. The product remains recognisably part of the My Systems family rather than becoming a visually independent brand.
 
 ## Visual direction
 
-MyDNS is **dark-first**, technical, minimal, and operational. Use neutral surfaces and one restrained primary accent. Network topology, nodes, grids, and system relationships are appropriate visual motifs.
+MyDNS is **dark-first**, technical, minimal, practical, and operational. Use neutral surfaces with restrained brand colour. Infrastructure, topology, grids, and system relationships are appropriate supporting motifs, but the logo itself is a **compass**.
 
-Avoid excessive gradients, glassmorphism, neon effects, generic cloud/SaaS styling, and decorative dashboard elements that do not communicate operational information.
+Avoid excessive gradients, glassmorphism, neon effects, generic AI/cloud/SaaS styling, and decorative dashboard elements that do not communicate operational information.
 
 ## Theme tokens
 
-The canonical theme mappings live in `brand/colors/`:
+The canonical mappings live in `brand/colors/`:
 
 - `brand/colors/dark.md`
 - `brand/colors/light.md`
 
-The frontend should map these values to semantic CSS variables/design tokens rather than hard-coding hex values inside components.
+The frontend must map these values to semantic CSS variables/design tokens rather than scattering hard-coded hex values through components.
 
 ## Typography
 
-- Inter for UI, headings, documentation, and general communication.
-- JetBrains Mono for code, DNS names, commands, configuration, identifiers, and technical metadata.
+- **Inter** for UI, headings, documentation, and general communication.
+- **JetBrains Mono** for code, DNS names, commands, configuration, identifiers, and technical metadata.
 
 ## Component rules
 
@@ -66,11 +66,24 @@ Prefer clear grouping and whitespace over excessive borders. Use a restrained, c
 
 Approved repository logo sources are under `brand/logo/`.
 
-- `primary/` — full colour product lockup.
-- `monochrome/` — single-colour use on constrained surfaces.
-- `mark/` — compact application/repository/favicon identity.
+- `primary/` — full-colour MyDNS lockup using the MyDNS blue identity.
+- `monochrome/` — single-colour lockup for constrained contexts.
+- `mark/` — compact geometric compass for application, favicon, and repository identity.
 
-The supplied MyDNS mark follows the approved modular M/network-node direction. Treat it as a source asset; do not redraw or create per-screen variants.
+The compass is the MyDNS product mark. Do **not** redraw it as an M/network-node symbol, add cyan, add node dots, add glow/gradients, or create screen-specific variants.
+
+The My Systems Brand Profile allows topology/network motifs in the wider visual language; that does not change the MyDNS logo concept.
+
+## Colour discipline
+
+Use the canonical My Systems palette:
+
+- Dark primary: `#5B8CFF`
+- Light primary: `#315EDE`
+- Dark accent: `#22C7A5`
+- Light accent: `#0D9F82`
+
+The green/teal accent is a secondary family accent. It is not the MyDNS logo colour. Semantic colours are reserved for operational meaning.
 
 ## Accessibility
 
