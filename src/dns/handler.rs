@@ -55,7 +55,7 @@ impl RequestHandler for DnsHandler {
 
         tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, "DNS query received");
         let result = self.processResolution(&name, rtype, src).await;
-        let builder = MessageResponseBuilder::from_message_request(&*request);
+        let builder = MessageResponseBuilder::from_message_request(request);
         let mut metadata = Metadata::response_from_request(&request.metadata);
 
         match result {
