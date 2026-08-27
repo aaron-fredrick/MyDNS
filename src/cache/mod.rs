@@ -103,9 +103,6 @@ impl DnsCache {
     }
 
     /// Removes all entries for a DNS name.
-    ///
-    /// Name-wide invalidation is required because cached A/AAAA/etc. answers
-    /// may depend on a CNAME record for the same owner name.
     pub fn removeName(&mut self, name: &str) {
         let name = name.to_lowercase();
         self.inner
@@ -113,8 +110,6 @@ impl DnsCache {
     }
 
     /// Removes all entries that have passed their expiry time.
-    ///
-    /// Called periodically by the background pruning task.
     pub fn prune(&mut self) -> usize {
         let before = self.inner.len();
         self.inner.retain(|_, entry| !entry.isExpired());
@@ -154,7 +149,7 @@ impl DnsCache {
                 let values = entry
                     .records
                     .iter()
-                    .filter_map(|r| r.data().map(|d| d.to_string()))
+                    .map(|r| r.data.to_string())
                     .collect();
 
                 (key.0.clone(), key.1, ttl_remaining, values)
@@ -220,10 +215,8 @@ pub fn spawnPruner(
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(60)) => {
-                    // Prune memory cache
                     let pruned_mem = cache.write().await.prune();
 
-                    // Prune DB cache
                     let pruned_db = match crate::db::records::pruneCache(&db).await {
                         Ok(n) => n,
                         Err(e) => {
