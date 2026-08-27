@@ -116,9 +116,12 @@ async fn start_dns_server(
     });
 
     for _ in 0..50 {
-        if tokio::net::TcpStream::connect(SocketAddr::new("127.0.0.1".parse().unwrap(), port))
-            .await
-            .is_ok()
+        if tokio::net::TcpStream::connect(SocketAddr::new(
+            "127.0.0.1".parse().unwrap(),
+            port,
+        ))
+        .await
+        .is_ok()
         {
             break;
         }
