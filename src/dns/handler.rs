@@ -441,12 +441,12 @@ impl DnsHandler {
                 RData::MX(mx) => Some(mx.preference as i64),
                 _ => None,
             };
-            let _ = crate::db::records::upsertCache(
+            let _ = crate::db::records::insertCache(
                 &self.state.db,
                 &owner,
                 &rtype.to_string(),
                 &val,
-                r.ttl as i64,
+                r.ttl,
                 prio,
             )
             .await;
@@ -466,7 +466,7 @@ impl DnsHandler {
             .config
             .try_read()
             .ok()
-            .and_then(|cfg| cfg.local_ip.parse().ok())
+            .map(|cfg| cfg.bind_host)
             .unwrap_or(IpAddr::from([127, 0, 0, 1]))
     }
 
@@ -518,8 +518,8 @@ impl DnsHandler {
         ));
     }
 
-    async fn saveNegativeCache(&self, name: &str, rtype: RecordType, ttl: i64) {
-        let _ = crate::db::records::upsertCache(
+    async fn saveNegativeCache(&self, name: &str, rtype: RecordType, ttl: u32) {
+        let _ = crate::db::records::insertCache(
             &self.state.db,
             name,
             &rtype.to_string(),
