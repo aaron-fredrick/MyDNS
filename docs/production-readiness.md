@@ -2,270 +2,400 @@
 
 Branch: `production-readiness`
 
-## Objective
+## 1. Purpose
 
-Bring MyDNS from a feature-complete development server to a defensible production release by addressing DNS correctness, API/security hardening, persistence, reliability, test coverage, CI/CD, packaging, deployment, and operational documentation.
+This document is the release plan for the first production version of MyDNS.
 
-## Current baseline
+The objective is to take the current feature-complete development server through one deliberate production-readiness pass and ship a defensible **v1**. The scope is intentionally finite: correctness, security, reliability, testing, the production UI, packaging, deployment, and documentation required for the first release.
 
-- `cargo fmt --check` passes locally.
-- `cargo check` passes locally.
-- `cargo clippy -- -D warnings` passes locally.
-- Latest full test run: 22 unit tests passed, 5 cache-persistence tests passed, 4 DNS integration tests passed, and 7 HTTP/API integration tests passed before the intermittent cache concurrency failure.
-- The focused `cache_persistence` target passes repeatedly, including 5 consecutive runs.
-- The complete `cargo test` suite still exposes an intermittent SQLite `database is locked` failure in `test_concurrent_cache_upserts_remain_deduplicated`.
-- SQLite concurrency hardening has been applied on `production-readiness` using WAL journaling plus a bounded 5-second busy timeout, but the full-suite race is not yet considered closed.
-- API validation unit and HTTP-level tests pass.
-- `cargo audit` remains outstanding.
-- `production-readiness` is the active implementation branch.
+This is **not an ongoing agile backlog**. Once the v1 acceptance criteria are satisfied and the release is tagged, this document is complete. Future improvements, performance work, feature requests, and issues raised from real-world use can be evaluated separately after v1.
 
-## Progress since the original audit
+---
 
-### Completed
+## 2. Current verified state
 
-- [x] DNS UDP/TCP binding honors configured `bind_host`.
-- [x] DNS resolution distinguishes positive, NODATA, NXDOMAIN, and SERVFAIL outcomes.
-- [x] Upstream resolver failures are not collapsed into NXDOMAIN.
-- [x] Authoritative CNAME chasing is bounded and loop-safe.
-- [x] Wire-level DNS coverage exists for UDP/TCP, NODATA, NXDOMAIN, CNAME chains, CNAME-only responses, multi-hop chains, and CNAME loops.
-- [x] Persistent cache insertion deduplicates records using a database uniqueness constraint.
-- [x] Persistent cache lookups enforce TTL expiration.
-- [x] CNAME-dependent persistent cache invalidation is implemented.
-- [x] API integration coverage verifies cache deduplication and dependent invalidation.
-- [x] Persistent cache lifecycle test target added in `tests/cache_persistence.rs`, covering restart persistence, negative-cache persistence, expiration/pruning, explicit clear, and concurrent upserts.
-- [x] DNS record API validates names, supported record types, record values, TTL bounds, and MX priority before persistence.
-- [x] Record updates validate the effective post-update name/type/value/TTL/priority combination.
-- [x] HTTP integration coverage verifies malformed record inputs are rejected with `400` and valid updates still succeed.
-- [x] SQLite concurrency gate closed: Set `max_connections(1)` on SQLite pool to eliminate `database is locked` failures under concurrent writes. Verified with 6 consecutive full test suite passes.
-- [x] Upstream timeout handling added: DNS handler now wraps upstream resolution with 5-second timeout, returning SERVFAIL on timeout.
+The current `production-readiness` branch has already closed the following major areas:
 
-### In progress
+- DNS UDP and TCP serving.
+- Configured DNS bind-host handling.
+- Positive answers, NODATA, NXDOMAIN, and SERVFAIL differentiation.
+- Authoritative CNAME chasing with bounded loop protection.
+- Wire-level DNS coverage for the supported record types.
+- Upstream timeout, NXDOMAIN, and SERVFAIL handling.
+- Persistent cache storage and restart persistence.
+- Positive and negative cache entries.
+- TTL expiration and pruning.
+- Persistent cache deduplication.
+- CNAME-dependent cache invalidation.
+- SQLite concurrent-write reliability for the current test model.
+- Record validation for names, supported types, values, TTLs, and MX priority.
+- Effective-state validation for record updates.
+- Authentication and protected-route coverage currently present in the integration suite.
+- Security headers, audit logging, and bounded request/resource controls.
+- Unix privilege-handling work and graceful shutdown work already present on the branch.
+- Documented HTTPS deployment through a TLS-terminating reverse proxy.
+- JWT configuration using `jsonwebtoken`'s AWS-LC-RS backend rather than its RustCrypto RSA backend.
 
-None
+### Latest local verification
 
-## Remaining priority order
+The latest verification run completed successfully for:
 
-### P0 — Correctness and security blockers
+- `cargo check`
+- `cargo fmt --check`
+- `cargo clippy -- -D warnings`
+- `cargo test`
 
-- [x] Add validation for DNS names, record types, record values, TTL bounds, and MX priority.
-- [x] Define and enforce zone/ownership rules for API-managed records.
-- [x] Complete Unix privilege dropping with deliberate UID/GID/groups handling and fail-closed behavior.
-- [x] Make DNS/HTTP shutdown propagation symmetric and handle OS termination signals cleanly.
-- [x] Decide and implement HTTPS deployment: documented TLS-terminating reverse proxy approach in `docs/https-deployment.md`.
-- [x] Add login/API request-size limits and login abuse/rate limiting.
+The complete test suite currently passes, including:
 
-### P1 — DNS correctness
+- 29 library tests.
+- 1 authentication coverage test.
+- 5 persistent-cache tests.
+- 8 DNS integration tests.
+- 7 HTTP/API integration tests.
+- 3 upstream integration tests.
+- 2 validation API tests.
 
-- [x] Add authoritative wire-level coverage for A, AAAA, CNAME, MX, NS, TXT, and PTR. Current implementation natively builds A, AAAA, CNAME, MX, and PTR; NS/TXT support must be added before those tests are required.
-- [x] Verify upstream timeout, unreachable-server, malformed-response, and SERVFAIL behavior.
-- [ ] Verify query-name case normalization, trailing-dot normalization, and record-type separation.
-- [ ] Verify response flags, authority behavior, and TTL propagation.
+`cargo audit` still reports `RUSTSEC-2023-0071` for `rsa 0.9.10`. Current dependency-tree checks do not show `rsa` as a reachable dependency of the selected MyDNS feature graph, while the lockfile still contains the package entry. This must be explicitly reviewed and documented before the v1 release gate is closed; it must not be silently ignored.
 
-### P1 — Cache and persistence
+---
 
-- [x] Persistent-cache schema/uniqueness contract.
-- [x] Duplicate-write prevention.
-- [x] SQLite TTL filtering.
-- [x] CNAME-dependent invalidation.
-- [x] Positive-cache restart persistence test.
-- [x] Negative-cache restart persistence test.
-- [x] Expired-cache visibility/pruning test.
-- [x] Explicit persistent cache clear test.
-- [x] **Concurrent identical cache upserts pass reliably in the complete suite.** Fixed by setting `max_connections(1)` on SQLite pool.
-- [ ] Integrate the lifecycle suite into the normal CI matrix.
-- [x] Make all integration-test temporary database cleanup failure-safe.
-- [x] Ensure generated database/journal artifacts never remain in the repository working tree after tests.
+## 3. Remaining work for v1
 
-### P1 — Web/API hardening
+The remaining work is grouped by release concern rather than by sprint or agile iteration. Work should be completed in the order below because later release tasks depend on earlier correctness and security gates.
 
-- [x] Review admin bootstrap, password handling, JWT secret lifecycle, token lifetime, and rotation/recovery.
-- [x] Add authorization tests for every protected route, including records, settings, cache, and WebSocket.
-- [ ] Standardize HTTP status codes/error payloads without leaking internals.
-- [x] Add security headers.
-- [x] Add audit logging for authentication and destructive/admin operations without credentials/tokens.
-- [x] Add bounded request/body and concurrency/resource controls.
+### 3.1 DNS correctness and ownership
 
-### P1 — Dependency and supply-chain security
+#### Zone / ownership enforcement — next implementation item
 
-- [ ] Run `cargo audit` and review every advisory against the actual dependency graph.
-- [ ] Review the current Dependabot findings and upgrade/justify each one.
-- [ ] Keep direct dependency requirements intentional.
-- [ ] Pin/verify GitHub Actions versions.
-- [ ] Decide whether SBOM generation is required for releases.
+The management API must not allow an authenticated administrator or future user boundary to create or modify records outside the configured DNS ownership boundary.
 
-### P1 — Test-suite expansion
+Implement:
 
-- [x] Add API validation tests for malformed names, unsupported types, invalid values, TTLs, and priorities.
-- [ ] Add complete CRUD update coverage, including rename/type/value/TTL changes and invalidation.
-- [ ] Add protected-route authorization coverage for records/settings/cache/WebSocket.
-- [ ] Add configuration parsing tests, including missing credentials and malformed values.
-- [ ] Add bind-address tests for localhost and explicit interface/all-interface configuration.
-- [ ] Add startup/shutdown and signal-handling tests.
-- [x] Add DNS tests for all supported record types over UDP and TCP.
-- [ ] Add WebSocket authentication and disconnect/lag handling tests.
-- [ ] Adopt a deterministic temporary-directory strategy so test artifacts never pollute the repository root.
+- `allowed_zones` configuration.
+- Canonical DNS-name normalization before ownership checks.
+- Exact-zone matching.
+- Subdomain matching.
+- Case-insensitive handling.
+- Trailing-dot handling.
+- Rejection of unrelated zones.
+- Enforcement on both record creation and update.
+- Tests covering exact matches, subdomains, unrelated names, case differences, and trailing dots.
 
-### P1 — CI quality gates
+This must be enforced at the API validation boundary, not only by the UI.
 
-- [ ] Run `cargo fmt --check` on every push/PR.
-- [ ] Run `cargo check` on every push/PR.
-- [ ] Run `cargo clippy -- -D warnings` on every push/PR.
-- [ ] Run the complete test suite on Linux and Windows.
-- [ ] Add release-profile build/test verification.
-- [ ] Add CodeQL coverage to the active development/PR path.
-- [ ] Add dependency auditing to CI.
-- [ ] Configure branch protection so required checks gate merges to `main`.
+#### DNS protocol edge cases
 
-### P2 — Frontend and UI production build
+Add explicit tests for:
 
-The current repository already has a browser UI under `src/assets` consisting of `dashboard.html`, `style.css`, and `app.js`. fileciteturn6file0L1-L2 The backend is an Axum 0.7 HTTP/WebSocket service, so the frontend should remain a static client served by the Rust binary rather than introducing a second runtime server. fileciteturn4file0L1-L2
+- Query-name case normalization.
+- Trailing-dot normalization.
+- Record-type separation.
+- Authoritative response flags.
+- Authority-section behavior.
+- TTL propagation.
 
-#### Recommended frontend stack
+The existing record-type and upstream integration coverage should remain intact while these cases are added.
 
-- [ ] Migrate the existing UI to **React + TypeScript + Vite**.
-- [ ] Use Vite only as the development/build tool; production output must be static assets served by MyDNS/Axum.
-- [ ] Keep application state/API integration lightweight: React state/hooks for local UI state, native `fetch` for mutations, and a small API/query abstraction for server state. Avoid adding a large state-management framework unless real complexity requires it.
-- [ ] Use native WebSocket handling for live DNS/log/status streams, with explicit reconnect/backoff and connection-state UI.
-- [ ] Use a small icon library such as Lucide rather than shipping a large UI component framework.
-- [ ] Keep the visual system in project-owned CSS/design tokens so the My Systems/MyDNS brand is not locked to a third-party component theme.
-- [ ] Use semantic HTML, keyboard-accessible controls, visible focus states, reduced-motion support, and WCAG-conscious contrast.
-- [ ] Add responsive layouts for desktop, tablet, and narrow/mobile management views.
-- [ ] Build production assets with hashed filenames and a deterministic Node/npm or pnpm build step in CI.
-- [ ] Decide and document the Rust-to-frontend asset handoff: preferred approach is a dedicated frontend source directory (for example `web/`) compiled to a static `dist/` directory consumed/served by Axum; do not make the Rust backend depend on Node at runtime.
-- [ ] Add frontend lint/type-check/build checks to CI.
-- [ ] Add browser-level smoke tests for authentication, navigation, CRUD record flows, protected routes, and WebSocket reconnect behavior.
-- [ ] Ensure production frontend assets are reproducible and no development source maps/debug endpoints are exposed unintentionally.
+---
 
-#### Version-controlled UI design artifact
+### 3.2 Web/API hardening
 
-Figma MCP exhaustion must not block UI design or implementation. The repository will maintain a version-controlled visual specification/prototype that can later be transferred into Figma without redesigning the product.
+Complete the remaining API behavior checks:
 
-- [ ] Create `docs/ui/README.md` as the authoritative UI/design specification.
-- [ ] Create `docs/ui/design-system.css` containing reusable design tokens and component styling used by the prototype.
-- [ ] Create `docs/ui/prototype.html` as a high-fidelity clickable dashboard prototype.
-- [ ] Include prototype states for login, dashboard, DNS records, cache, live logs, settings, search/filtering, record-type badges, status indicators, modals, toasts, empty/loading/error states, destructive confirmations, and WebSocket disconnected/reconnecting states.
-- [ ] Base terminology, navigation, data fields, and workflows on the actual MyDNS backend/API rather than inventing Figma-only functionality.
-- [ ] Use the My Systems brand profile as the visual source of truth for brand treatment while keeping implementation tokens in-repository.
-- [ ] Treat the prototype and design-system files as the visual specification for the eventual `src/assets`/frontend implementation.
-- [ ] When Figma MCP availability returns, optionally reproduce the approved repository design in Figma; Figma is a secondary design surface, not a blocker or the sole source of truth.
+- Standardize HTTP status codes and structured error payloads.
+- Ensure errors do not expose internal implementation details, filesystem paths, credentials, tokens, or database information.
+- Verify every protected REST route rejects unauthenticated requests.
+- Verify every authenticated operation enforces the intended authorization boundary.
+- Verify WebSocket authentication independently from REST authentication.
+- Verify session-expiration behavior.
+- Verify destructive operations require the intended authorization.
 
-#### Frontend implementation sequence
+Add tests for:
 
-1. [ ] Audit the existing `src/assets` HTML/CSS/JS against the actual API and current production-readiness requirements.
-2. [ ] Freeze the information architecture and core workflows in `docs/ui/prototype.html`.
-3. [ ] Establish My Systems/MyDNS design tokens, typography, spacing, surfaces, controls, status semantics, and responsive rules in the repository design system.
-4. [ ] Scaffold the React/TypeScript/Vite frontend without changing Rust/backend behavior.
-5. [ ] Implement authentication and application shell/navigation.
-6. [ ] Implement dashboard and live service/status views.
-7. [ ] Implement DNS record CRUD with validation/error handling matching the backend API.
-8. [ ] Implement cache and logs views, including live WebSocket behavior and reconnect states.
-9. [ ] Implement settings and destructive/admin confirmation flows.
-10. [ ] Add loading, empty, error, unauthorized, session-expired, and disconnected states across all views.
-11. [ ] Run accessibility, responsive, browser smoke, lint, type-check, and production-build verification.
-12. [ ] Replace the legacy `src/assets` implementation only after the new build is functionally and visually verified.
+- Malformed JSON.
+- Oversized requests.
+- Invalid authentication credentials.
+- Expired/tampered JWTs.
+- Unauthorized resource access.
+- Invalid record mutations.
+- WebSocket authentication and rejection.
 
-### P2 — Release engineering
+---
 
-- [ ] Define supported release targets.
-- [ ] Build versioned release archives containing binaries, configuration examples, and required documentation.
-- [ ] Generate SHA-256 checksums.
-- [ ] Publish GitHub Releases from version tags.
-- [ ] Verify release binaries on clean machines/containers.
-- [ ] Add release notes/changelog generation.
-- [ ] Decide on SBOM/signing/provenance.
-- [ ] Decide Linux tarball vs `.deb`/`.rpm` packaging.
-- [ ] Decide Windows ZIP vs installer/service packaging.
+### 3.3 Configuration and lifecycle verification
 
-### P2 — Containerisation
+Add automated coverage for startup configuration and lifecycle behavior:
 
-- [ ] Add a minimal multi-stage production Dockerfile.
-- [ ] Run as non-root where the DNS binding strategy permits it.
-- [ ] Document any required DNS capability/host-network configuration; never require unrestricted `--privileged`.
-- [ ] Keep SQLite/configuration persistent outside the image.
-- [ ] Add a container healthcheck.
-- [ ] Add a Compose example where useful.
-- [ ] Scan the built image for known vulnerabilities.
+- Missing required configuration.
+- Malformed configuration values.
+- Invalid bind addresses.
+- Invalid ports.
+- Invalid TTL/configuration ranges.
+- Missing or invalid authentication configuration.
+- `allowed_zones` parsing and normalization.
+- Startup failure behavior.
+- Graceful shutdown.
+- OS termination signal handling.
+- DNS and HTTP shutdown coordination.
 
-### P2 — Native service deployment
+The service must fail closed when required security or privilege configuration is invalid.
 
-- [ ] Provide a Linux systemd unit with least privilege, restart policy, limits, writable paths, and dependency ordering.
-- [ ] Provide a Windows service/install procedure if Windows remains supported.
-- [ ] Document DNS UDP/TCP and management HTTP(S) ports.
-- [ ] Document firewall rules, filesystem permissions, database backup/restore, and log rotation.
-- [ ] Define health/readiness checks and operational failure behavior.
+---
 
-### P2 — Documentation
+### 3.4 WebSocket reliability
 
-- [ ] Rewrite README Quick Start for `config.ini` and remove stale `.env.example` instructions.
-- [ ] Document supported DNS record types and resolver behavior.
-- [ ] Document production topology, HTTPS, ports, privileges, database/log locations, and backups.
-- [ ] Add native and container deployment guides.
-- [ ] Add a complete configuration reference.
-- [ ] Add release/upgrade and rollback guidance.
-- [ ] Add changelog/release notes.
-- [ ] Document the security model and threat assumptions.
+The live management channel must be production-safe before the UI depends on it.
 
-## Acceptance criteria
+Verify:
 
-A production release is complete only when:
+- Authenticated connection succeeds.
+- Unauthenticated connection is rejected.
+- Client disconnect is cleaned up correctly.
+- Server shutdown closes connections cleanly.
+- Slow/lagging clients cannot consume unbounded resources.
+- Reconnection works after a dropped connection.
+- Repeated connect/disconnect cycles do not leak resources.
 
-1. Format, check, clippy, unit tests, integration tests, and release-profile verification pass with zero warnings/errors.
-2. DNS correctly distinguishes positive answers, NODATA, NXDOMAIN, and SERVFAIL.
-3. All documented record types behave correctly over both UDP and TCP.
-4. Authoritative CNAME chains are correct, bounded, and loop-safe.
-5. Cache persistence, expiration, deduplication, invalidation, restart behavior, clear behavior, and concurrency are verified.
-6. Management surfaces are authenticated/authorized as intended, with abuse/resource limits and no credential/token leakage.
-7. Default exposure is localhost-only and configured bind addresses are honored.
-8. Production dashboard traffic is protected by HTTPS.
-9. Unix privilege handling fails closed and does not leave the service unnecessarily privileged.
-10. CI gates pull requests and releases; dependency/security checks are automated.
-11. Release artifacts are versioned, checksummed, tested, and published for documented targets.
-12. At least one documented native deployment and one documented container deployment are reproducible.
-13. README and deployment/configuration documentation match the implementation.
-14. A clean test run leaves no generated database/log/runtime artifacts in the working tree.
-15. A final clean-tree audit is performed before tagging the production release.
-16. The production frontend is a reproducible static build served by MyDNS, with browser smoke coverage and no required Node runtime in production.
-17. The approved UI design is represented in version-controlled repository documentation/prototype and matches the implemented frontend workflows.
+---
 
-## Immediate next steps
+### 3.5 Dependency and supply-chain security
 
-1. Pull the latest `production-readiness` branch.
-2. Remove any leftover `test_*.db`, `test_dns_*.db`, and `*.db-journal` artifacts; never commit them.
-3. Inspect the SQLite connection/pool initialization and persistent-cache upsert path.
-4. Reproduce the lock failure with the **full** `cargo test` suite, not only the focused cache target.
-5. Fix the underlying SQLite contention/transaction/pool lifecycle issue. Do not weaken the concurrency assertion merely to make the test pass.
-6. Run `cargo fmt --check`.
-7. Run `cargo check`.
-8. Run `cargo clippy -- -D warnings`.
-9. Run `cargo test --test cache_persistence -- --nocapture` repeatedly.
-10. Run the complete `cargo test` suite repeatedly until the concurrency test is stable.
-11. Verify the working tree is clean of generated runtime artifacts.
-12. Commit and push the verified SQLite fix.
-13. Only after the cache gate is genuinely stable, proceed to the next P0 item: **zone/ownership enforcement**.
-14. Run `cargo audit` as the next security gate and record advisory dispositions in this document.
-15. In parallel with backend hardening, begin the repository UI design artifact under `docs/ui/`; UI work must not be blocked by Figma MCP quota.
-16. After the visual prototype is approved, scaffold the React/TypeScript/Vite frontend and plan the CI/build handoff into Axum's static asset serving.
+The v1 release must have an explicit security disposition for all dependency findings.
 
-## Handoff state
+Required actions:
 
-The current blocking issue for the next engineer/agent is **SQLite concurrent-write reliability**. The isolated persistence test can pass repeatedly, but the complete suite has demonstrated an intermittent `database is locked` failure. Treat the cache concurrency gate as open until the full suite is consistently green.
+- Re-run `cargo audit` against the final lockfile.
+- Investigate the reported `rsa 0.9.10` / `RUSTSEC-2023-0071` entry.
+- Confirm the actual selected dependency graph using Cargo's normal and feature graphs.
+- If the package remains only as an unused/optional lockfile resolution, document that fact and why the vulnerable implementation is not reachable by MyDNS.
+- If it becomes reachable, remove or replace the dependency before release where technically possible.
+- Review Dependabot/security findings and either upgrade or document a justified exception.
+- Keep direct dependency requirements intentional.
+- Pin or otherwise verify GitHub Actions dependencies used for release/security workflows.
+- Decide whether an SBOM is required for the v1 release and implement it if required.
 
-Recommended investigation order:
+A known advisory may be accepted only with a documented technical justification and confirmation that the vulnerable code path is not part of the shipped application.
 
-1. SQLite connection initialization and PRAGMA settings.
-2. SQLx pool size, acquisition/release behavior, and test pool lifecycle.
-3. Cache upsert transaction scope and duration.
-4. SQLite busy timeout/WAL interaction and whether retries are required for transient contention.
-5. Parallel integration-test database isolation and cleanup.
-6. Repeat the complete suite enough times to establish stability.
+---
 
-## Execution order
+### 3.6 CI release gates
 
-1. **P0 correctness/security:** validation, ownership, privilege handling, shutdown, HTTPS, abuse controls.
-2. **P1 DNS/cache:** complete DNS record-type behavior and upstream failure coverage; finish cache CI integration.
-3. **P1 API/security:** authorization, error handling, headers, audit logging, resource limits.
-4. **P1 CI/security:** audit dependencies, harden CI, enable branch protection.
-5. **P2 UI foundation:** repository design system/prototype, then React/TypeScript/Vite frontend migration and browser smoke coverage.
-6. **P2 deployment:** native service, container, HTTPS topology, backups.
-7. **P2 release:** artifacts, checksums, supported targets, clean-machine verification, release notes.
-8. **Final gate:** complete security review, clean-tree audit, reproducible deployment verification, frontend production-build verification, then tag the production-ready commit.
+The repository must enforce the same basic checks used for local v1 verification.
+
+CI must run:
+
+- `cargo fmt --check`
+- `cargo check`
+- `cargo clippy -- -D warnings`
+- Complete `cargo test`
+- Linux verification.
+- Windows verification.
+- Dependency/security auditing.
+- Release-profile build verification.
+- CodeQL/security analysis where configured.
+
+Required checks must gate merges to `main` before the production tag is created.
+
+The CI configuration must not rely on a developer machine having NASM or another undeclared native build prerequisite. Native build dependencies required by crates such as AWS-LC must be installed or provisioned explicitly by the relevant CI job.
+
+---
+
+## 4. Production frontend
+
+The v1 dashboard will be a real production web application, not a second server runtime.
+
+### Architecture
+
+```text
+React + TypeScript
+        |
+       Vite
+        |
+   static dist/
+        |
+        v
+      Axum
+        |
+   +----+----+
+   |         |
+ REST API  WebSocket
+   |         |
+   +----+----+
+        |
+      MyDNS
+```
+
+Development uses Node tooling only for frontend development and builds. Production runs the compiled static frontend from the Rust/Axum service and does not require Node at runtime.
+
+### UI implementation
+
+- Migrate the existing `src/assets` dashboard to React + TypeScript + Vite.
+- Keep API behavior aligned with the actual Rust backend.
+- Use native `fetch` for HTTP operations and native WebSocket handling for live streams.
+- Implement explicit WebSocket reconnect/backoff and connection-state UI.
+- Keep application state deliberately lightweight.
+- Use project-owned design tokens/CSS rather than locking the application to a large component framework.
+- Use semantic HTML and accessible controls.
+- Provide visible focus states and sensible keyboard navigation.
+- Respect reduced-motion preferences.
+- Provide responsive desktop, tablet, and narrow-screen management layouts.
+- Implement authentication, dashboard, DNS records, cache, live logs/status, settings, search/filtering, validation, confirmation dialogs, toasts, and empty/loading/error states.
+- Ensure unauthorized, expired-session, disconnected, and reconnecting states are represented in the UI.
+- Add frontend linting, type-checking, and production-build verification to CI.
+- Add browser smoke tests covering authentication, navigation, CRUD, protected routes, and WebSocket reconnect behavior.
+- Build deterministic production assets with hashed filenames.
+- Do not expose development-only endpoints or debugging behavior in the production build.
+
+### Repository-owned UI specification
+
+Figma is not a release dependency. The repository remains the authoritative source for the v1 visual specification.
+
+Create and maintain:
+
+```text
+ docs/ui/
+ ├── README.md
+ ├── design-system.css
+ └── prototype.html
+```
+
+The prototype must represent the approved v1 workflows and states and must use the actual MyDNS terminology and data model.
+
+Figma may be used later as a secondary design surface, but Figma availability or MCP quota must not block v1 implementation.
+
+---
+
+## 5. Release engineering
+
+Before tagging v1:
+
+- Define the supported release targets.
+- Produce versioned release archives.
+- Include required configuration examples and documentation.
+- Generate SHA-256 checksums.
+- Publish from version tags.
+- Verify artifacts on clean machines/containers.
+- Generate release notes/changelog information.
+- Confirm version consistency across the application, package, and release artifacts.
+- Decide and document SBOM/signing/provenance requirements.
+
+The release process must be reproducible from a clean checkout.
+
+---
+
+## 6. Deployment
+
+### Container deployment
+
+Provide a production container that:
+
+- Uses a minimal multi-stage build.
+- Runs without unnecessary root privileges.
+- Does not require unrestricted `--privileged` mode.
+- Keeps SQLite/configuration persistent outside the image.
+- Provides a healthcheck.
+- Documents required DNS networking/capabilities.
+- Is scanned for known vulnerabilities.
+
+### Native deployment
+
+Provide at least one documented native deployment path, including:
+
+- Linux systemd service.
+- Least-privilege execution.
+- Restart policy.
+- Writable paths.
+- DNS UDP/TCP ports.
+- Management HTTP/HTTPS ports.
+- Firewall requirements.
+- Database backup/restore.
+- Log locations and rotation.
+- Operational health/readiness behavior.
+
+If Windows remains a supported production target, provide the equivalent Windows service/install procedure.
+
+---
+
+## 7. Documentation
+
+The v1 documentation must match the shipped implementation.
+
+Required documentation:
+
+- README quick start.
+- Complete configuration reference.
+- Supported DNS record types and behavior.
+- Authentication/security model.
+- Production topology.
+- HTTPS deployment.
+- Native deployment.
+- Container deployment.
+- Ports and firewall requirements.
+- Database and log locations.
+- Backup/restore procedure.
+- Upgrade and rollback procedure.
+- Release process.
+- Operational troubleshooting.
+
+Remove stale setup instructions and ensure examples use the current configuration format.
+
+---
+
+## 8. V1 acceptance gate
+
+MyDNS v1 is ready to release only when all of the following are true:
+
+1. `cargo fmt --check` passes.
+2. `cargo check` passes.
+3. `cargo clippy -- -D warnings` passes.
+4. The complete test suite passes reliably.
+5. DNS correctly distinguishes positive answers, NODATA, NXDOMAIN, and SERVFAIL.
+6. Supported DNS record types work correctly over UDP and TCP.
+7. CNAME chains are bounded and loop-safe.
+8. Upstream timeout and failure behavior is deterministic.
+9. Zone/ownership enforcement is implemented and tested.
+10. Cache persistence, expiration, deduplication, invalidation, restart behavior, clearing, and concurrency are verified.
+11. Protected REST and WebSocket surfaces enforce authentication and authorization as intended.
+12. Request/resource limits and abuse controls are active.
+13. Required security headers and audit logging are active without leaking credentials or tokens.
+14. Startup configuration validation and shutdown behavior are tested.
+15. Dependency advisories have documented dispositions and no unexplained release blocker remains.
+16. CI runs the required quality/security gates on the supported platforms.
+17. The frontend is a reproducible React/TypeScript/Vite static build served by Axum.
+18. Browser smoke tests cover the critical management workflows.
+19. At least one native deployment and one container deployment are documented and reproducible.
+20. Release artifacts are versioned, checksummed, and verified.
+21. README, configuration, security, deployment, and release documentation match the implementation.
+22. A clean test run leaves no generated database, journal, log, or runtime artifacts in the repository working tree.
+23. The final production checkout is reviewed for accidental secrets, debug behavior, stale files, and untracked generated artifacts.
+
+---
+
+## 9. Execution order
+
+Complete the v1 work in this order:
+
+1. **Zone/ownership enforcement.**
+2. **DNS normalization, response flags, authority behavior, and TTL tests.**
+3. **Remaining API authorization/error-contract tests.**
+4. **Configuration/startup/shutdown tests.**
+5. **WebSocket authentication and reliability tests.**
+6. **Final dependency/security review, including the RSA advisory disposition.**
+7. **CI quality/security gates and cross-platform verification.**
+8. **Repository-owned UI specification and prototype.**
+9. **React/TypeScript/Vite frontend implementation.**
+10. **Browser smoke/accessibility/responsive verification.**
+11. **Release packaging and clean-machine verification.**
+12. **Native and container deployment verification.**
+13. **Final documentation audit and clean-tree audit.**
+14. **Tag and publish MyDNS v1.**
+
+No additional feature expansion is part of this sequence. If a new issue is discovered that is not required to satisfy the v1 acceptance gate, record it separately for post-v1 evaluation rather than expanding the release scope.
+
+---
+
+## 10. Post-v1 boundary
+
+Once the acceptance gate is satisfied, this plan is considered complete.
+
+Future work should be driven by real deployment experience, user feedback, observed operational issues, security findings, performance measurements, and a fresh technical review. Those improvements should be planned independently rather than continuously extending the v1 release checklist.
