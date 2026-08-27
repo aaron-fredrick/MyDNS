@@ -3,7 +3,7 @@
 //! These tests exercise the real DNS UDP/TCP listeners and the resolution
 //! outcome model against an isolated SQLite database.
 
-use hickory_proto::op::{Message, Query};
+use hickory_proto::op::{Message, MessageType, OpCode, Query};
 use hickory_proto::rr::{Name, RecordType};
 use hickory_proto::serialize::binary::BinDecodable;
 use mydns::{
@@ -69,13 +69,9 @@ async fn start_dns_server() -> (
             "CNAME",
             "loop-one.dns-test.local",
         ),
-        // AAAA record
         ("dns6-test.local", "AAAA", "2001:db8::1"),
-        // MX record
         ("mail-test.local", "MX", "mail.example.com"),
-        // NS record
         ("ns-test.local", "NS", "ns1.example.com"),
-        // TXT record
         (
             "txt-test.local",
             "TXT",
@@ -85,8 +81,6 @@ async fn start_dns_server() -> (
         db::records::createRecord(
             &pool,
             &db::records::CreateRecord {
-                // The DNS handler normalizes query names by removing the trailing
-                // root label separator before looking them up in SQLite.
                 name: record.0.to_string(),
                 record_type: record.1.to_string(),
                 value: record.2.to_string(),
@@ -115,7 +109,6 @@ async fn start_dns_server() -> (
         let _ = dns::server::run(server_state, server_cancel).await;
     });
 
-    // Wait for the server to bind its sockets
     for _ in 0..50 {
         if tokio::net::TcpStream::connect(addr).await.is_ok() {
             break;
@@ -126,8 +119,7 @@ async fn start_dns_server() -> (
 }
 
 fn query_message(name: &str, record_type: RecordType) -> Vec<u8> {
-    let mut message = Message::new();
-    message.set_id(0x1234);
+    let mut message = Message::new(0x1234, MessageType::Query, OpCode::Query);
     message.add_query(Query::query(Name::from_ascii(name).unwrap(), record_type));
     message.to_vec().expect("Failed to encode DNS query")
 }
@@ -150,31 +142,26 @@ async fn udp_query(
     Message::from_bytes(&buf[..len]).expect("Invalid DNS response")
 }
 
+fn response_code(message: &Message) -> hickory_proto::op::ResponseCode {
+    message.header.response_code()
+}
+
 #[tokio::test]
 async fn test_dns_udp_positive_nxdomain_and_nodata() {
     let (addr, db_path, cancel, task) = start_dns_server().await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "dns-test.local.", RecordType::A).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert!(!response.answers().is_empty(), "Expected A answer");
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert!(!response.answers.is_empty(), "Expected A answer");
 
     let response = udp_query(&socket, addr, "dns-test.local.", RecordType::AAAA).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert!(response.answers().is_empty(), "Expected NODATA response");
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert!(response.answers.is_empty(), "Expected NODATA response");
 
     let response = udp_query(&socket, addr, "missing.dns-test.local.", RecordType::A).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NXDomain
-    );
-    assert!(response.answers().is_empty());
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NXDomain);
+    assert!(response.answers.is_empty());
 
     cancel.cancel();
     let _ = task.await;
@@ -184,8 +171,6 @@ async fn test_dns_udp_positive_nxdomain_and_nodata() {
 #[tokio::test]
 async fn test_dns_tcp_positive_answer() {
     let (addr, db_path, cancel, task) = start_dns_server().await;
-
-    // Add a connection retry loop to ensure the server is ready
     let mut stream = None;
     for _ in 0..10 {
         if let Ok(Ok(s)) =
@@ -210,20 +195,14 @@ async fn test_dns_tcp_positive_answer() {
         .unwrap();
     let response_len = u16::from_be_bytes(length) as usize;
     let mut response_bytes = vec![0u8; response_len];
-    tokio::time::timeout(
-        Duration::from_secs(2),
-        stream.read_exact(&mut response_bytes),
-    )
-    .await
-    .expect("TCP DNS response timed out")
-    .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), stream.read_exact(&mut response_bytes))
+        .await
+        .expect("TCP DNS response timed out")
+        .unwrap();
 
     let response = Message::from_bytes(&response_bytes).expect("Invalid TCP DNS response");
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert!(!response.answers().is_empty(), "Expected A answer over TCP");
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert!(!response.answers.is_empty(), "Expected A answer over TCP");
 
     cancel.cancel();
     let _ = task.await;
@@ -236,36 +215,16 @@ async fn test_dns_udp_authoritative_cname_chain_and_cname_only() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "alias-one.dns-test.local.", RecordType::A).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert_eq!(
-        response.answers().len(),
-        3,
-        "Expected two CNAMEs and the target A record"
-    );
-    assert_eq!(response.answers()[0].record_type(), RecordType::CNAME);
-    assert_eq!(response.answers()[1].record_type(), RecordType::CNAME);
-    assert_eq!(response.answers()[2].record_type(), RecordType::A);
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(response.answers.len(), 3, "Expected two CNAMEs and the target A record");
+    assert_eq!(response.answers[0].record_type(), RecordType::CNAME);
+    assert_eq!(response.answers[1].record_type(), RecordType::CNAME);
+    assert_eq!(response.answers[2].record_type(), RecordType::A);
 
-    let response = udp_query(
-        &socket,
-        addr,
-        "alias-one.dns-test.local.",
-        RecordType::CNAME,
-    )
-    .await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert_eq!(
-        response.answers().len(),
-        1,
-        "Expected the requested CNAME only"
-    );
-    assert_eq!(response.answers()[0].record_type(), RecordType::CNAME);
+    let response = udp_query(&socket, addr, "alias-one.dns-test.local.", RecordType::CNAME).await;
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(response.answers.len(), 1, "Expected the requested CNAME only");
+    assert_eq!(response.answers[0].record_type(), RecordType::CNAME);
 
     cancel.cancel();
     let _ = task.await;
@@ -278,28 +237,23 @@ async fn test_dns_udp_authoritative_cname_loop_returns_servfail() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "loop-one.dns-test.local.", RecordType::A).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::ServFail
-    );
-    assert!(response.answers().is_empty());
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::ServFail);
+    assert!(response.answers.is_empty());
 
     cancel.cancel();
     let _ = task.await;
     let _ = std::fs::remove_file(db_path);
 }
+
 #[tokio::test]
 async fn test_dns_udp_aaaa_record() {
     let (addr, db_path, cancel, task) = start_dns_server().await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "dns6-test.local.", RecordType::AAAA).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert_eq!(response.answers().len(), 1);
-    assert_eq!(response.answers()[0].record_type(), RecordType::AAAA);
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(response.answers.len(), 1);
+    assert_eq!(response.answers[0].record_type(), RecordType::AAAA);
 
     cancel.cancel();
     let _ = task.await;
@@ -312,12 +266,9 @@ async fn test_dns_udp_mx_record() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "mail-test.local.", RecordType::MX).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert_eq!(response.answers().len(), 1);
-    assert_eq!(response.answers()[0].record_type(), RecordType::MX);
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(response.answers.len(), 1);
+    assert_eq!(response.answers[0].record_type(), RecordType::MX);
 
     cancel.cancel();
     let _ = task.await;
@@ -330,12 +281,9 @@ async fn test_dns_udp_ns_record() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "ns-test.local.", RecordType::NS).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert_eq!(response.answers().len(), 1);
-    assert_eq!(response.answers()[0].record_type(), RecordType::NS);
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(response.answers.len(), 1);
+    assert_eq!(response.answers[0].record_type(), RecordType::NS);
 
     cancel.cancel();
     let _ = task.await;
@@ -348,12 +296,9 @@ async fn test_dns_udp_txt_record() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let response = udp_query(&socket, addr, "txt-test.local.", RecordType::TXT).await;
-    assert_eq!(
-        response.response_code(),
-        hickory_proto::op::ResponseCode::NoError
-    );
-    assert_eq!(response.answers().len(), 1);
-    assert_eq!(response.answers()[0].record_type(), RecordType::TXT);
+    assert_eq!(response_code(&response), hickory_proto::op::ResponseCode::NoError);
+    assert_eq!(response.answers.len(), 1);
+    assert_eq!(response.answers[0].record_type(), RecordType::TXT);
 
     cancel.cancel();
     let _ = task.await;
