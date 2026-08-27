@@ -1,12 +1,10 @@
-#[allow(unused_imports)]
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
-use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{Name, Record, RecordType};
-use hickory_resolver::config::{NameServerConfigGroup, ResolverConfig, ResolverOpts};
-use hickory_resolver::error::ResolveErrorKind;
-use hickory_resolver::TokioAsyncResolver;
+use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+use hickory_resolver::net::runtime::TokioRuntimeProvider;
+use hickory_resolver::TokioResolver;
 
 use crate::config::ResolverPriority;
 
@@ -68,19 +66,25 @@ fn detectGatewayImpl() -> Option<IpAddr> {
 }
 
 #[allow(non_snake_case)]
-fn buildResolver(addr: SocketAddr) -> TokioAsyncResolver {
-    let group = NameServerConfigGroup::from_ips_clear(&[addr.ip()], addr.port(), true);
-    let config = ResolverConfig::from_parts(None, vec![], group);
+fn buildResolver(addr: SocketAddr) -> anyhow::Result<TokioResolver> {
+    let config = ResolverConfig::from_parts(
+        None,
+        vec![],
+        vec![NameServerConfig::udp_and_tcp(addr.ip())],
+    );
     let mut opts = ResolverOpts::default();
     opts.timeout = Duration::from_secs(3);
     opts.attempts = 2;
-    TokioAsyncResolver::tokio(config, opts)
+
+    let mut builder = TokioResolver::builder_with_config(config, TokioRuntimeProvider::default());
+    *builder.options_mut() = opts;
+    Ok(builder.build()?)
 }
 
 /// Forwards DNS queries to upstream servers in the configured priority order.
 pub struct UpstreamResolver {
-    cloudflare: TokioAsyncResolver,
-    router: Option<TokioAsyncResolver>,
+    cloudflare: TokioResolver,
+    router: Option<TokioResolver>,
     pub priority: ResolverPriority,
     #[allow(dead_code)]
     pub cloudflare_addr: SocketAddr,
@@ -96,8 +100,8 @@ impl UpstreamResolver {
     ) -> anyhow::Result<Self> {
         let effective_router = router_addr.or_else(detectGateway);
 
-        let cloudflare = buildResolver(cloudflare_addr);
-        let router = effective_router.map(buildResolver);
+        let cloudflare = buildResolver(cloudflare_addr)?;
+        let router = effective_router.map(buildResolver).transpose()?;
 
         if let Some(addr) = effective_router {
             tracing::info!(%addr, "Router/gateway DNS detected");
@@ -153,7 +157,7 @@ impl UpstreamResolver {
     }
 
     #[allow(non_snake_case)]
-    fn orderedResolvers(&self) -> (&TokioAsyncResolver, Option<&TokioAsyncResolver>) {
+    fn orderedResolvers(&self) -> (&TokioResolver, Option<&TokioResolver>) {
         match self.priority {
             ResolverPriority::CloudflareFirst => (&self.cloudflare, self.router.as_ref()),
             ResolverPriority::RouterFirst => {
@@ -169,7 +173,7 @@ impl UpstreamResolver {
 
 #[allow(non_snake_case)]
 async fn queryResolver(
-    resolver: &TokioAsyncResolver,
+    resolver: &TokioResolver,
     name: &Name,
     rtype: RecordType,
 ) -> UpstreamResolution {
@@ -179,30 +183,20 @@ async fn queryResolver(
             if records.is_empty() {
                 return UpstreamResolution::Nodata;
             }
-            let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(300);
+            let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
             UpstreamResolution::Positive(records, ttl)
         }
-        Err(e) => match e.kind() {
-            ResolveErrorKind::NoRecordsFound { response_code, .. }
-                if *response_code == ResponseCode::NXDomain =>
-            {
+        Err(e) => {
+            if e.is_nx_domain() {
                 tracing::info!(query = %name, "Upstream returned NXDOMAIN");
                 UpstreamResolution::NxDomain
-            }
-            ResolveErrorKind::NoRecordsFound { response_code, .. }
-                if *response_code == ResponseCode::ServFail =>
-            {
-                tracing::info!(query = %name, "Upstream returned SERVFAIL");
-                UpstreamResolution::ServFail
-            }
-            ResolveErrorKind::NoRecordsFound { .. } => {
+            } else if e.is_no_records_found() {
                 tracing::info!(query = %name, "Upstream returned NODATA");
                 UpstreamResolution::Nodata
-            }
-            _ => {
+            } else {
                 tracing::warn!(query = %name, error = %e, "Upstream lookup failed; returning SERVFAIL");
                 UpstreamResolution::ServFail
             }
-        },
+        }
     }
 }
