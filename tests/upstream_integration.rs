@@ -1,4 +1,4 @@
-use hickory_proto::op::{Message, Query, ResponseCode};
+use hickory_proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
 use hickory_proto::rr::{Name, RecordType};
 use mydns::{config::AppConfig, db, dns, state::AppState};
 use std::net::SocketAddr;
@@ -20,31 +20,29 @@ async fn start_mock_upstream() -> (SocketAddr, tokio::sync::mpsc::Receiver<Messa
         while let Ok((len, src)) = socket_clone.recv_from(&mut buf).await {
             let msg = Message::from_vec(&buf[..len]).unwrap();
 
-            // Create a response based on the query name
-            let mut response = Message::new();
-            response.set_id(msg.id());
-            response.set_message_type(hickory_proto::op::MessageType::Response);
-            response.add_query(msg.queries().first().unwrap().clone());
+            // Create a response based on the query name.
+            let mut response = Message::new(msg.id, MessageType::Response, msg.op_code);
+            response.add_query(msg.queries.first().unwrap().clone());
 
             let name = msg
-                .queries()
+                .queries
                 .first()
                 .unwrap()
                 .name()
                 .to_string()
                 .to_lowercase();
             if name.contains("nxdomain") {
-                response.set_response_code(ResponseCode::NXDomain);
+                response.metadata.response_code = ResponseCode::NXDomain;
                 let bytes = response.to_vec().unwrap();
                 let _ = socket_clone.send_to(&bytes, src).await;
             } else if name.contains("servfail") {
-                response.set_response_code(ResponseCode::ServFail);
+                response.metadata.response_code = ResponseCode::ServFail;
                 let bytes = response.to_vec().unwrap();
                 let _ = socket_clone.send_to(&bytes, src).await;
             } else if name.contains("timeout") {
-                // Do nothing, let it timeout
+                // Do nothing, let it timeout.
             } else {
-                response.set_response_code(ResponseCode::NoError);
+                response.metadata.response_code = ResponseCode::NoError;
                 let bytes = response.to_vec().unwrap();
                 let _ = socket_clone.send_to(&bytes, src).await;
             }
@@ -136,8 +134,7 @@ async fn start_dns_server(
 }
 
 fn query_message(name: &str, record_type: RecordType) -> Vec<u8> {
-    let mut message = Message::new();
-    message.set_id(0x5678);
+    let mut message = Message::new(0x5678, MessageType::Query, OpCode::Query);
     message.add_query(Query::query(Name::from_ascii(name).unwrap(), record_type));
     message.to_vec().unwrap()
 }
@@ -162,7 +159,7 @@ async fn test_upstream_nxdomain() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let res = udp_query(&socket, addr, "nxdomain.example.com.").await;
-    assert_eq!(res.response_code(), ResponseCode::NXDomain);
+    assert_eq!(res.response_code, ResponseCode::NXDomain);
 
     cancel.cancel();
     let _ = task.await;
@@ -176,7 +173,7 @@ async fn test_upstream_servfail() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     let res = udp_query(&socket, addr, "servfail.example.com.").await;
-    assert_eq!(res.response_code(), ResponseCode::ServFail);
+    assert_eq!(res.response_code, ResponseCode::ServFail);
 
     cancel.cancel();
     let _ = task.await;
@@ -189,9 +186,9 @@ async fn test_upstream_timeout() {
     let (addr, db_path, cancel, task) = start_dns_server(mock_addr).await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-    // The timeout one will cause the server to wait for upstream, time out, and return ServFail
+    // The timeout one will cause the server to wait for upstream, time out, and return ServFail.
     let res = udp_query(&socket, addr, "timeout.example.com.").await;
-    assert_eq!(res.response_code(), ResponseCode::ServFail);
+    assert_eq!(res.response_code, ResponseCode::ServFail);
 
     cancel.cancel();
     let _ = task.await;
