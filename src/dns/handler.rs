@@ -3,10 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use hickory_proto::op::{Header, ResponseCode};
+use hickory_proto::op::{Header, HeaderCounts, Metadata, ResponseCode};
 use hickory_proto::rr::{Name, RData, Record, RecordType};
-use hickory_server::authority::MessageResponseBuilder;
+use hickory_server::net::runtime::Time;
 use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
+use hickory_server::zone_handler::MessageResponseBuilder;
 
 use crate::cache::CacheResult;
 use crate::dns::upstream::UpstreamResolution;
@@ -33,21 +34,24 @@ impl DnsHandler {
 
 #[async_trait]
 impl RequestHandler for DnsHandler {
-    async fn handle_request<R: ResponseHandler>(
+    async fn handle_request<R: ResponseHandler, T: Time>(
         &self,
         request: &Request,
         mut response_handle: R,
     ) -> ResponseInfo {
         let src = request.src();
-        let query = request.query();
+        let query = request.request_info().query;
         let name_fqdn = query.name().to_string();
         let rtype = query.query_type();
         let name = name_fqdn.trim_end_matches('.').to_lowercase();
 
         tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, "DNS query received");
         let result = self.processResolution(&name, rtype, src).await;
-        let builder = MessageResponseBuilder::from_message_request(request);
-        let mut header = Header::response_from_request(request.header());
+        let builder = MessageResponseBuilder::from_message_request(&*request);
+        let mut header = Header {
+            metadata: Metadata::response_from_request(&request.metadata),
+            counts: HeaderCounts::default(),
+        };
 
         match result {
             ResolutionResult::Positive(records) => {
@@ -59,7 +63,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send DNS response");
-                        ResponseInfo::from(Header::new())
+                        failedResponseInfo(request)
                     })
             }
             ResolutionResult::Nodata => {
@@ -71,7 +75,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send NODATA response");
-                        ResponseInfo::from(Header::new())
+                        failedResponseInfo(request)
                     })
             }
             ResolutionResult::NxDomain => {
@@ -82,7 +86,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send NXDOMAIN response");
-                        ResponseInfo::from(Header::new())
+                        failedResponseInfo(request)
                     })
             }
             ResolutionResult::ServFail => {
@@ -93,7 +97,7 @@ impl RequestHandler for DnsHandler {
                     .await
                     .unwrap_or_else(|e| {
                         tracing::error!(error = %e, "Failed to send SERVFAIL response");
-                        ResponseInfo::from(Header::new())
+                        failedResponseInfo(request)
                     })
             }
         }
@@ -117,7 +121,7 @@ impl DnsHandler {
         if let Some(result) = self.queryDatabase(name, rtype).await {
             if let ResolutionResult::Positive(records) = &result {
                 self.logResolution(src, name, rtype, records, "DB");
-                let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(300);
+                let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
                 self.saveToMemoryCache(name, rtype, records.clone(), ttl)
                     .await;
             }
@@ -129,7 +133,7 @@ impl DnsHandler {
 
         match self.queryUpstream(name, rtype, src).await {
             ResolutionResult::Positive(records) => {
-                let ttl = records.iter().map(|r| r.ttl()).min().unwrap_or(300);
+                let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
                 self.saveToAllCaches(name, rtype, records.clone(), ttl)
                     .await;
                 ResolutionResult::Positive(records)
@@ -426,22 +430,21 @@ impl DnsHandler {
         self.saveToMemoryCache(name, rtype, records.clone(), ttl)
             .await;
         for r in &records {
-            let owner = r.name().to_string().trim_end_matches('.').to_lowercase();
-            if let Some(val) = r.data().map(|d| d.to_string()) {
-                let prio = match r.data() {
-                    Some(RData::MX(mx)) => Some(mx.preference() as i64),
-                    _ => None,
-                };
-                let _ = crate::db::records::insertCache(
-                    &self.state.db,
-                    &owner,
-                    &r.record_type().to_string(),
-                    &val,
-                    ttl,
-                    prio,
-                )
-                .await;
-            }
+            let owner = r.name.to_string().trim_end_matches('.').to_lowercase();
+            let val = r.data.to_string();
+            let prio = match &r.data {
+                RData::MX(mx) => Some(mx.preference as i64),
+                _ => None,
+            };
+            let _ = crate::db::records::insertCache(
+                &self.state.db,
+                &owner,
+                &r.record_type().to_string(),
+                &val,
+                ttl,
+                prio,
+            )
+            .await;
         }
     }
 
@@ -494,7 +497,7 @@ impl DnsHandler {
     fn getRecordValuesString(&self, records: &[Record]) -> String {
         records
             .iter()
-            .filter_map(|r| r.data().map(|d| d.to_string()))
+            .map(|r| r.data.to_string())
             .collect::<Vec<_>>()
             .join(", ")
     }
@@ -548,12 +551,16 @@ pub fn buildRecord(
         RecordType::TXT => RData::TXT(TXT::new(vec![value.to_string()])),
         _ => return None,
     };
-    let mut record = Record::new();
-    record.set_name(fqdn);
-    record.set_ttl(ttl);
-    record.set_record_type(rtype);
-    record.set_data(Some(rdata));
-    Some(record)
+    Some(Record::from_rdata(fqdn, ttl, rdata))
+}
+
+fn failedResponseInfo(request: &Request) -> ResponseInfo {
+    let mut header = Header {
+        metadata: Metadata::response_from_request(&request.metadata),
+        counts: HeaderCounts::default(),
+    };
+    header.set_response_code(ResponseCode::ServFail);
+    ResponseInfo::from(header)
 }
 
 #[allow(non_snake_case)]
