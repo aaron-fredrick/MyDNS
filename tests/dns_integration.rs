@@ -143,7 +143,7 @@ async fn udp_query(
 }
 
 fn response_code(message: &Message) -> hickory_proto::op::ResponseCode {
-    message.header.response_code()
+    message.metadata.response_code
 }
 
 #[tokio::test]
