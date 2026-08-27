@@ -179,7 +179,7 @@ async fn queryResolver(
 ) -> UpstreamResolution {
     match resolver.lookup(name.clone(), rtype).await {
         Ok(lookup) => {
-            let records: Vec<Record> = lookup.records().to_vec();
+            let records: Vec<Record> = lookup.record_iter().cloned().collect();
             if records.is_empty() {
                 return UpstreamResolution::Nodata;
             }
