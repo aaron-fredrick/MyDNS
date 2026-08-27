@@ -5,7 +5,7 @@ use std::time::Duration;
 use std::net::Ipv4Addr;
 
 use hickory_proto::rr::{Name, Record, RecordType};
-use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+use hickory_resolver::config::{ConnectionConfig, NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use hickory_resolver::TokioResolver;
 
@@ -70,8 +70,19 @@ fn detectGatewayImpl() -> Option<IpAddr> {
 
 #[allow(non_snake_case)]
 fn buildResolver(addr: SocketAddr) -> anyhow::Result<TokioResolver> {
-    let config =
-        ResolverConfig::from_parts(None, vec![], vec![NameServerConfig::udp_and_tcp(addr.ip())]);
+    // Hickory 0.26 separates the server IP from connection ports. The old
+    // udp_and_tcp(addr.ip()) form silently used port 53, which meant configured
+    // non-standard upstream ports (including test/mock resolvers) were ignored.
+    let mut udp = ConnectionConfig::udp();
+    udp.port = addr.port();
+    let mut tcp = ConnectionConfig::tcp();
+    tcp.port = addr.port();
+
+    let config = ResolverConfig::from_parts(
+        None,
+        vec![],
+        vec![NameServerConfig::new(addr.ip(), true, vec![udp, tcp])],
+    );
     let mut opts = ResolverOpts::default();
     opts.timeout = Duration::from_secs(3);
     opts.attempts = 2;
