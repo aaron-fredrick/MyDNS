@@ -4,207 +4,204 @@ Branch: `production-readiness`
 
 ## 1. Purpose
 
-This document is the release plan for the first production version of MyDNS.
+This is the implementation and release plan for **MyDNS v1**.
 
-The objective is to take the current feature-complete development server through one deliberate production-readiness pass and ship a defensible **v1**. The scope is intentionally finite: correctness, security, reliability, testing, the production UI, packaging, deployment, and documentation required for the first release.
+The current branch is **not V1-ready yet**. The core DNS/API implementation is in good shape, but the release still requires a final correctness, stress/reliability, observability, UI, security, packaging, and deployment pass.
 
-This is **not an ongoing agile backlog**. Once the v1 acceptance criteria are satisfied and the release is tagged, this document is complete. Future improvements, performance work, feature requests, and issues raised from real-world use can be evaluated separately after v1.
+This is deliberately a **finite V1 completion plan**, not an agile backlog. We will finish the items required to make the first release genuinely usable and supportable, release V1, and only then consider later improvements based on real deployment experience, reported issues, and feedback.
+
+Do not expand this plan with speculative features. If something is not necessary for a credible V1, defer it.
 
 ---
 
-## 2. Current verified state
+## 2. Current branch state
 
-The current `production-readiness` branch has already closed the following major areas:
+The branch currently has working coverage for:
 
 - DNS UDP and TCP serving.
-- Configured DNS bind-host handling.
-- Positive answers, NODATA, NXDOMAIN, and SERVFAIL differentiation.
-- Authoritative CNAME chasing with bounded loop protection.
-- Wire-level DNS coverage for the supported record types.
+- A/AAAA/CNAME/MX/NS/TXT/PTR handling currently covered by the test suite.
+- Positive answers, NODATA, NXDOMAIN, and SERVFAIL behavior.
+- Authoritative CNAME chaining and loop protection.
 - Upstream timeout, NXDOMAIN, and SERVFAIL handling.
-- Persistent cache storage and restart persistence.
-- Positive and negative cache entries.
-- TTL expiration and pruning.
-- Persistent cache deduplication.
-- CNAME-dependent cache invalidation.
-- SQLite concurrent-write reliability for the current test model.
-- Record validation for names, supported types, values, TTLs, and MX priority.
-- Effective-state validation for record updates.
-- Authentication and protected-route coverage currently present in the integration suite.
-- Security headers, audit logging, and bounded request/resource controls.
-- Unix privilege-handling work and graceful shutdown work already present on the branch.
-- Documented HTTPS deployment through a TLS-terminating reverse proxy.
-- JWT configuration using `jsonwebtoken`'s AWS-LC-RS backend rather than its RustCrypto RSA backend.
+- Persistent positive and negative cache storage.
+- Cache expiration, pruning, persistence, deduplication, and invalidation.
+- Record validation and effective-state validation.
+- Authentication and protected-route coverage currently present.
+- Security headers, audit logging, request/resource controls, graceful shutdown, and Unix privilege work already present.
+- React migration has **not yet been completed**; the current management UI remains the existing HTML/CSS/JavaScript application under `src/assets`.
+- WebSocket log streaming exists, but its observability and lifecycle behavior still need production-level verification.
 
 ### Latest local verification
 
-The latest verification run completed successfully for:
+The latest local run is currently green for:
 
 - `cargo check`
 - `cargo fmt --check`
 - `cargo clippy -- -D warnings`
 - `cargo test`
 
-The complete test suite currently passes, including:
+The complete suite includes library, authentication, cache persistence, DNS integration, HTTP/API integration, upstream integration, and validation API tests.
 
-- 29 library tests.
-- 1 authentication coverage test.
-- 5 persistent-cache tests.
-- 8 DNS integration tests.
-- 7 HTTP/API integration tests.
-- 3 upstream integration tests.
-- 2 validation API tests.
-
-`cargo audit` still reports `RUSTSEC-2023-0071` for `rsa 0.9.10`. Current dependency-tree checks do not show `rsa` as a reachable dependency of the selected MyDNS feature graph, while the lockfile still contains the package entry. This must be explicitly reviewed and documented before the v1 release gate is closed; it must not be silently ignored.
+`cargo audit` still reports `RUSTSEC-2023-0071` for `rsa 0.9.10`. The current Cargo feature/dependency inspection indicates that MyDNS selects `jsonwebtoken`'s AWS-LC-RS backend and does not expose `rsa` through the active dependency tree, but the lockfile still contains the package. This remains a release-security disposition item and must be explicitly closed before V1.
 
 ---
 
-## 3. Remaining work for v1
+## 3. V1 completion work
 
-The remaining work is grouped by release concern rather than by sprint or agile iteration. Work should be completed in the order below because later release tasks depend on earlier correctness and security gates.
+The following is the remaining V1 scope. It is ordered by dependency and risk, not by sprint.
 
-### 3.1 DNS correctness and ownership
+### 3.1 Stress and reliability testing — REQUIRED
 
-#### Zone / ownership enforcement — next implementation item
+The existing functional tests prove correctness for individual scenarios; they do **not** yet establish that the server remains stable under sustained/concurrent load.
 
-The management API must not allow an authenticated administrator or future user boundary to create or modify records outside the configured DNS ownership boundary.
+Add a dedicated stress-test area and run it against the real server processes where practical.
 
-Implement:
+Cover at minimum:
 
-- `allowed_zones` configuration.
-- Canonical DNS-name normalization before ownership checks.
-- Exact-zone matching.
-- Subdomain matching.
-- Case-insensitive handling.
-- Trailing-dot handling.
-- Rejection of unrelated zones.
-- Enforcement on both record creation and update.
-- Tests covering exact matches, subdomains, unrelated names, case differences, and trailing dots.
+- High-rate concurrent DNS queries.
+- Mixed query types and names.
+- Repeated cache hits/misses under concurrency.
+- Concurrent cache population and expiration.
+- CNAME chains under concurrency.
+- Upstream success, timeout, NXDOMAIN, and SERVFAIL under load.
+- Concurrent HTTP record CRUD operations.
+- Concurrent authenticated API requests.
+- Repeated WebSocket connect/disconnect cycles.
+- Log broadcast pressure and slow WebSocket consumers.
+- Graceful shutdown while DNS/API/WebSocket traffic is active.
+- Startup/shutdown/restart cycles.
+- Long-running cache expiration/pruning behavior.
+- Resource behavior: memory growth, task growth, file descriptors/sockets, and SQLite stability.
 
-This must be enforced at the API validation boundary, not only by the UI.
+The stress tests must be deterministic enough to run in CI for a bounded smoke profile, with a heavier profile available for release verification.
 
-#### DNS protocol edge cases
-
-Add explicit tests for:
-
-- Query-name case normalization.
-- Trailing-dot normalization.
-- Record-type separation.
-- Authoritative response flags.
-- Authority-section behavior.
-- TTL propagation.
-
-The existing record-type and upstream integration coverage should remain intact while these cases are added.
+Do not treat a single successful stress run as sufficient. Investigate failures and rerun after fixes.
 
 ---
 
-### 3.2 Web/API hardening
+### 3.2 Test/portfolio directory correction and repository hygiene — REQUIRED
 
-Complete the remaining API behavior checks:
+Review the repository layout before V1 and correct the test/support directory structure so production code, integration tests, stress tests, UI artifacts, and portfolio/demo material are clearly separated.
 
-- Standardize HTTP status codes and structured error payloads.
-- Ensure errors do not expose internal implementation details, filesystem paths, credentials, tokens, or database information.
-- Verify every protected REST route rejects unauthenticated requests.
-- Verify every authenticated operation enforces the intended authorization boundary.
-- Verify WebSocket authentication independently from REST authentication.
-- Verify session-expiration behavior.
-- Verify destructive operations require the intended authorization.
+The final repository must have an intentional layout with:
 
-Add tests for:
+- Production Rust source under `src/`.
+- Normal integration tests under `tests/`.
+- Stress/load tests separated from ordinary deterministic integration tests where appropriate.
+- UI specification/prototype material under `docs/ui/`.
+- Portfolio/demo material in its explicitly intended location rather than being mixed into production/test paths.
+- No generated databases, WAL/SHM/journal files, logs, build output, screenshots, temporary metadata, or debug dumps committed as application artifacts.
 
-- Malformed JSON.
-- Oversized requests.
-- Invalid authentication credentials.
-- Expired/tampered JWTs.
-- Unauthorized resource access.
-- Invalid record mutations.
-- WebSocket authentication and rejection.
+Correct any existing naming/location inconsistency found during this review and document the intended structure.
 
 ---
 
-### 3.3 Configuration and lifecycle verification
+### 3.3 DNS observability and terminal logging — REQUIRED
 
-Add automated coverage for startup configuration and lifecycle behavior:
+The server needs useful operational visibility when run directly from a terminal. Existing tracing is present, but V1 should make DNS behavior understandable without attaching a debugger.
 
-- Missing required configuration.
-- Malformed configuration values.
-- Invalid bind addresses.
-- Invalid ports.
-- Invalid TTL/configuration ranges.
-- Missing or invalid authentication configuration.
-- `allowed_zones` parsing and normalization.
-- Startup failure behavior.
-- Graceful shutdown.
-- OS termination signal handling.
-- DNS and HTTP shutdown coordination.
+Implement structured, readable DNS request tracing covering:
 
-The service must fail closed when required security or privilege configuration is invalid.
+- Client/source IP and source port.
+- Requested FQDN.
+- Query type.
+- Transport/protocol where available (UDP/TCP).
+- Normalized query name.
+- Resolution path: memory cache, persistent cache, authoritative DB, special record, or upstream.
+- Cache hit/miss.
+- Upstream target when an upstream lookup occurs.
+- CNAME hops where relevant.
+- Final response classification: positive, NODATA, NXDOMAIN, or SERVFAIL.
+- Response/answer count.
+- Effective TTL where relevant.
+- Resolution duration/latency.
+- Errors and timeout causes.
+
+Example operational flow should be easy to follow:
+
+```text
+DNS RX  client=192.168.1.20:53142  query=example.com. type=A
+DNS    cache=MISS
+DNS    source=UPSTREAM target=1.1.1.1:53
+DNS    result=NOERROR answers=1 ttl=287 latency=18ms
+DNS TX  client=192.168.1.20:53142  query=example.com. type=A
+```
+
+The exact formatting may differ, but the information must be present and consistent.
+
+Avoid logging passwords, JWTs, authorization headers, or other secrets.
 
 ---
 
-### 3.4 WebSocket reliability
+### 3.4 Live WebSocket logs — REQUIRED
 
-The live management channel must be production-safe before the UI depends on it.
+The WebSocket stream should expose the same meaningful operational events as terminal logging, in a compact UI-safe form.
+
+Verify and improve:
+
+- Consistent event categories.
+- Timestamp generated from the actual event time rather than arbitrary UI receipt time where possible.
+- Client IP/source visibility for DNS events.
+- Query name/type visibility.
+- Cache path and upstream path.
+- Final response code/status.
+- Latency.
+- CNAME traversal information where useful.
+- Authentication/admin events without secrets.
+- Clear reconnect/disconnect status.
+- Correct behavior when the broadcast channel lags or closes.
+- Bounded retained log history.
+- No unbounded memory growth from clients.
+
+The browser log representation must be readable, filterable, and safe to display.
+
+---
+
+### 3.5 Cache UI correctness — REQUIRED
+
+The current cache page only refreshes when the page/section is loaded. Its `ttl_remaining` value therefore becomes stale while the page remains open.
+
+Fix the cache UI so that:
+
+- TTL countdown updates visibly every second without requiring a page reload.
+- Entries disappear automatically when their TTL reaches zero or after the next authoritative refresh confirms expiration.
+- The UI periodically refreshes authoritative cache state from the API.
+- Refreshes do not reset the visible countdown backwards due to stale responses.
+- Cache hit/miss/stat values update while the dashboard is open.
+- Cache clear/delete operations update the table immediately and reconcile with the server.
+- Loading, empty, error, and disconnected states are explicit.
+- Concurrent refreshes cannot overwrite newer UI state with an older response.
+
+The browser countdown is presentation only; the server remains authoritative for expiration.
+
+Add regression coverage for this behavior at the frontend level.
+
+---
+
+### 3.6 Dashboard/live status correctness — REQUIRED
+
+Audit the dashboard for stale or misleading state.
 
 Verify:
 
-- Authenticated connection succeeds.
-- Unauthenticated connection is rejected.
-- Client disconnect is cleaned up correctly.
-- Server shutdown closes connections cleanly.
-- Slow/lagging clients cannot consume unbounded resources.
-- Reconnection works after a dropped connection.
-- Repeated connect/disconnect cycles do not leak resources.
+- Uptime updates correctly.
+- Cache hit/miss counters update correctly.
+- Cache size updates correctly.
+- Record count updates after CRUD operations.
+- WebSocket status accurately reflects connected/reconnecting/disconnected states.
+- Logs continue updating after navigation.
+- Leaving/re-entering a section does not create duplicate polling timers or WebSocket connections.
+- Logout cancels all timers and closes the WebSocket.
+- Expired authentication returns the user to login rather than silently failing API calls.
+- Failed API calls display actionable errors rather than being swallowed.
+
+The current frontend contains several empty `catch` paths; V1 should replace silent failures with visible, appropriately scoped error handling.
 
 ---
 
-### 3.5 Dependency and supply-chain security
+### 3.7 Frontend architecture and production UI — REQUIRED
 
-The v1 release must have an explicit security disposition for all dependency findings.
-
-Required actions:
-
-- Re-run `cargo audit` against the final lockfile.
-- Investigate the reported `rsa 0.9.10` / `RUSTSEC-2023-0071` entry.
-- Confirm the actual selected dependency graph using Cargo's normal and feature graphs.
-- If the package remains only as an unused/optional lockfile resolution, document that fact and why the vulnerable implementation is not reachable by MyDNS.
-- If it becomes reachable, remove or replace the dependency before release where technically possible.
-- Review Dependabot/security findings and either upgrade or document a justified exception.
-- Keep direct dependency requirements intentional.
-- Pin or otherwise verify GitHub Actions dependencies used for release/security workflows.
-- Decide whether an SBOM is required for the v1 release and implement it if required.
-
-A known advisory may be accepted only with a documented technical justification and confirmation that the vulnerable code path is not part of the shipped application.
-
----
-
-### 3.6 CI release gates
-
-The repository must enforce the same basic checks used for local v1 verification.
-
-CI must run:
-
-- `cargo fmt --check`
-- `cargo check`
-- `cargo clippy -- -D warnings`
-- Complete `cargo test`
-- Linux verification.
-- Windows verification.
-- Dependency/security auditing.
-- Release-profile build verification.
-- CodeQL/security analysis where configured.
-
-Required checks must gate merges to `main` before the production tag is created.
-
-The CI configuration must not rely on a developer machine having NASM or another undeclared native build prerequisite. Native build dependencies required by crates such as AWS-LC must be installed or provisioned explicitly by the relevant CI job.
-
----
-
-## 4. Production frontend
-
-The v1 dashboard will be a real production web application, not a second server runtime.
-
-### Architecture
+The existing UI is functional but is still the legacy static HTML/JavaScript implementation. V1 should move to the agreed production frontend architecture:
 
 ```text
 React + TypeScript
@@ -219,183 +216,236 @@ React + TypeScript
    +----+----+
    |         |
  REST API  WebSocket
-   |         |
-   +----+----+
-        |
-      MyDNS
 ```
 
-Development uses Node tooling only for frontend development and builds. Production runs the compiled static frontend from the Rust/Axum service and does not require Node at runtime.
+Requirements:
 
-### UI implementation
+- React + TypeScript + Vite production build.
+- Static assets served by Axum; no Node runtime in production.
+- Preserve existing backend API contracts unless a deliberate V1 correction is required.
+- Explicit application state for auth, records, cache, stats, settings, logs, and WebSocket state.
+- Proper polling/subscription lifecycle management.
+- WebSocket reconnect with bounded backoff.
+- Accessible semantic controls and keyboard navigation.
+- Responsive desktop/tablet/narrow layouts.
+- Loading, empty, error, unauthorized, expired-session, reconnecting, and disconnected states.
+- Search/filtering where already expected by the UI design.
+- Confirmation dialogs and clear success/error feedback.
+- Production build with deterministic hashed assets.
+- Frontend lint/type-check/build verification in CI.
 
-- Migrate the existing `src/assets` dashboard to React + TypeScript + Vite.
-- Keep API behavior aligned with the actual Rust backend.
-- Use native `fetch` for HTTP operations and native WebSocket handling for live streams.
-- Implement explicit WebSocket reconnect/backoff and connection-state UI.
-- Keep application state deliberately lightweight.
-- Use project-owned design tokens/CSS rather than locking the application to a large component framework.
-- Use semantic HTML and accessible controls.
-- Provide visible focus states and sensible keyboard navigation.
-- Respect reduced-motion preferences.
-- Provide responsive desktop, tablet, and narrow-screen management layouts.
-- Implement authentication, dashboard, DNS records, cache, live logs/status, settings, search/filtering, validation, confirmation dialogs, toasts, and empty/loading/error states.
-- Ensure unauthorized, expired-session, disconnected, and reconnecting states are represented in the UI.
-- Add frontend linting, type-checking, and production-build verification to CI.
-- Add browser smoke tests covering authentication, navigation, CRUD, protected routes, and WebSocket reconnect behavior.
-- Build deterministic production assets with hashed filenames.
-- Do not expose development-only endpoints or debugging behavior in the production build.
+Do not introduce a large frontend framework/component dependency unless it solves a concrete V1 requirement.
 
-### Repository-owned UI specification
+---
 
-Figma is not a release dependency. The repository remains the authoritative source for the v1 visual specification.
+### 3.8 UI specification / prototype — REQUIRED
 
-Create and maintain:
+The repository remains the authoritative UI specification. Figma is optional and must not block implementation.
+
+Maintain:
 
 ```text
- docs/ui/
- ├── README.md
- ├── design-system.css
- └── prototype.html
+docs/ui/
+├── README.md
+├── design-system.css
+└── prototype.html
 ```
 
-The prototype must represent the approved v1 workflows and states and must use the actual MyDNS terminology and data model.
+The prototype must cover the actual V1 workflows and states, including:
 
-Figma may be used later as a secondary design surface, but Figma availability or MCP quota must not block v1 implementation.
-
----
-
-## 5. Release engineering
-
-Before tagging v1:
-
-- Define the supported release targets.
-- Produce versioned release archives.
-- Include required configuration examples and documentation.
-- Generate SHA-256 checksums.
-- Publish from version tags.
-- Verify artifacts on clean machines/containers.
-- Generate release notes/changelog information.
-- Confirm version consistency across the application, package, and release artifacts.
-- Decide and document SBOM/signing/provenance requirements.
-
-The release process must be reproducible from a clean checkout.
+- Login/authentication failure.
+- Dashboard.
+- DNS record list/create/edit/delete.
+- Cache list with live TTL behavior.
+- Live logs.
+- WebSocket disconnected/reconnecting state.
+- Settings.
+- Empty/loading/error states.
+- Responsive layouts.
 
 ---
 
-## 6. Deployment
+### 3.9 DNS correctness and ownership — REQUIRED
 
-### Container deployment
+Complete the remaining correctness boundary work:
 
-Provide a production container that:
+- `allowed_zones` configuration.
+- Canonical name normalization.
+- Exact-zone and subdomain matching.
+- Case-insensitive and trailing-dot handling.
+- Rejection of unrelated zones.
+- Enforcement on create and update.
+- Regression tests for all boundary cases.
 
-- Uses a minimal multi-stage build.
-- Runs without unnecessary root privileges.
-- Does not require unrestricted `--privileged` mode.
-- Keeps SQLite/configuration persistent outside the image.
-- Provides a healthcheck.
-- Documents required DNS networking/capabilities.
-- Is scanned for known vulnerabilities.
+Add/retain explicit protocol tests for:
 
-### Native deployment
-
-Provide at least one documented native deployment path, including:
-
-- Linux systemd service.
-- Least-privilege execution.
-- Restart policy.
-- Writable paths.
-- DNS UDP/TCP ports.
-- Management HTTP/HTTPS ports.
-- Firewall requirements.
-- Database backup/restore.
-- Log locations and rotation.
-- Operational health/readiness behavior.
-
-If Windows remains a supported production target, provide the equivalent Windows service/install procedure.
+- Query-name normalization.
+- Record-type separation.
+- Authoritative response flags.
+- Authority-section behavior.
+- TTL propagation.
+- UDP and TCP behavior.
+- Positive, NODATA, NXDOMAIN, and SERVFAIL responses.
+- CNAME chains and loops.
 
 ---
 
-## 7. Documentation
+### 3.10 API/auth/WebSocket hardening — REQUIRED
 
-The v1 documentation must match the shipped implementation.
+Verify:
 
-Required documentation:
+- Every protected REST endpoint rejects unauthenticated access.
+- Authenticated operations respect the intended resource/zone boundary.
+- WebSocket authentication is enforced independently.
+- Expired/tampered JWTs are rejected.
+- Malformed JSON and oversized requests are rejected cleanly.
+- Error payloads are consistent and do not leak internal details.
+- Destructive/admin operations are audited.
+- Failed login attempts are logged without credentials.
+- WebSocket reconnect/disconnect cycles do not leak resources.
 
-- README quick start.
-- Complete configuration reference.
-- Supported DNS record types and behavior.
-- Authentication/security model.
-- Production topology.
-- HTTPS deployment.
-- Native deployment.
-- Container deployment.
-- Ports and firewall requirements.
-- Database and log locations.
-- Backup/restore procedure.
-- Upgrade and rollback procedure.
-- Release process.
+---
+
+### 3.11 Configuration and lifecycle — REQUIRED
+
+Add/verify tests for:
+
+- Missing required configuration.
+- Malformed values.
+- Invalid addresses/ports.
+- Invalid TTLs.
+- Invalid auth configuration.
+- `allowed_zones` normalization.
+- Startup failure behavior.
+- SIGINT/SIGTERM/Ctrl+C behavior as applicable.
+- Coordinated DNS/HTTP/WebSocket shutdown.
+- Restart behavior.
+
+Security-sensitive startup failures must fail closed.
+
+---
+
+### 3.12 Dependency/security gate — REQUIRED
+
+Before release:
+
+- Re-run `cargo audit` against the final lockfile.
+- Resolve or formally disposition `RUSTSEC-2023-0071`.
+- Confirm the shipped feature graph does not use the vulnerable RSA implementation.
+- Keep the AWS-LC-RS JWT backend intentional if it remains the chosen design.
+- Review all other advisories and CI security findings.
+- Ensure native build prerequisites such as NASM are explicitly provisioned in CI where AWS-LC requires them.
+- Review GitHub Actions dependencies.
+- Decide whether SBOM/signing/provenance is required for V1.
+
+The RSA advisory cannot simply be ignored because `cargo tree` does not show a reachable path; the final lockfile and dependency-resolution explanation must be recorded.
+
+---
+
+### 3.13 CI and release verification — REQUIRED
+
+CI must verify at minimum:
+
+- `cargo fmt --check`
+- `cargo check`
+- `cargo clippy -- -D warnings`
+- Complete `cargo test`
+- Stress smoke profile.
+- Linux build/test.
+- Windows build/test.
+- `cargo audit`.
+- Release-profile build.
+- CodeQL/security analysis where configured.
+- Frontend install, type-check, lint, build, and browser smoke tests.
+
+Native dependencies required by the selected Rust crates must be installed explicitly rather than assumed to exist on the runner.
+
+---
+
+### 3.14 Packaging, deployment, and documentation — REQUIRED
+
+Before release:
+
+- Reproducible release build from a clean checkout.
+- Versioned archives.
+- SHA-256 checksums.
+- Container image with a minimal multi-stage build and non-root runtime.
+- Container healthcheck.
+- Documented persistent data/config/log locations.
+- Linux systemd deployment.
+- Windows deployment procedure if Windows remains a supported production target.
+- Backup/restore.
+- Upgrade/rollback.
+- HTTPS reverse-proxy deployment.
+- Firewall and port documentation.
 - Operational troubleshooting.
-
-Remove stale setup instructions and ensure examples use the current configuration format.
+- README/config/security/deployment docs matching the shipped implementation.
 
 ---
 
-## 8. V1 acceptance gate
+## 4. V1 acceptance gate
 
-MyDNS v1 is ready to release only when all of the following are true:
+MyDNS is **not V1-ready** until all of the following are true:
 
 1. `cargo fmt --check` passes.
 2. `cargo check` passes.
 3. `cargo clippy -- -D warnings` passes.
 4. The complete test suite passes reliably.
-5. DNS correctly distinguishes positive answers, NODATA, NXDOMAIN, and SERVFAIL.
-6. Supported DNS record types work correctly over UDP and TCP.
-7. CNAME chains are bounded and loop-safe.
-8. Upstream timeout and failure behavior is deterministic.
-9. Zone/ownership enforcement is implemented and tested.
-10. Cache persistence, expiration, deduplication, invalidation, restart behavior, clearing, and concurrency are verified.
-11. Protected REST and WebSocket surfaces enforce authentication and authorization as intended.
-12. Request/resource limits and abuse controls are active.
-13. Required security headers and audit logging are active without leaking credentials or tokens.
-14. Startup configuration validation and shutdown behavior are tested.
-15. Dependency advisories have documented dispositions and no unexplained release blocker remains.
-16. CI runs the required quality/security gates on the supported platforms.
-17. The frontend is a reproducible React/TypeScript/Vite static build served by Axum.
-18. Browser smoke tests cover the critical management workflows.
-19. At least one native deployment and one container deployment are documented and reproducible.
-20. Release artifacts are versioned, checksummed, and verified.
-21. README, configuration, security, deployment, and release documentation match the implementation.
-22. A clean test run leaves no generated database, journal, log, or runtime artifacts in the repository working tree.
-23. The final production checkout is reviewed for accidental secrets, debug behavior, stale files, and untracked generated artifacts.
+5. Stress smoke tests pass and no unresolved stability issue remains.
+6. DNS positive/NODATA/NXDOMAIN/SERVFAIL behavior is correct.
+7. UDP and TCP behavior is verified for supported records.
+8. CNAME chains and loops are safe.
+9. Upstream failures are deterministic.
+10. Zone/ownership enforcement is implemented and tested.
+11. Cache persistence, expiration, deduplication, invalidation, restart, clearing, and concurrency are verified.
+12. Cache UI TTL/countdown and refresh behavior is correct.
+13. Dashboard statistics and live status remain synchronized without duplicate timers/connections.
+14. Terminal DNS logging provides source IP, query, type, resolution path, result, and latency.
+15. WebSocket logs provide equivalent useful operational visibility without leaking secrets.
+16. WebSocket lifecycle and reconnect behavior are reliable.
+17. Protected REST and WebSocket surfaces enforce authentication/authorization.
+18. Configuration/startup/shutdown behavior is tested.
+19. Dependency/security advisories have explicit final dispositions.
+20. CI reproduces the required quality/security gates on supported platforms.
+21. Production frontend is implemented as React/TypeScript/Vite static assets served by Axum.
+22. Browser smoke tests cover the critical management workflows.
+23. Repository/test/portfolio/UI directories are intentional and free of generated artifacts.
+24. Native and container deployment procedures are reproducible.
+25. Release artifacts are versioned, checksummed, and verified.
+26. Documentation matches the actual implementation.
+27. Final clean-tree review finds no secrets, debug artifacts, stale generated files, or accidental runtime data.
+
+Only after all 27 conditions are satisfied should the V1 tag be created.
 
 ---
 
-## 9. Execution order
+## 5. Execution order
 
-Complete the v1 work in this order:
+Complete the work in this order:
 
-1. **Zone/ownership enforcement.**
-2. **DNS normalization, response flags, authority behavior, and TTL tests.**
-3. **Remaining API authorization/error-contract tests.**
-4. **Configuration/startup/shutdown tests.**
-5. **WebSocket authentication and reliability tests.**
-6. **Final dependency/security review, including the RSA advisory disposition.**
-7. **CI quality/security gates and cross-platform verification.**
-8. **Repository-owned UI specification and prototype.**
-9. **React/TypeScript/Vite frontend implementation.**
-10. **Browser smoke/accessibility/responsive verification.**
-11. **Release packaging and clean-machine verification.**
-12. **Native and container deployment verification.**
-13. **Final documentation audit and clean-tree audit.**
-14. **Tag and publish MyDNS v1.**
+1. **Repository/test/portfolio layout correction and hygiene.**
+2. **Stress-test infrastructure and reliability verification.**
+3. **Terminal DNS observability and structured logging.**
+4. **WebSocket event/log reliability and lifecycle fixes.**
+5. **Cache UI live TTL/countdown and refresh correctness.**
+6. **Dashboard state synchronization and error handling.**
+7. **Zone/ownership enforcement and remaining DNS correctness.**
+8. **API/auth/configuration/lifecycle hardening.**
+9. **Final dependency/security disposition.**
+10. **React/TypeScript/Vite production frontend implementation and UI integration.**
+11. **Browser smoke/accessibility/responsive verification.**
+12. **CI cross-platform and security gates.**
+13. **Packaging, deployment, and clean-machine verification.**
+14. **Documentation and final repository audit.**
+15. **Full V1 acceptance run.**
+16. **Tag and publish V1.**
 
-No additional feature expansion is part of this sequence. If a new issue is discovered that is not required to satisfy the v1 acceptance gate, record it separately for post-v1 evaluation rather than expanding the release scope.
+This sequence is intentionally finite. Do not turn it into an endless list of enhancements.
 
 ---
 
-## 10. Post-v1 boundary
+## 6. Post-V1 boundary
 
-Once the acceptance gate is satisfied, this plan is considered complete.
+Once the acceptance gate passes and V1 is released, this document is complete.
 
-Future work should be driven by real deployment experience, user feedback, observed operational issues, security findings, performance measurements, and a fresh technical review. Those improvements should be planned independently rather than continuously extending the v1 release checklist.
+Later performance work, UX refinement, additional features, issues discovered in deployment, and feedback-driven improvements belong to a separate post-V1 plan. They must not silently expand the V1 release scope.
