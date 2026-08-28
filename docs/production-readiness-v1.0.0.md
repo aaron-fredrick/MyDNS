@@ -51,20 +51,23 @@ Use this section to record implementation progress against the requirements belo
 | V1-004 | Stress | Verify concurrency, cache pressure, upstream failures, shutdown, and restart behavior. | TODO | |
 | V1-005 | Observability | Add structured terminal DNS request/response tracing. | TODO | |
 | V1-006 | Observability | Include client IP/port, FQDN, type, transport, cache/resolution path, result, TTL, and latency. | TODO | |
-| V1-007 | WebSocket | Stream useful DNS operational events to the dashboard. | TODO | |
-| V1-008 | WebSocket | Verify reconnect, disconnect, backpressure, bounded history, and resource cleanup. | TODO | |
-| V1-009 | Cache UI | Implement live TTL countdown without page reload. | TODO | |
-| V1-010 | Cache UI | Reconcile countdown with authoritative backend refresh without stale responses moving state backwards. | TODO | |
-| V1-011 | Dashboard | Keep uptime, cache, record, WebSocket, and log state synchronized. | TODO | |
-| V1-012 | Dashboard | Replace silent frontend failures with explicit loading/error/disconnected handling. | TODO | |
-| V1-013 | DNS | Complete allowed-zone ownership enforcement and normalization tests. | TODO | |
-| V1-014 | API/Auth | Complete REST/WebSocket authentication, authorization, input, and error handling verification. | TODO | |
-| V1-015 | Lifecycle | Verify configuration validation, startup failure, shutdown, and restart behavior. | TODO | |
-| V1-016 | Security | Resolve or formally disposition all release-blocking dependency/security advisories. | TODO | |
-| V1-017 | Frontend | Implement the agreed React + TypeScript + Vite production frontend. | TODO | |
-| V1-018 | UI | Maintain the repository UI specification/prototype for V1 workflows and states. | TODO | |
-| V1-019 | CI | Reproduce Rust, frontend, stress smoke, security, and cross-platform gates in CI. | TODO | |
-| V1-020 | Release | Produce reproducible release artifacts, deployment procedures, and matching documentation. | TODO | |
+| V1-007 | Observability | Add backend metrics/telemetry required by the management dashboard, including counters, latency distributions, cache metrics, upstream health, and DNS outcome/query-type metrics. | TODO | |
+| V1-008 | Observability | Expose aggregated dashboard metrics through a stable backend API contract; frontend renders metrics and does not own authoritative calculations. | TODO | |
+| V1-009 | Observability | Provide time-series/time-bucketed metric data for dashboard charts and support P50/P95/P99 latency percentiles without requiring raw-log aggregation per dashboard request. | TODO | |
+| V1-010 | WebSocket | Stream useful DNS operational events to the dashboard. | TODO | |
+| V1-011 | WebSocket | Verify reconnect, disconnect, backpressure, bounded history, and resource cleanup. | TODO | |
+| V1-012 | Cache UI | Implement live TTL countdown without page reload. | TODO | |
+| V1-013 | Cache UI | Reconcile countdown with authoritative backend refresh without stale responses moving state backwards. | TODO | |
+| V1-014 | Dashboard | Keep uptime, cache, record, WebSocket, and log state synchronized. | TODO | |
+| V1-015 | Dashboard | Replace silent frontend failures with explicit loading/error/disconnected handling. | TODO | |
+| V1-016 | DNS | Complete allowed-zone ownership enforcement and normalization tests. | TODO | |
+| V1-017 | API/Auth | Complete REST/WebSocket authentication, authorization, input, and error handling verification. | TODO | |
+| V1-018 | Lifecycle | Verify configuration validation, startup failure, shutdown, and restart behavior. | TODO | |
+| V1-019 | Security | Resolve or formally disposition all release-blocking dependency/security advisories. | TODO | |
+| V1-020 | Frontend | Implement the agreed React + TypeScript + Vite production frontend. | TODO | |
+| V1-021 | UI | Maintain the repository UI specification/prototype for V1 workflows and states. | TODO | |
+| V1-022 | CI | Reproduce Rust, frontend, stress smoke, security, and cross-platform gates in CI. | TODO | |
+| V1-023 | Release | Produce reproducible release artifacts, deployment procedures, and matching documentation. | TODO | |
 
 Status values should remain simple: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 
@@ -138,7 +141,72 @@ DNS TX  client=192.168.1.20:53142 query=example.com. type=A
 
 Do not log passwords, JWTs, authorization headers, or other secrets.
 
-### 2.4 Live WebSocket logs — REQUIRED
+### 2.4 Backend metrics and dashboard observability — REQUIRED
+
+The management dashboard must be backed by **authoritative metrics calculated/collected by the Rust backend**. The React frontend must not independently derive operational truth from raw DNS events or client-side timing.
+
+At minimum, the backend metrics layer must support:
+
+- Total DNS query count and request rate/time buckets.
+- Query counts by DNS record type.
+- Resolution outcomes including `NOERROR`, `NXDOMAIN`, `SERVFAIL`, and `REFUSED`.
+- Cache hits, misses, current entries, and evictions.
+- Cache hit rate.
+- DNS response latency distributions.
+- Upstream request count and upstream failures/timeouts.
+- Upstream latency distributions.
+- Upstream availability/health.
+- Record/zone counts needed by the dashboard.
+- DNS error rate.
+
+Latency telemetry must support at least **average, P95, and P99** for dashboard presentation. P50/median should also be available where practical because it describes typical latency better than arithmetic mean alone.
+
+The implementation should use an appropriate in-process metrics/histogram approach rather than retaining unbounded raw request records solely for percentile calculations. Dashboard requests must not require expensive full-table/raw-log aggregation on every refresh.
+
+Historical chart data should be represented as bounded time buckets/windows suitable for ranges such as 15m, 1h, 6h, 24h, and 7d as the implementation evolves.
+
+### 2.5 Dashboard metrics API contract — REQUIRED
+
+Define and document a stable backend API contract for dashboard metrics. The response should expose already-calculated/aggregated values such as:
+
+```json
+{
+  "requests_per_minute": 1284,
+  "cache_hit_rate": 92.4,
+  "upstream_latency": {
+    "avg_ms": 24,
+    "p95_ms": 41,
+    "p99_ms": 68
+  },
+  "response_time": {
+    "avg_ms": 18,
+    "p95_ms": 41,
+    "p99_ms": 68
+  },
+  "upstream_availability": 99.98,
+  "dns_error_rate": 0.02
+}
+```
+
+The exact API shape may change during implementation, but the separation of responsibility must remain:
+
+```text
+Rust backend
+  ├─ collect measurements
+  ├─ maintain counters/histograms
+  ├─ calculate aggregates/percentiles
+  └─ expose API/WebSocket data
+             ↓
+React frontend
+  ├─ fetch/subscribe
+  ├─ format values
+  ├─ render tiles/charts
+  └─ manage loading/error/disconnected UI states
+```
+
+The frontend may calculate purely presentational values such as chart coordinates, display formatting, or relative visual scaling. It must not redefine cache hit rate, latency percentiles, availability, error rate, or other authoritative operational metrics.
+
+### 2.6 Live WebSocket logs — REQUIRED
 
 The dashboard log stream must expose meaningful operational events, including DNS source, query/type, resolution path, result, latency, and relevant CNAME/upstream information.
 
@@ -152,7 +220,7 @@ Verify:
 - No secret leakage.
 - Consistent event categories.
 
-### 2.5 Cache UI correctness — REQUIRED
+### 2.7 Cache UI correctness — REQUIRED
 
 The cache UI must not display a stale `ttl_remaining` value while the page remains open.
 
@@ -169,7 +237,7 @@ Requirements:
 
 The browser countdown is presentation only; server-side expiration remains authoritative.
 
-### 2.6 Dashboard state synchronization — REQUIRED
+### 2.8 Dashboard state synchronization — REQUIRED
 
 Verify correct live behavior for:
 
@@ -184,7 +252,7 @@ Verify correct live behavior for:
 
 Navigation must not create duplicate timers or WebSocket connections. Logout must clean up active polling and WebSocket resources.
 
-### 2.7 DNS correctness and ownership — REQUIRED
+### 2.9 DNS correctness and ownership — REQUIRED
 
 Complete and verify:
 
@@ -198,13 +266,13 @@ Complete and verify:
 
 Retain protocol coverage for UDP/TCP, supported records, authoritative responses, TTLs, positive/NODATA/NXDOMAIN/SERVFAIL, CNAME chains, and loops.
 
-### 2.8 API, authentication, and lifecycle — REQUIRED
+### 2.10 API, authentication, and lifecycle — REQUIRED
 
 Verify protected REST and WebSocket surfaces, JWT validation, authorization/zone boundaries, malformed/oversized input handling, consistent safe errors, audit behavior, failed-login logging, startup configuration validation, graceful shutdown, and restart behavior.
 
 Security-sensitive startup failures must fail closed.
 
-### 2.9 Dependency and security gate — REQUIRED
+### 2.11 Dependency and security gate — REQUIRED
 
 Before release:
 
@@ -216,7 +284,7 @@ Before release:
 
 The advisory must not be dismissed solely because `cargo tree` does not show an active dependency path; the final lockfile state and reason must be documented.
 
-### 2.10 Production frontend — REQUIRED
+### 2.12 Production frontend — REQUIRED
 
 Implement the agreed architecture:
 
@@ -241,13 +309,13 @@ The frontend must provide explicit application state and lifecycle handling for 
 
 Required UI states include loading, empty, error, unauthorized, expired session, reconnecting, and disconnected.
 
-### 2.11 UI specification/prototype — REQUIRED
+### 2.13 UI specification/prototype — REQUIRED
 
 The repository remains the authoritative UI specification. Figma is optional and must not block V1 implementation.
 
 Maintain the agreed UI material under `docs/ui/` and cover the real V1 workflows and states: login, dashboard, DNS record CRUD, cache/live TTL, live logs, WebSocket failure/reconnect, settings, loading/empty/error states, and responsive layouts.
 
-### 2.12 CI and release verification — REQUIRED
+### 2.14 CI and release verification — REQUIRED
 
 CI must cover:
 
@@ -265,7 +333,7 @@ CI must cover:
 
 Native dependencies must be explicitly installed on runners.
 
-### 2.13 Packaging, deployment, and documentation — REQUIRED
+### 2.15 Packaging, deployment, and documentation — REQUIRED
 
 Before release, verify:
 
@@ -300,21 +368,24 @@ Before release, verify:
 8. Cache persistence, expiration, pruning, deduplication, invalidation, restart, clear, and concurrency are verified.
 9. Cache UI TTL countdown and authoritative refresh are correct.
 10. Dashboard state stays synchronized without duplicate timers/connections.
-11. Terminal DNS logs expose source, query, type, resolution path, result, and latency.
-12. WebSocket logs expose equivalent useful operational information safely.
-13. WebSocket lifecycle/reconnect behavior is reliable.
-14. Protected REST/WebSocket surfaces enforce authentication and authorization.
-15. Configuration/startup/shutdown/restart behavior is tested.
-16. Security/dependency advisories have final dispositions.
-17. CI reproduces the required quality/security gates on supported platforms.
-18. React/TypeScript/Vite production frontend is implemented and served as static assets by Axum.
-19. Browser smoke tests cover critical management workflows.
-20. Repository/test/portfolio/UI layout is intentional and clean.
-21. Release artifacts and deployment procedures are reproducible.
-22. Documentation matches the shipped implementation.
-23. Final clean-tree review finds no secrets, debug artifacts, stale generated files, or accidental runtime data.
+11. Rust backend exposes the authoritative metrics required by the dashboard.
+12. Dashboard metrics include request rate, cache hit rate, upstream latency, response latency, P95/P99, availability, errors, query types, outcomes, and required historical chart data.
+13. Dashboard API returns aggregated metrics without requiring expensive raw-log/database aggregation on every refresh.
+14. Terminal DNS logs expose source, query, type, resolution path, result, and latency.
+15. WebSocket logs expose equivalent useful operational information safely.
+16. WebSocket lifecycle/reconnect behavior is reliable.
+17. Protected REST/WebSocket surfaces enforce authentication and authorization.
+18. Configuration/startup/shutdown/restart behavior is tested.
+19. Security/dependency advisories have final dispositions.
+20. CI reproduces the required quality/security gates on supported platforms.
+21. React/TypeScript/Vite production frontend is implemented and served as static assets by Axum.
+22. Browser smoke tests cover critical management workflows.
+23. Repository/test/portfolio/UI layout is intentional and clean.
+24. Release artifacts and deployment procedures are reproducible.
+25. Documentation matches the shipped implementation.
+26. Final clean-tree review finds no secrets, debug artifacts, stale generated files, or accidental runtime data.
 
-Only after all 23 conditions are satisfied should the `v1.0.0` tag be created.
+Only after all 26 conditions are satisfied should the `v1.0.0` tag be created.
 
 ---
 
@@ -325,19 +396,20 @@ The V1 work should be completed in this order:
 1. Repository/test/portfolio layout and hygiene.
 2. Stress-test infrastructure and reliability verification.
 3. Terminal DNS observability/logging.
-4. WebSocket event and lifecycle correctness.
-5. Cache UI live TTL/countdown and refresh correctness.
-6. Dashboard synchronization and frontend error handling.
-7. DNS ownership/correctness completion.
-8. API/auth/configuration/lifecycle hardening.
-9. Dependency/security disposition.
-10. React/TypeScript/Vite production frontend.
-11. Browser smoke, accessibility, and responsive verification.
-12. CI/cross-platform/security gates.
-13. Packaging/deployment/clean-machine verification.
-14. Documentation and final repository audit.
-15. Full v1.0.0 acceptance run.
-16. Tag and publish v1.0.0.
+4. Backend metrics/telemetry layer and dashboard metrics API contract.
+5. WebSocket event and lifecycle correctness.
+6. Cache UI live TTL/countdown and refresh correctness.
+7. Dashboard synchronization and frontend error handling.
+8. DNS ownership/correctness completion.
+9. API/auth/configuration/lifecycle hardening.
+10. Dependency/security disposition.
+11. React/TypeScript/Vite production frontend using the backend metrics contract.
+12. Browser smoke, accessibility, and responsive verification.
+13. CI/cross-platform/security gates.
+14. Packaging/deployment/clean-machine verification.
+15. Documentation and final repository audit.
+16. Full v1.0.0 acceptance run.
+17. Tag and publish v1.0.0.
 
 This is the V1 completion sequence, not a recurring sprint cycle.
 
