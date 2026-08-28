@@ -24,9 +24,14 @@ jobs:
       with:
         node-version: 22
 
+    - name: Install frontend dependencies and build
+      run: npm install
+
+    - name: Typecheck frontend
+      run: npm run typecheck
+
     - name: Build frontend
-      working-directory: frontend
-      run: npm install && npm run typecheck && npm run build
+      run: npm run build
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
