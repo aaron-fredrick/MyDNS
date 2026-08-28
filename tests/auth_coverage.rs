@@ -73,6 +73,8 @@ fn remove_test_db(path: &str) {
     let _ = std::fs::remove_file(format!("{path}-wal"));
 }
 
+type RequestBuilder = fn(&Client, String) -> reqwest::RequestBuilder;
+
 /// Asserts that every authenticated endpoint returns 401 without a token,
 /// and the unauthenticated /stats endpoint returns 200.
 #[tokio::test]
@@ -89,7 +91,7 @@ async fn test_all_protected_routes_require_auth() {
     );
 
     // -- Authenticated routes (must return 401 without token) --
-    let protected: &[(&str, fn(&Client, String) -> reqwest::RequestBuilder)] = &[
+    let protected: &[(&str, RequestBuilder)] = &[
         ("GET /records", |c, u| c.get(u)),
         ("POST /records", |c, u| c.post(u)),
         ("PUT /records/1", |c, u| c.put(u)),
@@ -101,16 +103,16 @@ async fn test_all_protected_routes_require_auth() {
     ];
 
     for (label, build) in protected {
-        let url = if label.contains("/records/1") || label.contains("/records/1") {
-            format!("{api}/records/1")
+        let url = if label.contains("/records") {
+            if label.contains("/records/1") {
+                format!("{api}/records/1")
+            } else {
+                format!("{api}/records")
+            }
         } else if label.contains("/settings") {
             format!("{api}/settings")
-        } else if label.contains("/cache") && !label.ends_with("cache") {
-            format!("{api}/cache")
-        } else if label.contains("/cache") {
-            format!("{api}/cache")
         } else {
-            format!("{api}/records")
+            format!("{api}/cache")
         };
 
         let status = build(&c, url).send().await.unwrap().status();
