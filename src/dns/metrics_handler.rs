@@ -42,15 +42,19 @@ impl RequestHandler for MetricsHandler {
 
         let response = self.inner.handle_request(request, response_handle).await;
         let response_ms = started.elapsed().as_secs_f64() * 1000.0;
-        let outcome = match response.response_code() {
+
+        // Hickory 0.26 exposes the response code as a field on ResponseInfo,
+        // rather than the response_code() accessor used by older versions.
+        let outcome = match response.response_code {
             ResponseCode::NoError => "NOERROR",
             ResponseCode::NXDomain => "NXDOMAIN",
             ResponseCode::ServFail => "SERVFAIL",
             ResponseCode::Refused => "REFUSED",
             _ => "OTHER",
         };
+
         self.state.metrics.record_outcome(outcome);
-        self.state.metrics.record_latency(response_ms, None);
+        self.state.metrics.record_latency(response_ms);
         response
     }
 }
