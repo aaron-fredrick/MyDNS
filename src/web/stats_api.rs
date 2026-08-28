@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::{extract::State, Json};
+use serde_json::json;
 
 use crate::state::AppState;
 use crate::web::error::ApiError;
@@ -22,20 +23,15 @@ pub async fn getStats(
         .unwrap_or(0);
 
     let total_cache = hits + misses;
-    let cache_hit_rate = if total_cache == 0 {
-        0.0
-    } else {
-        hits as f64 / total_cache as f64 * 100.0
-    };
-
-    let mut stats = state.metrics.snapshot();
-    if let Some(object) = stats.as_object_mut() {
-        object.insert("cache_hits".into(), serde_json::json!(hits));
-        object.insert("cache_misses".into(), serde_json::json!(misses));
-        object.insert("cache_hit_rate".into(), serde_json::json!(cache_hit_rate));
-        object.insert("cache_size".into(), serde_json::json!(cache_size));
-        object.insert("record_count".into(), serde_json::json!(record_count));
+    let cache_hit_rate = if total_cache == 0 { 0.0 } else { hits as f64 / total_cache as f64 * 100.0 };
+    let stats = state.metrics.snapshot();
+    let mut value = serde_json::to_value(stats)?;
+    if let Some(object) = value.as_object_mut() {
+        object.insert("cache_hits".into(), json!(hits));
+        object.insert("cache_misses".into(), json!(misses));
+        object.insert("cache_hit_rate".into(), json!(cache_hit_rate));
+        object.insert("cache_size".into(), json!(cache_size));
+        object.insert("record_count".into(), json!(record_count));
     }
-
-    Ok(Json(stats))
+    Ok(Json(value))
 }
