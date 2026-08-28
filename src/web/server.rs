@@ -2,22 +2,28 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use axum::{
-    extract::DefaultBodyLimit,
-    http::{header as http_header, HeaderName, HeaderValue as HV, StatusCode},
+    body::Body,
+    extract::{DefaultBodyLimit, Path},
+    http::{header as http_header, HeaderName, HeaderValue as HV, Response, StatusCode},
+    response::IntoResponse,
     routing::{delete, get, post, put},
     Router,
 };
+use rust_embed::Embed;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
-use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::state::AppState;
 use crate::web::{auth, cache_api, records_api, settings_api, stats_api, ws};
 
 const MAX_BODY_BYTES: usize = 64 * 1024;
-const WEB_ROOT_ENV: &str = "MYDNS_WEB_ROOT";
+
+#[derive(Embed)]
+#[folder = "frontend/dist/"]
+#[allow_missing = true]
+struct FrontendAssets;
 
 pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Result<()> {
     let config = state.config.read().await.clone();
@@ -43,14 +49,11 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
             HV::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; font-src 'self' data:;"),
         ));
 
-    let web_root = std::env::var(WEB_ROOT_ENV).unwrap_or_else(|_| "frontend/dist".to_string());
-    let index = format!("{web_root}/index.html");
-    let static_files = ServeDir::new(&web_root).not_found_service(ServeFile::new(index));
-
     let app = Router::new()
         .nest("/api/v1", api_routes)
         .route("/ws", get(ws::wsHandler))
-        .fallback_service(static_files)
+        .route("/", get(serve_frontend))
+        .route("/*path", get(serve_frontend))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(security_headers)
         .layer(cors)
@@ -60,13 +63,33 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
         .await
         .with_context(|| format!("Failed to bind HTTP server on {}:{}", config.http_host, port))?;
 
-    tracing::info!(host = %config.http_host, port, web_root = %web_root, "HTTP server listening");
+    tracing::info!(host = %config.http_host, port, "HTTP server listening");
 
     axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
         .with_graceful_shutdown(async move { cancel.cancelled().await })
         .await
         .context("HTTP server error")?;
     Ok(())
+}
+
+async fn serve_frontend(Path(path): Path<String>) -> impl IntoResponse {
+    serve_asset(&path)
+}
+
+async fn serve_frontend_root() -> impl IntoResponse {
+    serve_asset("")
+}
+
+fn serve_asset(path: &str) -> Response<Body> {
+    let normalized = path.trim_start_matches('/');
+    let asset = FrontendAssets::get(normalized).or_else(|| FrontendAssets::get("index.html"));
+    let Some(asset) = asset else {
+        return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).expect("valid response");
+    };
+
+    let mime = if normalized.is_empty() { "text/html; charset=utf-8" } else { mime_guess::from_path(normalized).first_or_octet_stream().as_ref() };
+    let content_type = HeaderValue::from_str(mime).unwrap_or_else(|_| HV::from_static("application/octet-stream"));
+    Response::builder().status(StatusCode::OK).header(http_header::CONTENT_TYPE, content_type).body(Body::from(asset.data.into_owned())).expect("valid response")
 }
 
 fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Result<CorsLayer> {
