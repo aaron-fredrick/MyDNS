@@ -6,14 +6,11 @@ use hickory_server::server::Server;
 use tokio::net::{TcpListener, UdpSocket};
 use tokio_util::sync::CancellationToken;
 
-use crate::dns::handler::DnsHandler;
+use crate::dns::metrics_handler::MetricsHandler;
 use crate::state::AppState;
 
 /// Binds the DNS server on UDP and TCP and runs until the cancellation token
 /// fires or an unrecoverable error occurs.
-///
-/// On Unix the sockets are bound before privileges are dropped. This is
-/// necessary when the configured DNS port is below 1024 (for example, 53).
 pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Result<()> {
     let (bind_host, port) = {
         let cfg = state.config.read().await;
@@ -30,8 +27,6 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
 
     tracing::info!(%bind_host, port, "DNS server bound (UDP + TCP)");
 
-    // The privileged bind must happen before this process drops its Unix
-    // privileges. The sockets remain usable by the unprivileged process.
     #[cfg(unix)]
     {
         let cfg = state.config.read().await;
@@ -39,10 +34,9 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
             .context("Failed to drop Unix privileges after binding DNS sockets")?;
     }
 
-    let handler = DnsHandler::new(state);
+    let handler = MetricsHandler::new(state);
     let mut server = Server::new(handler);
     server.register_socket(udp);
-    // Hickory 0.26 requires an explicit per-connection response buffer size.
     server.register_listener(tcp, Duration::from_secs(30), 4096);
 
     tokio::select! {
