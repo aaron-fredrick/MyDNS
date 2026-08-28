@@ -40,7 +40,13 @@ impl RequestHandler for MetricsHandler {
                 .record_query(&info.query.query_type().to_string());
         }
 
-        let response = self.inner.handle_request(request, response_handle).await;
+        // Hickory 0.26 makes the Time type an explicit generic on RequestHandler.
+        // Forward both generic parameters to the wrapped handler so the compiler
+        // can use the same runtime type selected by the server.
+        let response = self
+            .inner
+            .handle_request::<R, T>(request, response_handle)
+            .await;
         let response_ms = started.elapsed().as_secs_f64() * 1000.0;
 
         // Hickory 0.26 exposes the response code as a field on ResponseInfo,
