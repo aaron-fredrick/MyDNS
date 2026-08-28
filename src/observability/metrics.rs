@@ -55,9 +55,11 @@ impl Metrics {
     pub fn record_upstream_latency(&self, latency_ms: f64) {
         record_sample(&self.upstream_samples, latency_ms);
     }
+
     pub fn record_eviction(&self) {
         self.cache_evictions.fetch_add(1, Ordering::Relaxed);
     }
+
     pub fn record_latency(&self, response_ms: f64) {
         record_sample(&self.response_samples, response_ms);
     }
@@ -72,8 +74,11 @@ impl Metrics {
             upstream_successes as f64 / upstream_requests as f64 * 100.0
         };
         let response_values = current_values(&self.response_samples);
-        let requests_per_minute =
-            current_count(&self.response_samples, now, Duration::from_secs(60));
+        let requests_per_minute = current_count(
+            &self.response_samples,
+            now,
+            Duration::from_secs(60),
+        );
         let upstream_values = current_values(&self.upstream_samples);
 
         MetricsSnapshot {
@@ -119,7 +124,11 @@ fn current_values(samples: &Mutex<VecDeque<(Instant, f64)>>) -> Vec<f64> {
     samples.iter().map(|(_, value)| *value).collect()
 }
 
-fn current_count(samples: &Mutex<VecDeque<(Instant, f64)>>, now: Instant, window: Duration) -> u64 {
+fn current_count(
+    samples: &Mutex<VecDeque<(Instant, f64)>>,
+    now: Instant,
+    window: Duration,
+) -> u64 {
     let samples = samples.lock().expect("metrics sample lock poisoned");
     samples
         .iter()
@@ -156,9 +165,21 @@ fn percentile_stats(values: &[f64]) -> LatencyStats {
     }
 }
 
+/// Uses linear interpolation between adjacent ordered observations.
+/// This is deterministic, monotonic, and avoids the off-by-one behaviour of
+/// rounding an index for small samples.
 fn percentile(sorted: &[f64], p: f64) -> f64 {
-    sorted[((sorted.len() - 1) as f64 * p).round() as usize]
+    debug_assert!(!sorted.is_empty());
+    let position = (sorted.len() - 1) as f64 * p;
+    let lower = position.floor() as usize;
+    let upper = position.ceil() as usize;
+    if lower == upper {
+        return sorted[lower];
+    }
+    let weight = position - lower as f64;
+    sorted[lower] + (sorted[upper] - sorted[lower]) * weight
 }
+
 fn round(value: f64) -> f64 {
     (value * 100.0).round() / 100.0
 }
@@ -218,9 +239,16 @@ mod tests {
         }
         let stats = &metrics.snapshot().response_time;
         assert_eq!(stats.avg_ms, 50.5);
-        assert_eq!(stats.p50_ms, 51.0);
-        assert_eq!(stats.p95_ms, 96.0);
-        assert_eq!(stats.p99_ms, 99.0);
+        assert_eq!(stats.p50_ms, 50.5);
+        assert_eq!(stats.p95_ms, 95.05);
+        assert_eq!(stats.p99_ms, 99.01);
+    }
+
+    #[test]
+    fn percentile_handles_single_and_small_samples() {
+        assert_eq!(percentile(&[42.0], 0.99), 42.0);
+        assert_eq!(percentile(&[10.0, 20.0], 0.50), 15.0);
+        assert_eq!(percentile(&[10.0, 20.0], 0.95), 19.5);
     }
 
     #[test]
