@@ -74,11 +74,8 @@ impl Metrics {
             upstream_successes as f64 / upstream_requests as f64 * 100.0
         };
         let response_values = current_values(&self.response_samples);
-        let requests_per_minute = current_count(
-            &self.response_samples,
-            now,
-            Duration::from_secs(60),
-        );
+        let requests_per_minute =
+            current_count(&self.response_samples, now, Duration::from_secs(60));
         let upstream_values = current_values(&self.upstream_samples);
 
         MetricsSnapshot {
@@ -124,11 +121,7 @@ fn current_values(samples: &Mutex<VecDeque<(Instant, f64)>>) -> Vec<f64> {
     samples.iter().map(|(_, value)| *value).collect()
 }
 
-fn current_count(
-    samples: &Mutex<VecDeque<(Instant, f64)>>,
-    now: Instant,
-    window: Duration,
-) -> u64 {
+fn current_count(samples: &Mutex<VecDeque<(Instant, f64)>>, now: Instant, window: Duration) -> u64 {
     let samples = samples.lock().expect("metrics sample lock poisoned");
     samples
         .iter()
