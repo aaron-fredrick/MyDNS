@@ -8,7 +8,7 @@ use tokio_util::sync::CancellationToken;
 use crate::cache::{CacheStats, DnsCache};
 use crate::config::AppConfig;
 use crate::dns::upstream::UpstreamResolver;
-use crate::metrics::Metrics;
+use crate::observability::Metrics;
 use crate::web::auth::LoginRateLimiter;
 
 /// Central shared state threaded through all DNS and HTTP handlers via `Arc`.
@@ -16,6 +16,7 @@ pub struct AppState {
     pub db: SqlitePool,
     pub cache: Arc<RwLock<DnsCache>>,
     pub cache_stats: Arc<CacheStats>,
+    /// Backend-owned operational telemetry shared by DNS and management surfaces.
     pub metrics: Arc<Metrics>,
     pub log_tx: broadcast::Sender<String>,
     pub start_time: Instant,
