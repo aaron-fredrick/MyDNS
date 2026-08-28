@@ -7,18 +7,13 @@ use crate::web::error::ApiError;
 
 /// `GET /api/v1/stats`
 ///
-/// Returns server uptime, cache hit/miss counts, cache size, and record count.
-///
-/// DESIGN DECISION: This endpoint is intentionally unauthenticated to allow
-/// external monitoring systems (e.g. Prometheus, Datadog, Uptime Kuma) and
-/// load balancer health checks to easily query server health and metrics
-/// without needing long-lived static API tokens (which MyDNS does not support).
-/// The data exposed is aggregate metrics and poses no risk of PII/credential leakage.
+/// Returns low-cost in-process resolver observability data. The frontend is
+/// responsible only for presentation; authoritative operational metrics are
+/// collected by the Rust DNS path and exposed here as an API contract.
 #[allow(non_snake_case)]
 pub async fn getStats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let uptime_secs = state.start_time.elapsed().as_secs();
     let (hits, misses) = state.cache_stats.snapshot();
     let cache_size = state.cache.read().await.len();
     let record_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM dns_records")
@@ -26,11 +21,21 @@ pub async fn getStats(
         .await
         .unwrap_or(0);
 
-    Ok(Json(serde_json::json!({
-        "uptime_secs":    uptime_secs,
-        "cache_hits":     hits,
-        "cache_misses":   misses,
-        "cache_size":     cache_size,
-        "record_count":   record_count,
-    })))
+    let total_cache = hits + misses;
+    let cache_hit_rate = if total_cache == 0 {
+        0.0
+    } else {
+        hits as f64 / total_cache as f64 * 100.0
+    };
+
+    let mut stats = state.metrics.snapshot();
+    if let Some(object) = stats.as_object_mut() {
+        object.insert("cache_hits".into(), serde_json::json!(hits));
+        object.insert("cache_misses".into(), serde_json::json!(misses));
+        object.insert("cache_hit_rate".into(), serde_json::json!(cache_hit_rate));
+        object.insert("cache_size".into(), serde_json::json!(cache_size));
+        object.insert("record_count".into(), serde_json::json!(record_count));
+    }
+
+    Ok(Json(stats))
 }
