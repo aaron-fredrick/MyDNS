@@ -39,7 +39,7 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
             "/records/:id",
             put(records_api::updateRecord).delete(records_api::deleteRecord),
         )
-        .route("/stats", get(stats_api::getStats))
+        .route("/stats", get(stats_api::get_stats))
         .route(
             "/settings",
             get(settings_api::getSettings).put(settings_api::updateSettings),
