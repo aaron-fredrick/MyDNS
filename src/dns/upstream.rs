@@ -1,5 +1,6 @@
 use std::net::{IpAddr, SocketAddr};
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 #[cfg(unix)]
 use std::net::Ipv4Addr;
@@ -10,6 +11,7 @@ use hickory_resolver::net::runtime::TokioRuntimeProvider;
 use hickory_resolver::TokioResolver;
 
 use crate::config::ResolverPriority;
+use crate::metrics::Metrics;
 
 #[derive(Debug)]
 pub enum UpstreamResolution {
@@ -19,9 +21,6 @@ pub enum UpstreamResolution {
     ServFail,
 }
 
-/// Attempts to detect the default gateway/router IP from the OS routing table.
-///
-/// Returns the gateway IP as port-53 `SocketAddr`, or `None` if detection fails.
 #[allow(non_snake_case)]
 pub fn detectGateway() -> Option<SocketAddr> {
     detectGatewayImpl().map(|ip| SocketAddr::new(ip, 53))
@@ -36,9 +35,7 @@ fn detectGatewayImpl() -> Option<IpAddr> {
         if line.contains("Default Gateway") {
             if let Some(raw) = line.split(':').nth(1) {
                 if let Ok(ip) = raw.trim().parse::<IpAddr>() {
-                    if !ip.is_unspecified() {
-                        return Some(ip);
-                    }
+                    if !ip.is_unspecified() { return Some(ip); }
                 }
             }
         }
@@ -53,10 +50,8 @@ fn detectGatewayImpl() -> Option<IpAddr> {
     for line in content.lines().skip(1) {
         let fields: Vec<&str> = line.split_whitespace().collect();
         if fields.len() >= 3 && fields[1] == "00000000" {
-            let gw_hex = fields[2];
-            let bytes = u32::from_str_radix(gw_hex, 16).ok()?;
-            let octets = bytes.to_le_bytes();
-            return Some(IpAddr::V4(Ipv4Addr::from(octets)));
+            let bytes = u32::from_str_radix(fields[2], 16).ok()?;
+            return Some(IpAddr::V4(Ipv4Addr::from(bytes.to_le_bytes())));
         }
     }
     None
@@ -64,15 +59,10 @@ fn detectGatewayImpl() -> Option<IpAddr> {
 
 #[allow(non_snake_case)]
 #[cfg(not(any(windows, unix)))]
-fn detectGatewayImpl() -> Option<IpAddr> {
-    None
-}
+fn detectGatewayImpl() -> Option<IpAddr> { None }
 
 #[allow(non_snake_case)]
 fn buildResolver(addr: SocketAddr) -> anyhow::Result<TokioResolver> {
-    // Hickory 0.26 separates the server IP from connection ports. The old
-    // udp_and_tcp(addr.ip()) form silently used port 53, which meant configured
-    // non-standard upstream ports (including test/mock resolvers) were ignored.
     let mut udp = ConnectionConfig::udp();
     udp.port = addr.port();
     let mut tcp = ConnectionConfig::tcp();
@@ -92,7 +82,6 @@ fn buildResolver(addr: SocketAddr) -> anyhow::Result<TokioResolver> {
     Ok(builder.build()?)
 }
 
-/// Forwards DNS queries to upstream servers in the configured priority order.
 pub struct UpstreamResolver {
     cloudflare: TokioResolver,
     router: Option<TokioResolver>,
@@ -100,6 +89,7 @@ pub struct UpstreamResolver {
     #[allow(dead_code)]
     pub cloudflare_addr: SocketAddr,
     pub router_addr: Option<SocketAddr>,
+    metrics: Option<Arc<Metrics>>,
 }
 
 impl UpstreamResolver {
@@ -110,7 +100,6 @@ impl UpstreamResolver {
         router_addr: Option<SocketAddr>,
     ) -> anyhow::Result<Self> {
         let effective_router = router_addr.or_else(detectGateway);
-
         let cloudflare = buildResolver(cloudflare_addr)?;
         let router = effective_router.map(buildResolver).transpose()?;
 
@@ -126,45 +115,53 @@ impl UpstreamResolver {
             priority,
             cloudflare_addr,
             router_addr: effective_router,
+            metrics: None,
         })
+    }
+
+    /// Attaches the process-wide telemetry collector after AppState creation.
+    pub fn attach_metrics(&mut self, metrics: Arc<Metrics>) {
+        self.metrics = Some(metrics);
     }
 
     /// Queries upstream servers while preserving NXDOMAIN, NODATA and SERVFAIL.
     pub async fn resolve(&self, name: &Name, rtype: RecordType) -> UpstreamResolution {
-        let (first, second) = self.orderedResolvers();
+        let started = Instant::now();
+        if let Some(metrics) = &self.metrics {
+            metrics.record_upstream_start();
+        }
 
-        match queryResolver(first, name, rtype).await {
-            UpstreamResolution::Positive(records, ttl) => {
-                UpstreamResolution::Positive(records, ttl)
-            }
+        let (first, second) = self.orderedResolvers();
+        let result = match queryResolver(first, name, rtype).await {
+            UpstreamResolution::Positive(records, ttl) => UpstreamResolution::Positive(records, ttl),
             UpstreamResolution::NxDomain => UpstreamResolution::NxDomain,
             UpstreamResolution::Nodata => {
                 if let Some(resolver) = second {
                     match queryResolver(resolver, name, rtype).await {
-                        UpstreamResolution::Positive(records, ttl) => {
-                            return UpstreamResolution::Positive(records, ttl)
-                        }
-                        UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
-                        UpstreamResolution::Nodata => return UpstreamResolution::Nodata,
-                        UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
+                        UpstreamResolution::Positive(records, ttl) => UpstreamResolution::Positive(records, ttl),
+                        UpstreamResolution::NxDomain => UpstreamResolution::NxDomain,
+                        UpstreamResolution::Nodata => UpstreamResolution::Nodata,
+                        UpstreamResolution::ServFail => UpstreamResolution::ServFail,
                     }
-                }
-                UpstreamResolution::Nodata
+                } else { UpstreamResolution::Nodata }
             }
             UpstreamResolution::ServFail => {
                 if let Some(resolver) = second {
                     match queryResolver(resolver, name, rtype).await {
-                        UpstreamResolution::Positive(records, ttl) => {
-                            return UpstreamResolution::Positive(records, ttl)
-                        }
-                        UpstreamResolution::NxDomain => return UpstreamResolution::NxDomain,
-                        UpstreamResolution::Nodata => return UpstreamResolution::Nodata,
-                        UpstreamResolution::ServFail => return UpstreamResolution::ServFail,
+                        UpstreamResolution::Positive(records, ttl) => UpstreamResolution::Positive(records, ttl),
+                        UpstreamResolution::NxDomain => UpstreamResolution::NxDomain,
+                        UpstreamResolution::Nodata => UpstreamResolution::Nodata,
+                        UpstreamResolution::ServFail => UpstreamResolution::ServFail,
                     }
-                }
-                UpstreamResolution::ServFail
+                } else { UpstreamResolution::ServFail }
             }
+        };
+
+        if let Some(metrics) = &self.metrics {
+            metrics.record_upstream_result(matches!(result, UpstreamResolution::Positive(_, _) | UpstreamResolution::Nodata | UpstreamResolution::NxDomain));
+            metrics.record_upstream_latency(started.elapsed().as_secs_f64() * 1000.0);
         }
+        result
     }
 
     #[allow(non_snake_case)]
@@ -172,28 +169,18 @@ impl UpstreamResolver {
         match self.priority {
             ResolverPriority::CloudflareFirst => (&self.cloudflare, self.router.as_ref()),
             ResolverPriority::RouterFirst => {
-                if let Some(router) = &self.router {
-                    (router, Some(&self.cloudflare))
-                } else {
-                    (&self.cloudflare, None)
-                }
+                if let Some(router) = &self.router { (router, Some(&self.cloudflare)) } else { (&self.cloudflare, None) }
             }
         }
     }
 }
 
 #[allow(non_snake_case)]
-async fn queryResolver(
-    resolver: &TokioResolver,
-    name: &Name,
-    rtype: RecordType,
-) -> UpstreamResolution {
+async fn queryResolver(resolver: &TokioResolver, name: &Name, rtype: RecordType) -> UpstreamResolution {
     match resolver.lookup(name.clone(), rtype).await {
         Ok(lookup) => {
             let records: Vec<Record> = lookup.answers().to_vec();
-            if records.is_empty() {
-                return UpstreamResolution::Nodata;
-            }
+            if records.is_empty() { return UpstreamResolution::Nodata; }
             let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
             UpstreamResolution::Positive(records, ttl)
         }
