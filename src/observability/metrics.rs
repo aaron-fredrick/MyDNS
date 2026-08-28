@@ -24,7 +24,9 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn new() -> Arc<Self> { Arc::new(Self::default()) }
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
 
     pub fn record_query(&self, query_type: &str) {
         self.queries.fetch_add(1, Ordering::Relaxed);
@@ -33,27 +35,45 @@ impl Metrics {
 
     pub fn record_outcome(&self, outcome: &str) {
         increment(&self.outcomes, outcome);
-        if matches!(outcome, "SERVFAIL" | "REFUSED" | "OTHER") { self.errors.fetch_add(1, Ordering::Relaxed); }
+        if matches!(outcome, "SERVFAIL" | "REFUSED" | "OTHER") {
+            self.errors.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
-    pub fn record_upstream_start(&self) { self.upstream_requests.fetch_add(1, Ordering::Relaxed); }
+    pub fn record_upstream_start(&self) {
+        self.upstream_requests.fetch_add(1, Ordering::Relaxed);
+    }
 
     pub fn record_upstream_result(&self, success: bool) {
-        if success { self.upstream_successes.fetch_add(1, Ordering::Relaxed); }
-        else { self.upstream_failures.fetch_add(1, Ordering::Relaxed); }
+        if success {
+            self.upstream_successes.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.upstream_failures.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
-    pub fn record_upstream_latency(&self, latency_ms: f64) { record_sample(&self.upstream_samples, latency_ms); }
-    pub fn record_eviction(&self) { self.cache_evictions.fetch_add(1, Ordering::Relaxed); }
-    pub fn record_latency(&self, response_ms: f64) { record_sample(&self.response_samples, response_ms); }
+    pub fn record_upstream_latency(&self, latency_ms: f64) {
+        record_sample(&self.upstream_samples, latency_ms);
+    }
+    pub fn record_eviction(&self) {
+        self.cache_evictions.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_latency(&self, response_ms: f64) {
+        record_sample(&self.response_samples, response_ms);
+    }
 
     pub fn snapshot(&self) -> MetricsSnapshot {
         let now = Instant::now();
         let upstream_requests = self.upstream_requests.load(Ordering::Relaxed);
         let upstream_successes = self.upstream_successes.load(Ordering::Relaxed);
-        let availability = if upstream_requests == 0 { 100.0 } else { upstream_successes as f64 / upstream_requests as f64 * 100.0 };
+        let availability = if upstream_requests == 0 {
+            100.0
+        } else {
+            upstream_successes as f64 / upstream_requests as f64 * 100.0
+        };
         let response_values = current_values(&self.response_samples);
-        let requests_per_minute = current_count(&self.response_samples, now, Duration::from_secs(60));
+        let requests_per_minute =
+            current_count(&self.response_samples, now, Duration::from_secs(60));
         let upstream_values = current_values(&self.upstream_samples);
 
         MetricsSnapshot {
@@ -70,14 +90,24 @@ impl Metrics {
             response_time: percentile_stats(&response_values),
             cache_evictions: self.cache_evictions.load(Ordering::Relaxed),
             dns_errors: self.errors.load(Ordering::Relaxed),
-            query_types: self.query_types.lock().expect("metrics query type lock poisoned").clone(),
-            resolution_outcomes: self.outcomes.lock().expect("metrics outcome lock poisoned").clone(),
+            query_types: self
+                .query_types
+                .lock()
+                .expect("metrics query type lock poisoned")
+                .clone(),
+            resolution_outcomes: self
+                .outcomes
+                .lock()
+                .expect("metrics outcome lock poisoned")
+                .clone(),
         }
     }
 }
 
 fn record_sample(samples: &Mutex<VecDeque<(Instant, f64)>>, value: f64) {
-    if !value.is_finite() || value < 0.0 { return; }
+    if !value.is_finite() || value < 0.0 {
+        return;
+    }
     let mut samples = samples.lock().expect("metrics sample lock poisoned");
     samples.push_back((Instant::now(), value));
     trim(&mut samples);
@@ -91,11 +121,20 @@ fn current_values(samples: &Mutex<VecDeque<(Instant, f64)>>) -> Vec<f64> {
 
 fn current_count(samples: &Mutex<VecDeque<(Instant, f64)>>, now: Instant, window: Duration) -> u64 {
     let samples = samples.lock().expect("metrics sample lock poisoned");
-    samples.iter().filter(|(at, _)| now.duration_since(*at) <= window).count() as u64
+    samples
+        .iter()
+        .filter(|(at, _)| now.duration_since(*at) <= window)
+        .count() as u64
 }
 
 fn trim(samples: &mut VecDeque<(Instant, f64)>) {
-    while samples.len() > MAX_SAMPLES || samples.front().is_some_and(|(at, _)| at.elapsed() > HISTORY) { samples.pop_front(); }
+    while samples.len() > MAX_SAMPLES
+        || samples
+            .front()
+            .is_some_and(|(at, _)| at.elapsed() > HISTORY)
+    {
+        samples.pop_front();
+    }
 }
 
 fn increment(map: &Mutex<HashMap<String, u64>>, key: &str) {
@@ -104,7 +143,9 @@ fn increment(map: &Mutex<HashMap<String, u64>>, key: &str) {
 }
 
 fn percentile_stats(values: &[f64]) -> LatencyStats {
-    if values.is_empty() { return LatencyStats::default(); }
+    if values.is_empty() {
+        return LatencyStats::default();
+    }
     let mut sorted = values.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     LatencyStats {
@@ -115,12 +156,28 @@ fn percentile_stats(values: &[f64]) -> LatencyStats {
     }
 }
 
-fn percentile(sorted: &[f64], p: f64) -> f64 { sorted[((sorted.len() - 1) as f64 * p).round() as usize] }
-fn round(value: f64) -> f64 { (value * 100.0).round() / 100.0 }
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    sorted[((sorted.len() - 1) as f64 * p).round() as usize]
+}
+fn round(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
 
 impl Default for Metrics {
     fn default() -> Self {
-        Self { started: Instant::now(), queries: AtomicU64::new(0), upstream_requests: AtomicU64::new(0), upstream_successes: AtomicU64::new(0), upstream_failures: AtomicU64::new(0), cache_evictions: AtomicU64::new(0), errors: AtomicU64::new(0), query_types: Mutex::new(HashMap::new()), outcomes: Mutex::new(HashMap::new()), response_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)), upstream_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)) }
+        Self {
+            started: Instant::now(),
+            queries: AtomicU64::new(0),
+            upstream_requests: AtomicU64::new(0),
+            upstream_successes: AtomicU64::new(0),
+            upstream_failures: AtomicU64::new(0),
+            cache_evictions: AtomicU64::new(0),
+            errors: AtomicU64::new(0),
+            query_types: Mutex::new(HashMap::new()),
+            outcomes: Mutex::new(HashMap::new()),
+            response_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)),
+            upstream_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)),
+        }
     }
 }
 
@@ -140,8 +197,11 @@ mod tests {
     #[test]
     fn records_queries_and_outcomes() {
         let metrics = Metrics::default();
-        metrics.record_query("A"); metrics.record_query("A"); metrics.record_query("AAAA");
-        metrics.record_outcome("NOERROR"); metrics.record_outcome("SERVFAIL");
+        metrics.record_query("A");
+        metrics.record_query("A");
+        metrics.record_query("AAAA");
+        metrics.record_outcome("NOERROR");
+        metrics.record_outcome("SERVFAIL");
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.queries_total, 3);
         assert_eq!(snapshot.query_types["A"], 2);
@@ -153,7 +213,9 @@ mod tests {
     #[test]
     fn calculates_latency_percentiles() {
         let metrics = Metrics::default();
-        for value in 1..=100 { metrics.record_latency(value as f64); }
+        for value in 1..=100 {
+            metrics.record_latency(value as f64);
+        }
         let stats = &metrics.snapshot().response_time;
         assert_eq!(stats.avg_ms, 50.5);
         assert_eq!(stats.p50_ms, 51.0);
@@ -164,8 +226,14 @@ mod tests {
     #[test]
     fn calculates_upstream_availability() {
         let metrics = Metrics::default();
-        for _ in 0..8 { metrics.record_upstream_start(); metrics.record_upstream_result(true); }
-        for _ in 0..2 { metrics.record_upstream_start(); metrics.record_upstream_result(false); }
+        for _ in 0..8 {
+            metrics.record_upstream_start();
+            metrics.record_upstream_result(true);
+        }
+        for _ in 0..2 {
+            metrics.record_upstream_start();
+            metrics.record_upstream_result(false);
+        }
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.upstream.requests, 10);
         assert_eq!(snapshot.upstream.successes, 8);
@@ -176,7 +244,9 @@ mod tests {
     #[test]
     fn ignores_invalid_latency_samples() {
         let metrics = Metrics::default();
-        metrics.record_latency(-1.0); metrics.record_latency(f64::NAN); metrics.record_latency(12.0);
+        metrics.record_latency(-1.0);
+        metrics.record_latency(f64::NAN);
+        metrics.record_latency(12.0);
         assert_eq!(metrics.snapshot().response_time.avg_ms, 12.0);
     }
 }

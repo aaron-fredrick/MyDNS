@@ -11,7 +11,12 @@ pub struct LatencyStats {
 
 impl Default for LatencyStats {
     fn default() -> Self {
-        Self { avg_ms: 0.0, p50_ms: 0.0, p95_ms: 0.0, p99_ms: 0.0 }
+        Self {
+            avg_ms: 0.0,
+            p50_ms: 0.0,
+            p95_ms: 0.0,
+            p99_ms: 0.0,
+        }
     }
 }
 
