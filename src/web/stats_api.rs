@@ -23,7 +23,11 @@ pub async fn getStats(
         .unwrap_or(0);
 
     let total_cache = hits + misses;
-    let cache_hit_rate = if total_cache == 0 { 0.0 } else { hits as f64 / total_cache as f64 * 100.0 };
+    let cache_hit_rate = if total_cache == 0 {
+        0.0
+    } else {
+        hits as f64 / total_cache as f64 * 100.0
+    };
     let stats = state.metrics.snapshot();
     let mut value = serde_json::to_value(stats)?;
     if let Some(object) = value.as_object_mut() {
