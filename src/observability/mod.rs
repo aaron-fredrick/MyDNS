@@ -1,8 +1,10 @@
-//! Operational telemetry and metrics for MyDNS.
+//! Backend-owned operational telemetry.
 //!
-//! This module owns backend-calculated observability data. DNS-specific
-//! instrumentation adapters remain in their owning subsystem (`dns/`).
+//! The observability subsystem owns metric state, aggregation, and typed
+//! snapshots. DNS-specific instrumentation adapters stay in `dns/`.
 
 mod metrics;
+mod types;
 
 pub use metrics::Metrics;
+pub use types::{LatencyStats, MetricsSnapshot, UpstreamStats};
