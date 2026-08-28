@@ -52,7 +52,7 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
     let app = Router::new()
         .nest("/api/v1", api_routes)
         .route("/ws", get(ws::wsHandler))
-        .route("/", get(serve_frontend))
+        .route("/", get(serve_frontend_root))
         .route("/*path", get(serve_frontend))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(security_headers)
@@ -72,21 +72,13 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
     Ok(())
 }
 
-async fn serve_frontend(Path(path): Path<String>) -> impl IntoResponse {
-    serve_asset(&path)
-}
-
-async fn serve_frontend_root() -> impl IntoResponse {
-    serve_asset("")
-}
+async fn serve_frontend(Path(path): Path<String>) -> impl IntoResponse { serve_asset(&path) }
+async fn serve_frontend_root() -> impl IntoResponse { serve_asset("") }
 
 fn serve_asset(path: &str) -> Response<Body> {
     let normalized = path.trim_start_matches('/');
     let asset = FrontendAssets::get(normalized).or_else(|| FrontendAssets::get("index.html"));
-    let Some(asset) = asset else {
-        return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).expect("valid response");
-    };
-
+    let Some(asset) = asset else { return Response::builder().status(StatusCode::NOT_FOUND).body(Body::empty()).expect("valid response"); };
     let mime = if normalized.is_empty() { "text/html; charset=utf-8" } else { mime_guess::from_path(normalized).first_or_octet_stream().as_ref() };
     let content_type = HeaderValue::from_str(mime).unwrap_or_else(|_| HV::from_static("application/octet-stream"));
     Response::builder().status(StatusCode::OK).header(http_header::CONTENT_TYPE, content_type).body(Body::from(asset.data.into_owned())).expect("valid response")
