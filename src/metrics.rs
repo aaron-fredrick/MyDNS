@@ -21,7 +21,9 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn new() -> Arc<Self> { Arc::new(Self::default()) }
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
 
     pub fn record_query(&self, query_type: &str) {
         self.queries.fetch_add(1, Ordering::Relaxed);
@@ -30,26 +32,41 @@ impl Metrics {
 
     pub fn record_outcome(&self, outcome: &str) {
         increment(&self.outcomes, outcome);
-        if matches!(outcome, "SERVFAIL" | "REFUSED" | "OTHER") { self.errors.fetch_add(1, Ordering::Relaxed); }
+        if matches!(outcome, "SERVFAIL" | "REFUSED" | "OTHER") {
+            self.errors.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
-    pub fn record_upstream_start(&self) { self.upstream_requests.fetch_add(1, Ordering::Relaxed); }
+    pub fn record_upstream_start(&self) {
+        self.upstream_requests.fetch_add(1, Ordering::Relaxed);
+    }
 
     pub fn record_upstream_result(&self, success: bool) {
-        if success { self.upstream_successes.fetch_add(1, Ordering::Relaxed); }
-        else { self.upstream_failures.fetch_add(1, Ordering::Relaxed); }
+        if success {
+            self.upstream_successes.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.upstream_failures.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     pub fn record_upstream_latency(&self, latency_ms: f64) {
-        let mut samples = self.upstream_samples.lock().expect("metrics upstream sample lock poisoned");
+        let mut samples = self
+            .upstream_samples
+            .lock()
+            .expect("metrics upstream sample lock poisoned");
         samples.push_back((Instant::now(), latency_ms));
         trim(&mut samples);
     }
 
-    pub fn record_eviction(&self) { self.cache_evictions.fetch_add(1, Ordering::Relaxed); }
+    pub fn record_eviction(&self) {
+        self.cache_evictions.fetch_add(1, Ordering::Relaxed);
+    }
 
     pub fn record_latency(&self, response_ms: f64) {
-        let mut samples = self.response_samples.lock().expect("metrics response sample lock poisoned");
+        let mut samples = self
+            .response_samples
+            .lock()
+            .expect("metrics response sample lock poisoned");
         samples.push_back((Instant::now(), response_ms));
         trim(&mut samples);
     }
@@ -59,15 +76,28 @@ impl Metrics {
         let queries = self.queries.load(Ordering::Relaxed);
         let upstream_requests = self.upstream_requests.load(Ordering::Relaxed);
         let upstream_successes = self.upstream_successes.load(Ordering::Relaxed);
-        let availability = if upstream_requests == 0 { 100.0 } else { upstream_successes as f64 / upstream_requests as f64 * 100.0 };
+        let availability = if upstream_requests == 0 {
+            100.0
+        } else {
+            upstream_successes as f64 / upstream_requests as f64 * 100.0
+        };
 
-        let mut response_samples = self.response_samples.lock().expect("metrics response sample lock poisoned");
+        let mut response_samples = self
+            .response_samples
+            .lock()
+            .expect("metrics response sample lock poisoned");
         trim(&mut response_samples);
         let response_values: Vec<f64> = response_samples.iter().map(|(_, value)| *value).collect();
-        let requests_per_minute = response_samples.iter().filter(|(at, _)| now.duration_since(*at) <= Duration::from_secs(60)).count() as u64;
+        let requests_per_minute = response_samples
+            .iter()
+            .filter(|(at, _)| now.duration_since(*at) <= Duration::from_secs(60))
+            .count() as u64;
         drop(response_samples);
 
-        let mut upstream_samples = self.upstream_samples.lock().expect("metrics upstream sample lock poisoned");
+        let mut upstream_samples = self
+            .upstream_samples
+            .lock()
+            .expect("metrics upstream sample lock poisoned");
         trim(&mut upstream_samples);
         let upstream_values: Vec<f64> = upstream_samples.iter().map(|(_, value)| *value).collect();
         drop(upstream_samples);
@@ -87,7 +117,13 @@ impl Metrics {
 }
 
 fn trim(samples: &mut VecDeque<(Instant, f64)>) {
-    while samples.len() > MAX_SAMPLES || samples.front().is_some_and(|(at, _)| at.elapsed() > HISTORY) { samples.pop_front(); }
+    while samples.len() > MAX_SAMPLES
+        || samples
+            .front()
+            .is_some_and(|(at, _)| at.elapsed() > HISTORY)
+    {
+        samples.pop_front();
+    }
 }
 
 fn increment(map: &Mutex<HashMap<String, u64>>, key: &str) {
@@ -96,18 +132,36 @@ fn increment(map: &Mutex<HashMap<String, u64>>, key: &str) {
 }
 
 fn percentile_stats(values: &[f64]) -> serde_json::Value {
-    if values.is_empty() { return serde_json::json!({"avg_ms": 0.0, "p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0}); }
+    if values.is_empty() {
+        return serde_json::json!({"avg_ms": 0.0, "p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0});
+    }
     let mut sorted = values.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let avg = sorted.iter().sum::<f64>() / sorted.len() as f64;
     serde_json::json!({"avg_ms": round(avg), "p50_ms": round(percentile(&sorted, 0.50)), "p95_ms": round(percentile(&sorted, 0.95)), "p99_ms": round(percentile(&sorted, 0.99))})
 }
 
-fn percentile(sorted: &[f64], p: f64) -> f64 { sorted[((sorted.len() - 1) as f64 * p).round() as usize] }
-fn round(value: f64) -> f64 { (value * 100.0).round() / 100.0 }
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    sorted[((sorted.len() - 1) as f64 * p).round() as usize]
+}
+fn round(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
 
 impl Default for Metrics {
     fn default() -> Self {
-        Self { started: Instant::now(), queries: AtomicU64::new(0), upstream_requests: AtomicU64::new(0), upstream_successes: AtomicU64::new(0), upstream_failures: AtomicU64::new(0), cache_evictions: AtomicU64::new(0), errors: AtomicU64::new(0), query_types: Mutex::new(HashMap::new()), outcomes: Mutex::new(HashMap::new()), response_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)), upstream_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)) }
+        Self {
+            started: Instant::now(),
+            queries: AtomicU64::new(0),
+            upstream_requests: AtomicU64::new(0),
+            upstream_successes: AtomicU64::new(0),
+            upstream_failures: AtomicU64::new(0),
+            cache_evictions: AtomicU64::new(0),
+            errors: AtomicU64::new(0),
+            query_types: Mutex::new(HashMap::new()),
+            outcomes: Mutex::new(HashMap::new()),
+            response_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)),
+            upstream_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)),
+        }
     }
 }

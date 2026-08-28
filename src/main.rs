@@ -24,7 +24,11 @@ async fn main() -> anyhow::Result<()> {
     let (log_tx, _) = broadcast::channel::<String>(1024);
 
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_writer(non_blocking_file).with_ansi(false))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking_file)
+                .with_ansi(false),
+        )
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .init();
@@ -37,12 +41,18 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::init(&cfg.db_path).await?;
 
     if let Some(prio) = db::getSetting(&pool, "resolver_priority").await? {
-        if let Ok(p) = prio.parse() { cfg.resolver_priority = p; }
+        if let Ok(p) = prio.parse() {
+            cfg.resolver_priority = p;
+        }
     }
     if let Some(cf) = db::getSetting(&pool, "cloudflare_dns").await? {
-        if let Ok(a) = cf.parse() { cfg.cloudflare_dns = a; }
+        if let Ok(a) = cf.parse() {
+            cfg.cloudflare_dns = a;
+        }
     }
-    if let Some(rt) = db::getSetting(&pool, "router_dns").await? { cfg.router_dns = rt.parse().ok(); }
+    if let Some(rt) = db::getSetting(&pool, "router_dns").await? {
+        cfg.router_dns = rt.parse().ok();
+    }
 
     if cfg.jwt_secret.is_empty() {
         if let Some(saved_secret) = db::getSetting(&pool, "jwt_secret").await? {
@@ -56,14 +66,21 @@ async fn main() -> anyhow::Result<()> {
 
     privileges::checkAndExitIfInsufficient(cfg.dns_port, cfg.http_port);
 
-    if db::records::findUserHash(&pool, &cfg.admin_username).await?.is_none() {
+    if db::records::findUserHash(&pool, &cfg.admin_username)
+        .await?
+        .is_none()
+    {
         let hash = web::auth::hashPassword(&cfg.admin_password)?;
         db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await?;
         tracing::info!(username = %cfg.admin_username, "Admin user seeded");
     }
     cfg.admin_password.clear();
 
-    let upstream = UpstreamResolver::fromConfig(cfg.resolver_priority.clone(), cfg.cloudflare_dns, cfg.router_dns)?;
+    let upstream = UpstreamResolver::fromConfig(
+        cfg.resolver_priority.clone(),
+        cfg.cloudflare_dns,
+        cfg.router_dns,
+    )?;
     let cancel = CancellationToken::new();
     let state = state::AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone());
 
@@ -112,12 +129,16 @@ async fn await_shutdown_signal() {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{signal, SignalKind};
-        let mut sigint = signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
-        let mut sigterm = signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+        let mut sigint =
+            signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
+        let mut sigterm =
+            signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
         tokio::select! { _ = sigint.recv() => {}, _ = sigterm.recv() => {} }
     }
     #[cfg(not(unix))]
     {
-        tokio::signal::ctrl_c().await.expect("Failed to register Ctrl+C handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to register Ctrl+C handler");
     }
 }
