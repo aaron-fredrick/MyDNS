@@ -8,3 +8,4 @@ pub mod settings_api;
 pub mod stats_api;
 pub mod validation;
 pub mod ws;
+pub mod zones_api;

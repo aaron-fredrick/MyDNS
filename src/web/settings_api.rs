@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 
-use crate::config::ResolverPriority;
+use crate::config::{self, ResolverMode, ResolverPriority};
 use crate::db;
 use crate::dns::upstream::UpstreamResolver;
 use crate::state::AppState;
@@ -12,13 +12,16 @@ use crate::web::error::ApiError;
 
 #[derive(Serialize)]
 pub struct SettingsResponse {
+    pub resolver_mode: String,
     pub resolver_priority: String,
     pub cloudflare_dns: String,
     pub router_dns: Option<String>,
+    pub root_hints: Vec<String>,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateSettings {
+    pub resolver_mode: Option<String>,
     pub resolver_priority: Option<String>,
     pub cloudflare_dns: Option<String>,
     pub router_dns: Option<String>,
@@ -31,10 +34,18 @@ pub async fn getSettings(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<SettingsResponse>, ApiError> {
     let cfg = state.config.read().await;
+    let root_hints = if cfg.root_hints.is_empty() {
+        config::default_root_hints().into_iter().map(|a| a.to_string()).collect()
+    } else {
+        cfg.root_hints.iter().map(|a| a.to_string()).collect()
+    };
+
     Ok(Json(SettingsResponse {
+        resolver_mode: cfg.resolver_mode.to_string(),
         resolver_priority: cfg.resolver_priority.to_string(),
         cloudflare_dns: cfg.cloudflare_dns.to_string(),
         router_dns: cfg.router_dns.map(|a| a.to_string()),
+        root_hints,
     }))
 }
 
@@ -49,6 +60,13 @@ pub async fn updateSettings(
     Json(body): Json<UpdateSettings>,
 ) -> Result<Json<SettingsResponse>, ApiError> {
     let mut cfg = state.config.write().await;
+
+    if let Some(ref mode_str) = body.resolver_mode {
+        cfg.resolver_mode = mode_str
+            .parse::<ResolverMode>()
+            .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+        db::setSetting(&state.db, "resolver_mode", mode_str).await?;
+    }
 
     if let Some(ref prio_str) = body.resolver_priority {
         cfg.resolver_priority = prio_str
@@ -74,9 +92,11 @@ pub async fn updateSettings(
 
     // Rebuild the upstream resolver chain with the updated config.
     let new_upstream = UpstreamResolver::fromConfig(
+        cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
+        cfg.root_hints.clone(),
     )?;
     drop(cfg); // release write lock before acquiring upstream write lock
     *state.upstream.write().await = new_upstream;
@@ -88,9 +108,17 @@ pub async fn updateSettings(
 
     // Re-read to build response.
     let cfg = state.config.read().await;
+    let root_hints = if cfg.root_hints.is_empty() {
+        config::default_root_hints().into_iter().map(|a| a.to_string()).collect()
+    } else {
+        cfg.root_hints.iter().map(|a| a.to_string()).collect()
+    };
+
     Ok(Json(SettingsResponse {
+        resolver_mode: cfg.resolver_mode.to_string(),
         resolver_priority: cfg.resolver_priority.to_string(),
         cloudflare_dns: cfg.cloudflare_dns.to_string(),
         router_dns: cfg.router_dns.map(|a| a.to_string()),
+        root_hints,
     }))
 }

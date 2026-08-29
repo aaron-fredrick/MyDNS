@@ -7,7 +7,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::cache::{CacheStats, DnsCache};
 use crate::config::AppConfig;
+use crate::dns::record_index::RecordIndex;
 use crate::dns::upstream::UpstreamResolver;
+use crate::dns::zone_trie::ZoneTrie;
 use crate::observability::Metrics;
 use crate::web::auth::LoginRateLimiter;
 
@@ -23,6 +25,10 @@ pub struct AppState {
     pub config: Arc<RwLock<AppConfig>>,
     pub upstream: Arc<RwLock<UpstreamResolver>>,
     pub login_rate_limiter: Arc<LoginRateLimiter>,
+    /// Label-inverted trie for O(depth) authoritative zone ownership lookup.
+    pub zone_trie: Arc<RwLock<ZoneTrie>>,
+    /// In-memory authoritative record index for zero-DB-hit hot-path resolution.
+    pub record_index: Arc<RwLock<RecordIndex>>,
     #[allow(dead_code)]
     pub cancel: CancellationToken,
 }
@@ -34,6 +40,8 @@ impl AppState {
         upstream: UpstreamResolver,
         log_tx: broadcast::Sender<String>,
         cancel: CancellationToken,
+        record_index: RecordIndex,
+        zone_trie: ZoneTrie,
     ) -> Arc<Self> {
         Arc::new(Self {
             db,
@@ -45,6 +53,8 @@ impl AppState {
             config: Arc::new(RwLock::new(config)),
             upstream: Arc::new(RwLock::new(upstream)),
             login_rate_limiter: Arc::new(LoginRateLimiter::new()),
+            zone_trie: Arc::new(RwLock::new(zone_trie)),
+            record_index: Arc::new(RwLock::new(record_index)),
             cancel,
         })
     }

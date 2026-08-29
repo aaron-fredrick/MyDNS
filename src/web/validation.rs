@@ -12,11 +12,18 @@ const MAX_LABEL_LEN: usize = 63;
 
 /// Checks that `name` belongs to one of the configured `allowed_zones`.
 ///
-/// If `allowed_zones` is empty the check is skipped (allow-all mode), which
-/// preserves backwards-compatibility when the operator has not configured
-/// zone restrictions.
+/// Semantics:
+/// - Empty `allowed_zones` → check skipped (allow any name; backwards-compatible
+///   with unconfigured deployments).
+/// - `allowed_zones` contains `"."` → the root zone is authoritative for the
+///   entire namespace; any valid DNS name is accepted.
+/// - Otherwise → `name` must be an exact match for a zone or a subdomain of one.
 pub fn validate_zone(name: &str, allowed_zones: &[String]) -> Result<(), ApiError> {
     if allowed_zones.is_empty() {
+        return Ok(());
+    }
+    // Root zone "." is authoritative for every name.
+    if allowed_zones.iter().any(|z| z == ".") {
         return Ok(());
     }
     let normalized = name.trim_end_matches('.').to_lowercase();
@@ -33,6 +40,7 @@ pub fn validate_zone(name: &str, allowed_zones: &[String]) -> Result<(), ApiErro
         )))
     }
 }
+
 
 pub fn validate_create_record(req: &CreateRecord) -> Result<(), ApiError> {
     validate_record(
@@ -206,6 +214,7 @@ mod tests {
             value: value.into(),
             ttl: 300,
             priority: None,
+            is_dev: false,
         }
     }
 
@@ -266,6 +275,18 @@ mod tests {
     #[test]
     fn zone_allow_all_when_list_is_empty() {
         assert!(validate_zone("anything.example.com", &[]).is_ok());
+    }
+
+    #[test]
+    fn valid_zone() {
+        assert!(validate_zone("host.example.com", &["example.com".into()]).is_ok());
+    }
+
+    #[test]
+    fn root_zone_allows_any_name() {
+        assert!(validate_zone("google.com", &[".".into()]).is_ok());
+        assert!(validate_zone("home.local", &[".".into()]).is_ok());
+        assert!(validate_zone("host.example.com", &["example.com".into(), ".".into()]).is_ok());
     }
 
     #[test]

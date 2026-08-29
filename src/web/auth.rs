@@ -222,7 +222,7 @@ mod tests {
             .header("Sec-WebSocket-Protocol", "chat, mydns-auth.test-token")
             .body(())
             .unwrap();
-        let (_, parts) = request.into_parts();
+        let (parts, _) = request.into_parts();
         assert_eq!(extract_bearer(&parts).unwrap(), "test-token");
     }
 }

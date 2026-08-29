@@ -10,14 +10,15 @@ use hickory_server::server::{Request, RequestHandler, ResponseHandler, ResponseI
 use hickory_server::zone_handler::MessageResponseBuilder;
 
 use crate::cache::CacheResult;
+use crate::dns::record_index::IndexResolution;
 use crate::dns::upstream::UpstreamResolution;
 use crate::state::AppState;
 
 #[derive(Debug)]
 enum ResolutionResult {
-    Positive(Vec<Record>),
-    Nodata,
-    NxDomain,
+    Positive(Vec<Record>, bool), // records, is_authoritative
+    Nodata(bool),                // is_authoritative
+    NxDomain(bool),              // is_authoritative
     ServFail,
 }
 
@@ -53,15 +54,17 @@ impl RequestHandler for DnsHandler {
         let rtype = query.query_type();
         let name = name_fqdn.trim_end_matches('.').to_lowercase();
 
-        tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, "DNS query received");
-        let result = self.processResolution(&name, rtype, src).await;
+        let recursion_desired = request.metadata.recursion_desired;
+        tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, recursion_desired, "DNS query received");
+        let result = self.processResolution(&name, rtype, src, recursion_desired).await;
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut metadata = Metadata::response_from_request(&request.metadata);
+        metadata.recursion_available = true;
 
         match result {
-            ResolutionResult::Positive(records) => {
+            ResolutionResult::Positive(records, is_authoritative) => {
                 metadata.response_code = ResponseCode::NoError;
-                metadata.authoritative = false;
+                metadata.authoritative = is_authoritative;
                 let response = builder.build(metadata, records.iter(), &[], &[], &[]);
                 response_handle
                     .send_response(response)
@@ -71,9 +74,9 @@ impl RequestHandler for DnsHandler {
                         failed_response_info(request)
                     })
             }
-            ResolutionResult::Nodata => {
+            ResolutionResult::Nodata(is_authoritative) => {
                 metadata.response_code = ResponseCode::NoError;
-                metadata.authoritative = false;
+                metadata.authoritative = is_authoritative;
                 let response = builder.build_no_records(metadata);
                 response_handle
                     .send_response(response)
@@ -83,8 +86,9 @@ impl RequestHandler for DnsHandler {
                         failed_response_info(request)
                     })
             }
-            ResolutionResult::NxDomain => {
+            ResolutionResult::NxDomain(is_authoritative) => {
                 metadata.response_code = ResponseCode::NXDomain;
+                metadata.authoritative = is_authoritative;
                 let response = builder.build_no_records(metadata);
                 response_handle
                     .send_response(response)
@@ -116,44 +120,60 @@ impl DnsHandler {
         name: &str,
         rtype: RecordType,
         src: SocketAddr,
+        recursion_desired: bool,
     ) -> ResolutionResult {
+        let is_authoritative_zone = {
+            let trie = self.state.zone_trie.read().await;
+            trie.find_zone(name).is_some()
+        };
+
         if let Some(result) = self.queryMemoryCache(name, rtype, src).await {
+            return result;
+        }
+        if let Some(result) = self.queryRecordIndex(name, rtype, src).await {
             return result;
         }
         if let Some(result) = self.queryPersistentCache(name, rtype).await {
             return result;
         }
-        if let Some(result) = self.queryDatabase(name, rtype).await {
-            if let ResolutionResult::Positive(records) = &result {
-                self.logResolution(src, name, rtype, records, "DB");
-                let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
-                self.saveToMemoryCache(name, rtype, records.clone(), ttl)
-                    .await;
-            }
-            return result;
-        }
         if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
-            return ResolutionResult::Positive(records);
+            return ResolutionResult::Positive(records, true);
+        }
+
+        // If the query falls within an authoritative zone and was not found locally:
+        // Return authoritative NXDOMAIN immediately and NEVER forward to upstream.
+        if is_authoritative_zone {
+            tracing::info!(client = %src, query = %name, r#type = %rtype, "Authoritative zone record not found");
+            let _ = self.state.log_tx.send(format!(
+                "[AUTHORITATIVE NXDOMAIN] client={} query={} type={}",
+                src, name, rtype
+            ));
+            return ResolutionResult::NxDomain(true);
+        }
+
+        if !recursion_desired {
+            tracing::info!(client = %src, query = %name, r#type = %rtype, "Recursion not desired and record not in local DB or cache");
+            return ResolutionResult::NxDomain(false);
         }
 
         match self.queryUpstream(name, rtype, src).await {
-            ResolutionResult::Positive(records) => {
+            ResolutionResult::Positive(records, _) => {
                 let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
                 self.saveToAllCaches(name, rtype, records.clone(), ttl)
                     .await;
-                ResolutionResult::Positive(records)
+                ResolutionResult::Positive(records, false)
             }
-            ResolutionResult::Nodata => {
+            ResolutionResult::Nodata(_) => {
                 tracing::info!(client = %src, query = %name, r#type = %rtype, "NODATA");
                 let _ = self.state.log_tx.send(format!(
                     "[NODATA] client={} query={} type={}",
                     src, name, rtype
                 ));
-                ResolutionResult::Nodata
+                ResolutionResult::Nodata(false)
             }
-            ResolutionResult::NxDomain => {
+            ResolutionResult::NxDomain(_) => {
                 self.handleMissingRecord(name, rtype, src).await;
-                ResolutionResult::NxDomain
+                ResolutionResult::NxDomain(false)
             }
             ResolutionResult::ServFail => {
                 tracing::warn!(client = %src, query = %name, r#type = %rtype, "SERVFAIL");
@@ -178,11 +198,11 @@ impl DnsHandler {
             return Some(match result {
                 CacheResult::Positive => {
                     self.logResolution(src, name, rtype, records, "memory");
-                    ResolutionResult::Positive(records.clone())
+                    ResolutionResult::Positive(records.clone(), false)
                 }
                 CacheResult::Negative => {
                     self.logNegativeCacheHit(src, name, rtype, "memory");
-                    ResolutionResult::NxDomain
+                    ResolutionResult::NxDomain(false)
                 }
             });
         }
@@ -223,7 +243,7 @@ impl DnsHandler {
             if rows.len() == 1 && rows[0].value == "NX" {
                 self.handleCachedNegativeResult(name, rtype, rows[0].expires_at)
                     .await;
-                return Some(ResolutionResult::NxDomain);
+                return Some(ResolutionResult::NxDomain(false));
             }
             let mut records = Vec::new();
             for row in &rows {
@@ -234,7 +254,7 @@ impl DnsHandler {
                 }
             }
             if !records.is_empty() {
-                return Some(ResolutionResult::Positive(records));
+                return Some(ResolutionResult::Positive(records, false));
             }
         }
 
@@ -248,7 +268,7 @@ impl DnsHandler {
                         .queryPersistentCacheRecursive(&target, rtype, depth + 1)
                         .await
                     {
-                        Some(ResolutionResult::Positive(mut target_recs)) => {
+                        Some(ResolutionResult::Positive(mut target_recs, _)) => {
                             if let Some(cname_rec) = build_record(
                                 name,
                                 RecordType::CNAME,
@@ -258,7 +278,7 @@ impl DnsHandler {
                             ) {
                                 target_recs.insert(0, cname_rec);
                             }
-                            return Some(ResolutionResult::Positive(target_recs));
+                            return Some(ResolutionResult::Positive(target_recs, false));
                         }
                         Some(other) => return Some(other),
                         None => {}
@@ -269,74 +289,41 @@ impl DnsHandler {
         None
     }
 
-    async fn queryDatabase(&self, name: &str, rtype: RecordType) -> Option<ResolutionResult> {
-        let mut current = name.to_string();
-        let mut chain = Vec::new();
-        let mut visited = std::collections::HashSet::new();
+    async fn queryRecordIndex(
+        &self,
+        name: &str,
+        rtype: RecordType,
+        src: SocketAddr,
+    ) -> Option<ResolutionResult> {
+        let rtype_str = rtype.to_string().to_uppercase();
+        let resolution = {
+            let index = self.state.record_index.read().await;
+            index.resolve_authoritative(name, &rtype_str)
+        };
 
-        for depth in 0..=10u8 {
-            if !visited.insert(current.clone()) {
-                tracing::warn!(name = %name, r#type = %rtype, depth = %depth, "Authoritative CNAME loop detected");
-                return Some(ResolutionResult::ServFail);
-            }
-
-            let rows = crate::db::records::findByName(&self.state.db, &current)
-                .await
-                .ok()?;
-
-            let rtype_str = rtype.to_string().to_uppercase();
-            let mut records = Vec::new();
-            for row in rows.iter().filter(|r| r.record_type == rtype_str) {
-                if let Some(record) =
-                    build_record(&current, rtype, &row.value, row.ttl as u32, row.priority)
-                {
-                    records.push(record);
+        match resolution {
+            IndexResolution::Found(db_records) => {
+                let records: Vec<Record> = db_records
+                    .iter()
+                    .filter_map(|r| {
+                        let parsed_type = r.record_type.parse::<RecordType>().ok()?;
+                        build_record(&r.name, parsed_type, &r.value, r.ttl as u32, r.priority)
+                    })
+                    .collect();
+                if records.is_empty() {
+                    return None;
                 }
+                let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
+                self.logResolution(src, name, rtype, &records, "INDEX");
+                self.saveToMemoryCache(name, rtype, records.clone(), ttl).await;
+                Some(ResolutionResult::Positive(records, true))
             }
-
-            if !records.is_empty() {
-                if !chain.is_empty() {
-                    chain.reverse();
-                    for cname in chain {
-                        records.insert(0, cname);
-                    }
-                }
-                return Some(ResolutionResult::Positive(records));
-            }
-
-            if rtype == RecordType::CNAME {
-                return if rows.is_empty() {
-                    None
-                } else {
-                    Some(ResolutionResult::Nodata)
-                };
-            }
-
-            let cname_row = rows.iter().find(|row| row.record_type == "CNAME");
-            let Some(cname_row) = cname_row else {
-                return if rows.is_empty() {
-                    None
-                } else {
-                    Some(ResolutionResult::Nodata)
-                };
-            };
-
-            let Some(cname_record) = build_record(
-                &current,
-                RecordType::CNAME,
-                &cname_row.value,
-                cname_row.ttl as u32,
-                None,
-            ) else {
-                return Some(ResolutionResult::ServFail);
-            };
-            chain.push(cname_record);
-            current = cname_row.value.trim_end_matches('.').to_lowercase();
+            IndexResolution::Nodata => Some(ResolutionResult::Nodata(true)),
+            IndexResolution::Miss => None,
+            IndexResolution::ServFail => Some(ResolutionResult::ServFail),
         }
-
-        tracing::warn!(name = %name, r#type = %rtype, "Authoritative CNAME recursion limit reached");
-        Some(ResolutionResult::ServFail)
     }
+
 
     async fn querySpecialRecords(
         &self,
@@ -344,6 +331,17 @@ impl DnsHandler {
         rtype: RecordType,
         src: SocketAddr,
     ) -> Option<Vec<Record>> {
+        // Synthetic PTR responses for loopback addresses.
+        // nslookup and similar tools reverse-resolve the server IP before sending queries.
+        // Without a PTR answer the tool marks the server as unresponsive and drops all
+        // subsequent queries. We synthesise localhost. here so no manual DB record is needed.
+        if rtype == RecordType::PTR && isLoopbackPtrName(name) {
+            if let Some(record) = build_record(name, RecordType::PTR, "localhost.", 3600, None) {
+                tracing::debug!(query = %name, "Synthetic loopback PTR response");
+                return Some(vec![record]);
+            }
+        }
+
         let dashboard_domain = {
             let cfg = self.state.config.read().await;
             cfg.dashboard_domain.clone()
@@ -395,10 +393,10 @@ impl DnsHandler {
                     "[UPSTREAM] client={} query={} type={} value=[{}] server={}",
                     src, name, rtype, values, addr
                 ));
-                ResolutionResult::Positive(records)
+                ResolutionResult::Positive(records, false)
             }
-            Ok(UpstreamResolution::Nodata) => ResolutionResult::Nodata,
-            Ok(UpstreamResolution::NxDomain) => ResolutionResult::NxDomain,
+            Ok(UpstreamResolution::Nodata) => ResolutionResult::Nodata(false),
+            Ok(UpstreamResolution::NxDomain) => ResolutionResult::NxDomain(false),
             Ok(UpstreamResolution::ServFail) => ResolutionResult::ServFail,
             Err(_) => {
                 tracing::warn!(client = %src, query = %name, r#type = %rtype, "Upstream resolve timed out; returning SERVFAIL");
@@ -474,7 +472,9 @@ impl DnsHandler {
         &self,
         upstream: &crate::dns::upstream::UpstreamResolver,
     ) -> String {
-        if let Some(addr) = upstream.router_addr {
+        if upstream.mode == crate::config::ResolverMode::Recursive {
+            "recursive (root hints)".to_string()
+        } else if let Some(addr) = upstream.router_addr {
             format!("{} (router)", addr)
         } else {
             format!("{} (cloudflare)", upstream.cloudflare_addr)
@@ -539,14 +539,47 @@ pub fn build_record(
     priority: Option<i64>,
 ) -> Option<Record> {
     use hickory_proto::rr::rdata::{A, AAAA, CNAME, MX, NS, PTR, TXT};
-    let fqdn: Name = name.parse().ok()?;
+    let fqdn_str = if name.ends_with('.') {
+        name.to_string()
+    } else {
+        format!("{}.", name)
+    };
+    let fqdn: Name = fqdn_str.parse().ok()?;
     let rdata = match rtype {
         RecordType::A => RData::A(A(value.parse().ok()?)),
         RecordType::AAAA => RData::AAAA(AAAA(value.parse().ok()?)),
-        RecordType::CNAME => RData::CNAME(CNAME(value.parse().ok()?)),
-        RecordType::MX => RData::MX(MX::new(priority.unwrap_or(10) as u16, value.parse().ok()?)),
-        RecordType::NS => RData::NS(NS(value.parse().ok()?)),
-        RecordType::PTR => RData::PTR(PTR(value.parse().ok()?)),
+        RecordType::CNAME => {
+            let target_str = if value.ends_with('.') {
+                value.to_string()
+            } else {
+                format!("{}.", value)
+            };
+            RData::CNAME(CNAME(target_str.parse().ok()?))
+        }
+        RecordType::MX => {
+            let target_str = if value.ends_with('.') {
+                value.to_string()
+            } else {
+                format!("{}.", value)
+            };
+            RData::MX(MX::new(priority.unwrap_or(10) as u16, target_str.parse().ok()?))
+        }
+        RecordType::NS => {
+            let target_str = if value.ends_with('.') {
+                value.to_string()
+            } else {
+                format!("{}.", value)
+            };
+            RData::NS(NS(target_str.parse().ok()?))
+        }
+        RecordType::PTR => {
+            let target_str = if value.ends_with('.') {
+                value.to_string()
+            } else {
+                format!("{}.", value)
+            };
+            RData::PTR(PTR(target_str.parse().ok()?))
+        }
         RecordType::TXT => RData::TXT(TXT::new(vec![value.to_string()])),
         _ => return None,
     };
@@ -571,4 +604,23 @@ fn isPrivateIp(ip: IpAddr) -> bool {
             (segs[0] & 0xfe00) == 0xfc00 || (segs[0] & 0xffc0) == 0xfe80
         }
     }
+}
+
+/// Returns true for PTR query names that correspond to loopback addresses:
+/// - `1.0.0.127.in-addr.arpa` and any other `127.x.x.x.in-addr.arpa` range
+/// - `1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa` (::1)
+#[allow(non_snake_case)]
+fn isLoopbackPtrName(name: &str) -> bool {
+    // IPv4 loopback: 127.0.0.0/8 → ends with .127.in-addr.arpa
+    if let Some(rest) = name.strip_suffix(".in-addr.arpa") {
+        // The PTR name is the reversed octets, so 127.x.x.x becomes x.x.x.127
+        if rest.split('.').last() == Some("127") {
+            return true;
+        }
+    }
+    // IPv6 loopback ::1 → 1.0.0...0.ip6.arpa (32 nibbles)
+    if name == "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa" {
+        return true;
+    }
+    false
 }

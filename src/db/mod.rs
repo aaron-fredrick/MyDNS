@@ -109,6 +109,38 @@ async fn runMigrations(pool: &SqlitePool) -> anyhow::Result<()> {
     .execute(pool)
     .await?;
 
+    // Authoritative zones — source of truth at runtime; seeded from config on
+    // first boot and then managed exclusively via the Zones API / UI.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS zones (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL UNIQUE,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Ephemeral dev records are purged on every startup before the record index
+    // is loaded. SQLite lacks ADD COLUMN IF NOT EXISTS, so we probe first.
+    let has_is_dev: bool = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM pragma_table_info('dns_records') WHERE name = 'is_dev'",
+    )
+    .fetch_one(pool)
+    .await
+    .map(|n| n > 0)
+    .unwrap_or(false);
+
+    if !has_is_dev {
+        sqlx::query(
+            "ALTER TABLE dns_records ADD COLUMN is_dev INTEGER NOT NULL DEFAULT 0",
+        )
+        .execute(pool)
+        .await?;
+    }
+
     Ok(())
 }
 

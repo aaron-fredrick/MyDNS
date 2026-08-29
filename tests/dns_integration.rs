@@ -7,8 +7,10 @@ use hickory_proto::op::{Message, MessageType, OpCode, Query};
 use hickory_proto::rr::{Name, RecordType};
 use hickory_proto::serialize::binary::BinDecodable;
 use mydns::{
-    config::{AppConfig, ResolverPriority},
+    config::{AppConfig, ResolverMode, ResolverPriority},
     db, dns,
+    dns::record_index::RecordIndex,
+    dns::zone_trie::ZoneTrie,
     state::AppState,
 };
 use std::net::SocketAddr;
@@ -40,12 +42,14 @@ async fn start_dns_server() -> (
         jwt_secret: mydns::config::generate_secret(64),
         admin_username: "admin".to_string(),
         admin_password: "changeme123".to_string(),
+        resolver_mode: ResolverMode::Forwarding,
         resolver_priority: ResolverPriority::CloudflareFirst,
         cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
         router_dns: None,
         run_as_user: "nobody".to_string(),
         run_as_group: "nobody".to_string(),
-        allowed_zones: vec![],
+        allowed_zones: vec!["dns-test.local".to_string()],
+        root_hints: vec![],
     };
 
     let _ = std::fs::remove_file(&db_path);
@@ -93,15 +97,21 @@ async fn start_dns_server() -> (
     }
 
     let upstream = dns::upstream::UpstreamResolver::fromConfig(
+        cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
+        cfg.root_hints.clone(),
     )
     .expect("Failed to build resolver");
 
     let (log_tx, _) = tokio::sync::broadcast::channel(1024);
     let cancel = CancellationToken::new();
-    let state = AppState::new(pool, cfg, upstream, log_tx, cancel.clone());
+    let zone_trie = ZoneTrie::from_zones(&cfg.allowed_zones);
+    let record_index = RecordIndex::load_from_db(&pool)
+        .await
+        .expect("Failed to load record index");
+    let state = AppState::new(pool, cfg, upstream, log_tx, cancel.clone(), record_index, zone_trie);
     let server_state = Arc::clone(&state);
     let server_cancel = cancel.clone();
 
@@ -121,7 +131,9 @@ async fn start_dns_server() -> (
 fn query_message(name: &str, record_type: RecordType) -> Vec<u8> {
     let mut message = Message::new(0x1234, MessageType::Query, OpCode::Query);
     message.add_query(Query::query(Name::from_ascii(name).unwrap(), record_type));
-    message.to_vec().expect("Failed to encode DNS query")
+    let mut bytes = message.to_vec().expect("Failed to encode DNS query");
+    bytes[2] |= 0b0000_0001; // Set RD bit
+    bytes
 }
 
 async fn udp_query(

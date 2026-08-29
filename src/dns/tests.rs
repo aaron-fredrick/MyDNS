@@ -50,3 +50,20 @@ fn test_build_invalid_name() {
     let rec = build_record("valid.name", RecordType::A, "1.1.1.1", 300, None);
     assert!(rec.is_some());
 }
+
+#[test]
+fn test_zone_trie_find_zone() {
+    use super::zone_trie::ZoneTrie;
+    let zones = vec![
+        "example.com".to_string(),
+        "sub.example.com".to_string(),
+        "mydns.local".to_string(),
+    ];
+    let trie = ZoneTrie::from_zones(&zones);
+
+    assert_eq!(trie.find_zone("api.sub.example.com"), Some("sub.example.com"));
+    assert_eq!(trie.find_zone("example.com"), Some("example.com"));
+    assert_eq!(trie.find_zone("www.example.com."), Some("example.com"));
+    assert_eq!(trie.find_zone("notexample.com"), None);
+    assert_eq!(trie.find_zone("google.com"), None);
+}

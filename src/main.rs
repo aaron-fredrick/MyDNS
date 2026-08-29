@@ -7,7 +7,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use mydns::{cache, config, db, dns, privileges, state, web};
 
 use config::AppConfig;
+use dns::record_index::RecordIndex;
 use dns::upstream::UpstreamResolver;
+use dns::zone_trie::ZoneTrie;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,14 +25,21 @@ async fn main() -> anyhow::Result<()> {
     let (non_blocking_file, _file_guard) = tracing_appender::non_blocking(file_appender);
     let (log_tx, _) = broadcast::channel::<String>(1024);
 
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
     tracing_subscriber::registry()
+        .with(env_filter)
         .with(
             tracing_subscriber::fmt::layer()
                 .with_writer(non_blocking_file)
                 .with_ansi(false),
         )
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
-        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stdout)
+                .with_ansi(true),
+        )
         .init();
 
     tracing::info!(log_file = %log_filename, "MyDNS starting");
@@ -77,12 +86,32 @@ async fn main() -> anyhow::Result<()> {
     cfg.admin_password.clear();
 
     let upstream = UpstreamResolver::fromConfig(
+        cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
+        cfg.root_hints.clone(),
     )?;
+
+    // Purge ephemeral dev records before building the index so they never
+    // survive a restart. This must happen before RecordIndex::load_from_db.
+    let purged = db::records::deleteDevRecords(&pool).await?;
+    if purged > 0 {
+        tracing::info!(count = purged, "Purged ephemeral dev records on startup");
+    }
+
+    // Seed DB zones from config (idempotent — skips duplicates).
+    db::records::seedZones(&pool, &cfg.allowed_zones).await?;
+
+    // Build the live trie from DB so zone changes made via the API persist
+    // across restarts without requiring a config file edit.
+    let zone_names = db::records::listZoneNames(&pool).await?;
+    tracing::info!(zones = ?zone_names, "Authoritative zones loaded from DB");
+    let zone_trie = ZoneTrie::from_zones(&zone_names);
+    let record_index = RecordIndex::load_from_db(&pool).await?;
+
     let cancel = CancellationToken::new();
-    let state = state::AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone());
+    let state = state::AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone(), record_index, zone_trie);
 
     // Attach the shared collector after AppState owns the resolver. This keeps
     // upstream telemetry in the resolver implementation without coupling it to HTTP.

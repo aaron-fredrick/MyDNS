@@ -6,7 +6,8 @@ export type Stats = {
   query_types: Record<string, number>; resolution_outcomes: Record<string, number>;
   cache_hits: number; cache_misses: number; cache_hit_rate: number; cache_size: number; record_count: number;
 };
-export type DnsRecord = { id: number; name: string; record_type: string; value: string; ttl: number; priority?: number | null };
+export type DnsRecord = { id: number; name: string; record_type: string; value: string; ttl: number; priority?: number | null; is_dev?: boolean };
+export type Zone = { id: number; name: string; created_at: string };
 export type CacheEntry = { name: string; record_type: string; ttl_remaining: number; values: string[] };
 let token: string | null = sessionStorage.getItem('mydns_token');
 export const auth = { get token() { return token; }, set token(value: string | null) { token = value; value ? sessionStorage.setItem('mydns_token', value) : sessionStorage.removeItem('mydns_token'); } };
@@ -27,6 +28,10 @@ export const api = {
   cache: () => request<CacheEntry[]>('/api/v1/cache'),
   clearCache: () => request<void>('/api/v1/cache', { method: 'DELETE' }),
   deleteCache: (name: string, type: string) => request<void>(`/api/v1/cache/${encodeURIComponent(name)}/${encodeURIComponent(type)}`, { method: 'DELETE' }),
-  settings: () => request<{ resolver_priority: string; cloudflare_dns: string; router_dns: string | null }>('/api/v1/settings'),
-  saveSettings: (settings: Record<string, unknown>) => request<{ resolver_priority: string; cloudflare_dns: string; router_dns: string | null }>('/api/v1/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+  settings: () => request<{ resolver_mode: string; resolver_priority: string; cloudflare_dns: string; router_dns: string | null; root_hints: string[] }>('/api/v1/settings'),
+  saveSettings: (settings: Record<string, unknown>) => request<{ resolver_mode: string; resolver_priority: string; cloudflare_dns: string; router_dns: string | null; root_hints: string[] }>('/api/v1/settings', { method: 'PUT', body: JSON.stringify(settings) }),
+  zones: async () => (await request<{ zones: Zone[] }>('/api/v1/zones')).zones,
+  addZone: async (name: string) => (await request<{ zone: Zone }>('/api/v1/zones', { method: 'POST', body: JSON.stringify({ name }) })).zone,
+  removeZone: (name: string) => request<{ removed: string }>(`/api/v1/zones/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 };
+

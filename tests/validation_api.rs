@@ -1,6 +1,8 @@
 //! HTTP-level tests for DNS record input validation.
 
 use mydns::{config::AppConfig, db, dns, state::AppState, web, web::auth::hashPassword};
+use mydns::dns::record_index::RecordIndex;
+use mydns::dns::zone_trie::ZoneTrie;
 use reqwest::Client;
 use serde_json::json;
 use std::sync::Arc;
@@ -21,12 +23,14 @@ async fn start_test_server() -> (String, String) {
         jwt_secret: mydns::config::generate_secret(64),
         admin_username: "admin".to_string(),
         admin_password: "changeme123".to_string(),
+        resolver_mode: mydns::config::ResolverMode::Forwarding,
         resolver_priority: mydns::config::ResolverPriority::CloudflareFirst,
         cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
         router_dns: None,
         run_as_user: "nobody".to_string(),
         run_as_group: "nobody".to_string(),
         allowed_zones: vec![],
+        root_hints: vec![],
     };
 
     let _ = std::fs::remove_file(&db_path);
@@ -36,14 +40,20 @@ async fn start_test_server() -> (String, String) {
         .await
         .unwrap();
     let upstream = dns::upstream::UpstreamResolver::fromConfig(
+        cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
+        cfg.root_hints.clone(),
     )
     .unwrap();
     let (log_tx, _) = tokio::sync::broadcast::channel(128);
     let cancel = CancellationToken::new();
-    let state = AppState::new(pool, cfg, upstream, log_tx, cancel.clone());
+    let zone_trie = ZoneTrie::from_zones(&cfg.allowed_zones);
+    let record_index = RecordIndex::load_from_db(&pool)
+        .await
+        .expect("Failed to load record index");
+    let state = AppState::new(pool, cfg, upstream, log_tx, cancel.clone(), record_index, zone_trie);
     let server_state = Arc::clone(&state);
     let server_cancel = cancel.clone();
     tokio::spawn(async move {

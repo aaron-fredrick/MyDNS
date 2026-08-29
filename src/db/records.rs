@@ -17,6 +17,8 @@ pub struct DnsRecord {
     pub priority: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
+    /// When true the record is ephemeral and will be deleted on the next restart.
+    pub is_dev: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -38,6 +40,11 @@ pub struct CreateRecord {
     pub value: String,
     pub ttl: u32,
     pub priority: Option<u16>,
+    /// When true the record is treated as an ephemeral dev record and will be
+    /// deleted on the next server restart. Dev records bypass authoritative-zone
+    /// validation, allowing testing against arbitrary domains (e.g. google.com).
+    #[serde(default)]
+    pub is_dev: bool,
 }
 
 /// Payload for updating an existing DNS record.
@@ -52,10 +59,23 @@ pub struct UpdateRecord {
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
 
-/// Returns all DNS records ordered by name.
+/// Returns all authoritative (non-dev) DNS records ordered by name.
+/// Used to build the in-memory record index at startup.
 pub async fn listRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
-        "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at \
+        "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
+         FROM dns_records WHERE is_dev = 0 ORDER BY name",
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to list DNS records")
+}
+
+/// Returns all DNS records including dev records, ordered by name.
+/// Used by the management API so the UI can display dev records.
+pub async fn listAllRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
+    sqlx::query_as::<_, DnsRecord>(
+        "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
          FROM dns_records ORDER BY name",
     )
     .fetch_all(pool)
@@ -66,7 +86,7 @@ pub async fn listRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
 /// Returns records matching a specific name (case-insensitive domain normalisation).
 pub async fn findByName(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
-        "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at \
+        "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
          FROM dns_records WHERE lower(name) = lower(?)",
     )
     .bind(name)
@@ -78,7 +98,7 @@ pub async fn findByName(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<Dns
 /// Returns a single record by its primary key.
 pub async fn getRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
-        "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at \
+        "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
          FROM dns_records WHERE id = ?",
     )
     .bind(id)
@@ -90,14 +110,15 @@ pub async fn getRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsR
 /// Inserts a new DNS record and returns the inserted row.
 pub async fn createRecord(pool: &SqlitePool, req: &CreateRecord) -> anyhow::Result<DnsRecord> {
     let id = sqlx::query(
-        "INSERT INTO dns_records (name, record_type, value, ttl, priority) \
-         VALUES (?, upper(?), ?, ?, ?)",
+        "INSERT INTO dns_records (name, record_type, value, ttl, priority, is_dev) \
+         VALUES (?, upper(?), ?, ?, ?, ?)",
     )
     .bind(&req.name)
     .bind(&req.record_type)
     .bind(&req.value)
     .bind(req.ttl as i64)
     .bind(req.priority.map(|p| p as i64))
+    .bind(req.is_dev as i64)
     .execute(pool)
     .await
     .context("Failed to insert DNS record")?
@@ -173,6 +194,94 @@ pub async fn seedAdmin(
     .await
     .context("Failed to seed admin user")?;
     Ok(())
+}
+
+// ── Zone Management ──────────────────────────────────────────────────────────
+
+/// A zone entry as stored in SQLite.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Zone {
+    pub id: i64,
+    pub name: String,
+    pub created_at: String,
+}
+
+/// Returns all configured authoritative zones ordered by name.
+pub async fn listZones(pool: &SqlitePool) -> anyhow::Result<Vec<Zone>> {
+    sqlx::query_as::<_, Zone>(
+        "SELECT id, name, created_at FROM zones ORDER BY name",
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to list zones")
+}
+
+/// Returns just the zone name strings from the DB (used to rebuild the trie).
+pub async fn listZoneNames(pool: &SqlitePool) -> anyhow::Result<Vec<String>> {
+    sqlx::query_scalar::<_, String>("SELECT name FROM zones ORDER BY name")
+        .fetch_all(pool)
+        .await
+        .context("Failed to list zone names")
+}
+
+/// Inserts zones from the config file that are not already present in the DB.
+/// Called once at startup; subsequent zone management is done via the API.
+pub async fn seedZones(pool: &SqlitePool, zones: &[String]) -> anyhow::Result<()> {
+    for zone in zones {
+        let normalized = zone.trim_end_matches('.').to_lowercase();
+        if normalized.is_empty() && zone != "." {
+            continue;
+        }
+        let canonical = if zone == "." { ".".to_string() } else { normalized };
+        sqlx::query(
+            "INSERT INTO zones (name) VALUES (?) ON CONFLICT(name) DO NOTHING",
+        )
+        .bind(&canonical)
+        .execute(pool)
+        .await
+        .context("Failed to seed zone")?;
+    }
+    Ok(())
+}
+
+/// Inserts a new zone. Returns the inserted row or an error on duplicate.
+pub async fn addZone(pool: &SqlitePool, name: &str) -> anyhow::Result<Zone> {
+    let id = sqlx::query("INSERT INTO zones (name) VALUES (?)")
+        .bind(name)
+        .execute(pool)
+        .await
+        .context("Failed to add zone")?
+        .last_insert_rowid();
+
+    sqlx::query_as::<_, Zone>("SELECT id, name, created_at FROM zones WHERE id = ?")
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .context("Zone not found after insert")
+}
+
+/// Deletes a zone by name. Returns `true` if a row was removed.
+pub async fn removeZone(pool: &SqlitePool, name: &str) -> anyhow::Result<bool> {
+    let rows = sqlx::query("DELETE FROM zones WHERE name = ?")
+        .bind(name)
+        .execute(pool)
+        .await
+        .context("Failed to remove zone")?
+        .rows_affected();
+    Ok(rows > 0)
+}
+
+// ── Dev Records ───────────────────────────────────────────────────────────────
+
+/// Deletes all records marked `is_dev = 1`. Called on startup before loading
+/// the record index so that ephemeral dev records do not persist across restarts.
+pub async fn deleteDevRecords(pool: &SqlitePool) -> anyhow::Result<u64> {
+    let rows = sqlx::query("DELETE FROM dns_records WHERE is_dev = 1")
+        .execute(pool)
+        .await
+        .context("Failed to delete dev records")?
+        .rows_affected();
+    Ok(rows)
 }
 // ── Cache Persistence ───────────────────────────────────────────────────────
 
