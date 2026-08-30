@@ -16,7 +16,7 @@ admin_username = "admin"
 admin_password = "CHANGE_ME"
 
 [resolver]
-mode = "forwarding"
+mode = "recursive"
 priority = "cloudflare_first"
 cloudflare_dns = "1.1.1.1:53"
 

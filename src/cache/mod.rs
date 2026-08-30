@@ -27,9 +27,8 @@ pub struct CacheEntry {
     pub expires_at: Instant,
 }
 
-#[allow(non_snake_case)]
 impl CacheEntry {
-    pub fn isExpired(&self) -> bool {
+    pub fn is_expired(&self) -> bool {
         Instant::now() >= self.expires_at
     }
 }
@@ -41,7 +40,6 @@ pub struct DnsCache {
     inner: HashMap<CacheKey, CacheEntry>,
 }
 
-#[allow(non_snake_case)]
 impl DnsCache {
     pub fn new() -> Self {
         Self {
@@ -54,21 +52,21 @@ impl DnsCache {
         let key = (name.to_lowercase(), rtype);
         self.inner
             .get(&key)
-            .filter(|e| !e.isExpired())
+            .filter(|e| !e.is_expired())
             .map(|e| (e.result, &e.records))
     }
 
     /// Inserts a positive cache entry with the given TTL.
     pub fn insert(&mut self, name: &str, rtype: RecordType, records: Vec<Record>, ttl: Duration) {
-        self.insertResult(name, rtype, CacheResult::Positive, records, ttl);
+        self.insert_result(name, rtype, CacheResult::Positive, records, ttl);
     }
 
     /// Inserts a negative cache entry with the given TTL.
-    pub fn insertNegative(&mut self, name: &str, rtype: RecordType, ttl: Duration) {
-        self.insertResult(name, rtype, CacheResult::Negative, Vec::new(), ttl);
+    pub fn insert_negative(&mut self, name: &str, rtype: RecordType, ttl: Duration) {
+        self.insert_result(name, rtype, CacheResult::Negative, Vec::new(), ttl);
     }
 
-    fn insertResult(
+    fn insert_result(
         &mut self,
         name: &str,
         rtype: RecordType,
@@ -103,7 +101,7 @@ impl DnsCache {
     }
 
     /// Removes all entries for a DNS name.
-    pub fn removeName(&mut self, name: &str) {
+    pub fn remove_name(&mut self, name: &str) {
         let name = name.to_lowercase();
         self.inner
             .retain(|(cached_name, _), _| cached_name != &name);
@@ -112,7 +110,7 @@ impl DnsCache {
     /// Removes all entries that have passed their expiry time.
     pub fn prune(&mut self) -> usize {
         let before = self.inner.len();
-        self.inner.retain(|_, entry| !entry.isExpired());
+        self.inner.retain(|_, entry| !entry.is_expired());
         before - self.inner.len()
     }
 
@@ -134,11 +132,11 @@ impl DnsCache {
     /// Returns a list of all non-expired cache entries for the UI.
     ///
     /// Returns: Vec<(Name, RecordType, TTL_Remaining_Secs, Values)>
-    pub fn listAll(&self) -> Vec<(String, RecordType, u32, Vec<String>)> {
+    pub fn list_all(&self) -> Vec<(String, RecordType, u32, Vec<String>)> {
         let now = Instant::now();
         self.inner
             .iter()
-            .filter(|(_, entry)| !entry.isExpired())
+            .filter(|(_, entry)| !entry.is_expired())
             .map(|(key, entry)| {
                 let ttl_remaining = entry
                     .expires_at
@@ -166,7 +164,6 @@ pub struct CacheStats {
     pub misses: AtomicU64,
 }
 
-#[allow(non_snake_case)]
 impl CacheStats {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
@@ -175,11 +172,11 @@ impl CacheStats {
         })
     }
 
-    pub fn recordHit(&self) {
+    pub fn record_hit(&self) {
         self.hits.fetch_add(1, Ordering::Relaxed);
     }
 
-    pub fn recordMiss(&self) {
+    pub fn record_miss(&self) {
         self.misses.fetch_add(1, Ordering::Relaxed);
     }
 
@@ -201,8 +198,7 @@ impl Default for CacheStats {
 }
 
 /// Spawns a background task that prunes expired cache entries every 60 seconds.
-#[allow(non_snake_case)]
-pub fn spawnPruner(
+pub fn spawn_pruner(
     cache: Arc<tokio::sync::RwLock<DnsCache>>,
     db: sqlx::SqlitePool,
     cancel: tokio_util::sync::CancellationToken,
@@ -213,7 +209,7 @@ pub fn spawnPruner(
                 _ = tokio::time::sleep(Duration::from_secs(60)) => {
                     let pruned_mem = cache.write().await.prune();
 
-                    let pruned_db = match crate::db::records::pruneCache(&db).await {
+                    let pruned_db = match crate::db::records::prune_cache(&db).await {
                         Ok(n) => n,
                         Err(e) => {
                             tracing::error!(error = %e, "Failed to prune DB cache");

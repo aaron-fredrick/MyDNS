@@ -1,8 +1,10 @@
+mod common;
+
 use hickory_proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
 use hickory_proto::rr::{Name, RecordType};
-use mydns::{config::AppConfig, db, dns, state::AppState};
 use mydns::dns::record_index::RecordIndex;
 use mydns::dns::zone_trie::ZoneTrie;
+use mydns::{config::AppConfig, db, dns, state::AppState};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -55,18 +57,24 @@ async fn start_mock_upstream() -> (SocketAddr, tokio::sync::mpsc::Receiver<Messa
     (addr, rx)
 }
 
-async fn start_dns_server(
-    upstream_addr: SocketAddr,
-) -> (
-    SocketAddr,
-    String,
-    CancellationToken,
-    tokio::task::JoinHandle<()>,
-) {
+struct TestUpstreamServerContext {
+    pub db: common::TestDb,
+    pub addr: SocketAddr,
+    pub cancel: CancellationToken,
+    pub task: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for TestUpstreamServerContext {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+    }
+}
+
+async fn start_dns_server(upstream_addr: SocketAddr) -> TestUpstreamServerContext {
     let _ = tracing_subscriber::fmt::try_init();
-    let test_id = mydns::config::generate_secret(8);
-    let db_path = format!("test_upstream_{}.db", test_id);
-    let port = rand::random::<u16>() % 10000 + 40000;
+    let db = common::TestDb::new();
+    let port = common::get_ephemeral_port().await;
+    let addr = SocketAddr::new("127.0.0.1".parse().unwrap(), port);
 
     let cfg = AppConfig {
         bind_host: "127.0.0.1".parse().unwrap(),
@@ -75,7 +83,7 @@ async fn start_dns_server(
         http_port: port + 1,
         cors_domains: vec!["mydns.local".to_string()],
         dashboard_domain: "mydns.local".to_string(),
-        db_path: db_path.clone(),
+        db_path: db.path_str(),
         jwt_secret: mydns::config::generate_secret(64),
         admin_username: "admin".to_string(),
         admin_password: "changeme123".to_string(),
@@ -89,20 +97,14 @@ async fn start_dns_server(
         root_hints: vec![],
     };
 
-    let _ = std::fs::remove_file(&db_path);
-    let _ = std::fs::remove_file(format!("{db_path}-shm"));
-    let _ = std::fs::remove_file(format!("{db_path}-wal"));
+    let pool = db.init_pool().await;
 
-    let pool = db::init(&cfg.db_path)
-        .await
-        .expect("Failed to init test DB");
-
-    let hash = mydns::web::auth::hashPassword(&cfg.admin_password).unwrap();
-    db::records::seedAdmin(&pool, &cfg.admin_username, &hash)
+    let hash = mydns::web::auth::hash_password(&cfg.admin_password).unwrap();
+    db::records::seed_admin(&pool, &cfg.admin_username, &hash)
         .await
         .unwrap();
 
-    let upstream = dns::upstream::UpstreamResolver::fromConfig(
+    let upstream = dns::upstream::UpstreamResolver::from_config(
         cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
@@ -117,7 +119,15 @@ async fn start_dns_server(
     let record_index = RecordIndex::load_from_db(&pool)
         .await
         .expect("Failed to load record index");
-    let state = AppState::new(pool, cfg, upstream, log_tx, cancel.clone(), record_index, zone_trie);
+    let state = AppState::new(
+        pool,
+        cfg,
+        upstream,
+        log_tx,
+        cancel.clone(),
+        record_index,
+        zone_trie,
+    );
     let server_state = Arc::clone(&state);
     let server_cancel = cancel.clone();
 
@@ -126,21 +136,18 @@ async fn start_dns_server(
     });
 
     for _ in 0..50 {
-        if tokio::net::TcpStream::connect(SocketAddr::new("127.0.0.1".parse().unwrap(), port))
-            .await
-            .is_ok()
-        {
+        if tokio::net::TcpStream::connect(addr).await.is_ok() {
             break;
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
-    (
-        SocketAddr::new("127.0.0.1".parse().unwrap(), port),
-        db_path,
+    TestUpstreamServerContext {
+        db,
+        addr,
         cancel,
         task,
-    )
+    }
 }
 
 fn query_message(name: &str, record_type: RecordType) -> Vec<u8> {
@@ -167,42 +174,30 @@ async fn udp_query(socket: &UdpSocket, addr: SocketAddr, name: &str) -> Message 
 #[tokio::test]
 async fn test_upstream_nxdomain() {
     let (mock_addr, _rx) = start_mock_upstream().await;
-    let (addr, db_path, cancel, task) = start_dns_server(mock_addr).await;
+    let ctx = start_dns_server(mock_addr).await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-    let res = udp_query(&socket, addr, "nxdomain.example.com.").await;
+    let res = udp_query(&socket, ctx.addr, "nxdomain.example.com.").await;
     assert_eq!(res.response_code, ResponseCode::NXDomain);
-
-    cancel.cancel();
-    let _ = task.await;
-    let _ = std::fs::remove_file(db_path);
 }
 
 #[tokio::test]
 async fn test_upstream_servfail() {
     let (mock_addr, _rx) = start_mock_upstream().await;
-    let (addr, db_path, cancel, task) = start_dns_server(mock_addr).await;
+    let ctx = start_dns_server(mock_addr).await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
-    let res = udp_query(&socket, addr, "servfail.example.com.").await;
+    let res = udp_query(&socket, ctx.addr, "servfail.example.com.").await;
     assert_eq!(res.response_code, ResponseCode::ServFail);
-
-    cancel.cancel();
-    let _ = task.await;
-    let _ = std::fs::remove_file(db_path);
 }
 
 #[tokio::test]
 async fn test_upstream_timeout() {
     let (mock_addr, _rx) = start_mock_upstream().await;
-    let (addr, db_path, cancel, task) = start_dns_server(mock_addr).await;
+    let ctx = start_dns_server(mock_addr).await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
 
     // The timeout one will cause the server to wait for upstream, time out, and return ServFail.
-    let res = udp_query(&socket, addr, "timeout.example.com.").await;
+    let res = udp_query(&socket, ctx.addr, "timeout.example.com.").await;
     assert_eq!(res.response_code, ResponseCode::ServFail);
-
-    cancel.cancel();
-    let _ = task.await;
-    let _ = std::fs::remove_file(db_path);
 }

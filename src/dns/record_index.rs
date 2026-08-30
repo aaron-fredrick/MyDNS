@@ -37,12 +37,15 @@ pub struct RecordIndex {
 impl RecordIndex {
     /// Loads all DNS records from the database and builds the index.
     pub async fn load_from_db(db: &SqlitePool) -> anyhow::Result<Self> {
-        let all_records = records::listRecords(db).await?;
+        let all_records = records::list_records(db).await?;
         let mut index = Self::default();
         for record in all_records {
             index.upsert(record);
         }
-        tracing::info!(entry_count = index.inner.len(), "Authoritative record index loaded");
+        tracing::info!(
+            entry_count = index.inner.len(),
+            "Authoritative record index loaded"
+        );
         Ok(index)
     }
 
@@ -52,7 +55,10 @@ impl RecordIndex {
     /// `(name, rtype)` key it is replaced. This handles in-place updates
     /// where neither name nor type change.
     pub fn upsert(&mut self, record: DnsRecord) {
-        let key = (record.name.to_lowercase(), record.record_type.to_uppercase());
+        let key = (
+            record.name.to_lowercase(),
+            record.record_type.to_uppercase(),
+        );
         let bucket = self.inner.entry(key).or_default();
         bucket.retain(|r| r.id != record.id);
         bucket.push(record);
@@ -223,7 +229,12 @@ mod tests {
     #[test]
     fn cname_chain_prepended_correctly() {
         let mut idx = RecordIndex::default();
-        idx.upsert(make_record(1, "alias.example.com", "CNAME", "target.example.com"));
+        idx.upsert(make_record(
+            1,
+            "alias.example.com",
+            "CNAME",
+            "target.example.com",
+        ));
         idx.upsert(make_record(2, "target.example.com", "A", "1.2.3.4"));
         match idx.resolve_authoritative("alias.example.com", "A") {
             IndexResolution::Found(r) => {
@@ -257,8 +268,18 @@ mod tests {
     #[test]
     fn cname_loop_returns_servfail() {
         let mut idx = RecordIndex::default();
-        idx.upsert(make_record(1, "loop-a.example.com", "CNAME", "loop-b.example.com"));
-        idx.upsert(make_record(2, "loop-b.example.com", "CNAME", "loop-a.example.com"));
+        idx.upsert(make_record(
+            1,
+            "loop-a.example.com",
+            "CNAME",
+            "loop-b.example.com",
+        ));
+        idx.upsert(make_record(
+            2,
+            "loop-b.example.com",
+            "CNAME",
+            "loop-a.example.com",
+        ));
         assert!(matches!(
             idx.resolve_authoritative("loop-a.example.com", "A"),
             IndexResolution::ServFail

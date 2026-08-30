@@ -22,7 +22,7 @@ logs/
 
 # Local configuration / secrets
 .env
-config.ini
+config.toml
 
 # Generated / temporary analysis output
 metadata.json

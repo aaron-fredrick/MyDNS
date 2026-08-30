@@ -7,9 +7,9 @@ use axum::{
 };
 
 use crate::db::records::{self, CreateRecord, UpdateRecord};
+use crate::error::ApiError;
 use crate::state::AppState;
 use crate::web::auth::JwtClaims;
-use crate::web::error::ApiError;
 use crate::web::validation;
 
 async fn cache_invalidation_names(
@@ -20,7 +20,7 @@ async fn cache_invalidation_names(
     for name in names {
         let normalized = name.trim_end_matches('.').to_lowercase();
         invalidation.insert(normalized.clone());
-        for dependent in records::findCnameDependents(pool, &normalized).await? {
+        for dependent in records::find_cname_dependents(pool, &normalized).await? {
             invalidation.insert(dependent);
         }
     }
@@ -30,8 +30,8 @@ async fn cache_invalidation_names(
 async fn invalidate_caches(state: &Arc<AppState>, names: &[String]) -> anyhow::Result<()> {
     let names = cache_invalidation_names(&state.db, names).await?;
     for name in &names {
-        records::deleteCacheForName(&state.db, name).await?;
-        state.cache.write().await.removeName(name);
+        records::delete_cache_for_name(&state.db, name).await?;
+        state.cache.write().await.remove_name(name);
     }
     Ok(())
 }
@@ -40,12 +40,11 @@ async fn invalidate_caches(state: &Arc<AppState>, names: &[String]) -> anyhow::R
 ///
 /// Returns all records including dev (ephemeral) records so the UI can
 /// distinguish and display them with an appropriate badge.
-#[allow(non_snake_case)]
-pub async fn listRecords(
+pub async fn list_records(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let rows = records::listAllRecords(&state.db).await?;
+    let rows = records::list_all_records(&state.db).await?;
     Ok(Json(serde_json::json!({ "records": rows })))
 }
 
@@ -55,8 +54,7 @@ pub async fn listRecords(
 /// authoritative zone in the DB. When `is_dev = true`, zone validation is
 /// skipped and the record is marked ephemeral — it will be purged on the next
 /// server restart.
-#[allow(non_snake_case)]
-pub async fn createRecord(
+pub async fn create_record(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Json(mut body): Json<CreateRecord>,
@@ -69,9 +67,9 @@ pub async fn createRecord(
     } else {
         // For authoritative records, validate against the live DB zones so
         // that zone changes made via the API are reflected immediately.
-        let zone_names = records::listZoneNames(&state.db)
+        let zone_names = records::list_zone_names(&state.db)
             .await
-            .map_err(|e| ApiError::Internal(e))?;
+            .map_err(ApiError::Internal)?;
         validation::validate_zone(&body.name, &zone_names)?;
     }
 
@@ -79,7 +77,7 @@ pub async fn createRecord(
     body.record_type = body.record_type.trim().to_ascii_uppercase();
     body.value = body.value.trim().to_string();
 
-    let row = records::createRecord(&state.db, &body).await?;
+    let row = records::create_record(&state.db, &body).await?;
     invalidate_caches(&state, std::slice::from_ref(&body.name)).await?;
     state.record_index.write().await.upsert(row.clone());
 
@@ -98,8 +96,7 @@ pub async fn createRecord(
 }
 
 /// `PUT /api/v1/records/:id`
-#[allow(non_snake_case)]
-pub async fn updateRecord(
+pub async fn update_record(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
@@ -109,15 +106,15 @@ pub async fn updateRecord(
 
     // If name is being changed, check it against allowed zones (unless the
     // existing record is a dev record — dev records may point at any domain).
-    let old = records::getRecord(&state.db, id)
+    let old = records::get_record(&state.db, id)
         .await?
         .ok_or_else(|| ApiError::NotFound("Record not found".into()))?;
 
     if let Some(ref new_name) = body.name {
         if !old.is_dev {
-            let zone_names = records::listZoneNames(&state.db)
+            let zone_names = records::list_zone_names(&state.db)
                 .await
-                .map_err(|e| ApiError::Internal(e))?;
+                .map_err(ApiError::Internal)?;
             validation::validate_zone(new_name, &zone_names)?;
         }
     }
@@ -164,7 +161,7 @@ pub async fn updateRecord(
         *value = new_value;
     }
 
-    let updated = records::updateRecord(&state.db, id, &body)
+    let updated = records::update_record(&state.db, id, &body)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
@@ -185,20 +182,19 @@ pub async fn updateRecord(
 }
 
 /// `DELETE /api/v1/records/:id`
-#[allow(non_snake_case)]
-pub async fn deleteRecord(
+pub async fn delete_record(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let row = records::getRecord(&state.db, id)
+    let row = records::get_record(&state.db, id)
         .await?
         .ok_or_else(|| ApiError::NotFound(format!("Record {} not found", id)))?;
 
     let invalidation_names =
         cache_invalidation_names(&state.db, std::slice::from_ref(&row.name)).await?;
 
-    let deleted = records::deleteRecord(&state.db, id).await?;
+    let deleted = records::delete_record(&state.db, id).await?;
     if !deleted {
         return Err(ApiError::NotFound(format!("Record {} not found", id)));
     }

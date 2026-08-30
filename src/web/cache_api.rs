@@ -7,9 +7,9 @@ use hickory_proto::rr::RecordType;
 use serde::Serialize;
 use std::sync::Arc;
 
+use crate::error::ApiError;
 use crate::state::AppState;
 use crate::web::auth::JwtClaims;
-use crate::web::error::ApiError;
 
 #[derive(Serialize)]
 pub struct CacheEntryInfo {
@@ -20,8 +20,7 @@ pub struct CacheEntryInfo {
 }
 
 /// `GET /api/v1/cache`
-#[allow(non_snake_case)]
-pub async fn listCache(
+pub async fn list_cache(
     State(state): State<Arc<AppState>>,
     _claims: JwtClaims,
 ) -> Result<Json<Vec<CacheEntryInfo>>, ApiError> {
@@ -32,7 +31,7 @@ pub async fn listCache(
     // 1. Get memory entries
     {
         let cache = state.cache.read().await;
-        for (name, rtype, ttl, values) in cache.listAll() {
+        for (name, rtype, ttl, values) in cache.list_all() {
             map.insert(
                 (name.clone(), rtype.to_string()),
                 CacheEntryInfo {
@@ -46,7 +45,7 @@ pub async fn listCache(
     }
 
     // 2. Get DB entries
-    if let Ok(db_entries) = crate::db::records::listCacheEntries(&state.db).await {
+    if let Ok(db_entries) = crate::db::records::list_cache_entries(&state.db).await {
         let now = chrono::Utc::now().timestamp();
         for row in db_entries {
             let key = (row.name.clone(), row.record_type.clone());
@@ -76,8 +75,7 @@ pub async fn listCache(
 }
 
 /// `DELETE /api/v1/cache`
-#[allow(non_snake_case)]
-pub async fn clearCache(
+pub async fn clear_cache(
     State(state): State<Arc<AppState>>,
     _claims: JwtClaims,
 ) -> Result<StatusCode, ApiError> {
@@ -85,7 +83,7 @@ pub async fn clearCache(
     state.cache.write().await.clear();
 
     // Clear DB
-    let _ = crate::db::records::clearCache(&state.db).await;
+    let _ = crate::db::records::clear_cache(&state.db).await;
 
     let _ = state.log_tx.send("[CRUD] Cache cleared".to_string());
     tracing::info!("DNS cache cleared by admin");
@@ -94,8 +92,7 @@ pub async fn clearCache(
 }
 
 /// `DELETE /api/v1/cache/:name/:type`
-#[allow(non_snake_case)]
-pub async fn deleteCacheEntry(
+pub async fn delete_cache_entry(
     State(state): State<Arc<AppState>>,
     _claims: JwtClaims,
     Path((name, rtype_str)): Path<(String, String)>,
@@ -108,7 +105,7 @@ pub async fn deleteCacheEntry(
     state.cache.write().await.remove(&name, rtype);
 
     // Delete from DB
-    let _ = crate::db::records::deleteCacheEntry(&state.db, &name, &rtype_str).await;
+    let _ = crate::db::records::delete_cache_entry(&state.db, &name, &rtype_str).await;
 
     let _ = state
         .log_tx

@@ -223,11 +223,15 @@ impl AppConfig {
         let admin_username = auth
             .admin_username
             .filter(|s| !s.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("Missing required config.toml field: [auth].admin_username"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("Missing required config.toml field: [auth].admin_username")
+            })?;
         let admin_password = auth
             .admin_password
             .filter(|s| !s.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("Missing required config.toml field: [auth].admin_password"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("Missing required config.toml field: [auth].admin_password")
+            })?;
 
         let server = parsed.server.unwrap_or_default();
         let database = parsed.database.unwrap_or_default();
@@ -400,10 +404,7 @@ fn required(
 ) -> anyhow::Result<String> {
     match values.get(key).map(|v| v.trim()).filter(|v| !v.is_empty()) {
         Some(value) => Ok(value.to_string()),
-        None => Err(anyhow::anyhow!(
-            "Missing required config value: {}",
-            key
-        )),
+        None => Err(anyhow::anyhow!("Missing required config value: {}", key)),
     }
 }
 
@@ -484,7 +485,10 @@ cors_domains = ["dashboard.local", "app.local"]
         assert_eq!(cfg.cloudflare_dns, "1.0.0.1:53".parse().unwrap());
         assert_eq!(cfg.router_dns, Some("192.168.1.1:53".parse().unwrap()));
         assert_eq!(cfg.root_hints.len(), 2);
-        assert_eq!(cfg.root_hints[0], "198.41.0.4:53".parse::<SocketAddr>().unwrap());
+        assert_eq!(
+            cfg.root_hints[0],
+            "198.41.0.4:53".parse::<SocketAddr>().unwrap()
+        );
         assert_eq!(cfg.allowed_zones, vec!["home.local", "lab.local"]);
         assert_eq!(cfg.dashboard_domain, "dashboard.local");
         assert_eq!(cfg.cors_domains, vec!["dashboard.local", "app.local"]);
@@ -517,9 +521,7 @@ admin_password = "password"
         // All should use port 53.
         assert!(hints.iter().all(|a| a.port() == 53));
         // The well-known A root server IP.
-        assert!(hints
-            .iter()
-            .any(|a| a.ip().to_string() == "198.41.0.4"));
+        assert!(hints.iter().any(|a| a.ip().to_string() == "198.41.0.4"));
     }
 
     #[test]

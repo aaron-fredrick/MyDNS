@@ -3,8 +3,8 @@ use std::sync::Arc;
 use axum::{extract::State, Json};
 use serde_json::json;
 
+use crate::error::ApiError;
 use crate::state::AppState;
-use crate::web::error::ApiError;
 
 /// `GET /api/v1/stats`
 ///

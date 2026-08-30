@@ -6,17 +6,16 @@
 //! - [`drop_privileges`] – called on Unix after the socket is bound.
 
 // `drop_privileges` and `drop_privileges_impl` are compiled out on Windows
-// (they are called only inside a `#[cfg(unix)]` block in main.rs).
+// (they are called only inside a `#[cfg(unix)]` block in main.rs).\
 #[allow(dead_code)]
-#[allow(non_snake_case)]
-pub fn checkAndExitIfInsufficient(dns_port: u16, http_port: u16) {
-    if (dns_port < 1024 || http_port < 1024) && !isRunningElevated() {
+pub fn check_and_exit_if_insufficient(dns_port: u16, http_port: u16) {
+    if (dns_port < 1024 || http_port < 1024) && !is_running_elevated() {
         eprintln!(
             "[CRITICAL] MyDNS requires elevated privileges to bind to privileged ports (DNS: {}, HTTP: {}).\n\
              {}",
             dns_port,
             http_port,
-            elevationHint()
+            elevation_hint()
         );
         std::process::exit(1);
     }
@@ -27,16 +26,14 @@ pub fn checkAndExitIfInsufficient(dns_port: u16, http_port: u16) {
 /// On Unix this is required for a production deployment when running as root:
 /// failure to drop privileges is returned to the caller so startup fails closed.
 #[allow(dead_code)]
-#[allow(non_snake_case)]
-pub fn dropPrivileges(user: &str, group: &str) -> anyhow::Result<()> {
-    dropPrivilegesImpl(user, group)
+pub fn drop_privileges(user: &str, group: &str) -> anyhow::Result<()> {
+    drop_privileges_impl(user, group)
 }
 
 // ── platform implementations ──────────────────────────────────────────────────
 
-#[allow(non_snake_case)]
 #[cfg(windows)]
-fn isRunningElevated() -> bool {
+fn is_running_elevated() -> bool {
     use std::ptr;
     use winapi::um::{
         processthreadsapi::{GetCurrentProcess, OpenProcessToken},
@@ -62,28 +59,24 @@ fn isRunningElevated() -> bool {
     }
 }
 
-#[allow(non_snake_case)]
 #[cfg(unix)]
-fn isRunningElevated() -> bool {
+fn is_running_elevated() -> bool {
     nix::unistd::getuid().is_root()
 }
 
-#[allow(non_snake_case)]
 #[cfg(not(any(windows, unix)))]
-fn isRunningElevated() -> bool {
+fn is_running_elevated() -> bool {
     // Conservative fallback: assume no privileges and let bind fail loudly.
     false
 }
 
-#[allow(non_snake_case)]
 #[cfg(windows)]
-fn elevationHint() -> &'static str {
+fn elevation_hint() -> &'static str {
     "  → Right-click the terminal and choose 'Run as Administrator', then retry."
 }
 
-#[allow(non_snake_case)]
 #[cfg(unix)]
-fn elevationHint() -> &'static str {
+fn elevation_hint() -> &'static str {
     "  → Re-run with: sudo ./mydns\n\
      \n\
      Alternatively, grant the binary CAP_NET_BIND_SERVICE:\n\
@@ -91,17 +84,15 @@ fn elevationHint() -> &'static str {
        sudo setcap cap_net_bind_service=ep ./target/release/mydns"
 }
 
-#[allow(non_snake_case)]
 #[cfg(not(any(windows, unix)))]
-fn elevationHint() -> &'static str {
+fn elevation_hint() -> &'static str {
     "  → Run with sufficient OS privileges to bind port 53."
 }
 
 // ── privilege dropping ────────────────────────────────────────────────────────
 
-#[allow(non_snake_case)]
 #[cfg(unix)]
-fn dropPrivilegesImpl(user_name: &str, group_name: &str) -> anyhow::Result<()> {
+fn drop_privileges_impl(user_name: &str, group_name: &str) -> anyhow::Result<()> {
     use nix::unistd::{setgroups, setresgid, setresuid, Group, User};
 
     let group = Group::from_name(group_name)
@@ -128,10 +119,9 @@ fn dropPrivilegesImpl(user_name: &str, group_name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(non_snake_case)]
 #[cfg(not(unix))]
 #[allow(dead_code)]
-fn dropPrivilegesImpl(_user: &str, _group: &str) -> anyhow::Result<()> {
+fn drop_privileges_impl(_user: &str, _group: &str) -> anyhow::Result<()> {
     tracing::warn!("Privilege dropping is not supported on this platform");
     Ok(())
 }

@@ -8,9 +8,9 @@ use serde::Deserialize;
 
 use crate::db::records;
 use crate::dns::zone_trie::ZoneTrie;
+use crate::error::ApiError;
 use crate::state::AppState;
 use crate::web::auth::JwtClaims;
-use crate::web::error::ApiError;
 
 #[derive(Deserialize)]
 pub struct AddZoneRequest {
@@ -18,9 +18,10 @@ pub struct AddZoneRequest {
 }
 
 fn validate_zone_name(name: &str) -> Result<String, ApiError> {
-    // The root zone "." is the only single-character zone allowed.
     if name == "." {
-        return Ok(".".to_string());
+        return Err(ApiError::BadRequest(
+            "The root zone '.' is not allowed".into(),
+        ));
     }
     let normalized = name.trim_end_matches('.').to_lowercase();
     if normalized.is_empty() {
@@ -44,7 +45,10 @@ fn validate_zone_name(name: &str) -> Result<String, ApiError> {
                 "DNS labels must not start or end with '-'".into(),
             ));
         }
-        if !label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+        if !label
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        {
             return Err(ApiError::BadRequest(
                 "DNS labels may only contain letters, digits, and hyphens".into(),
             ));
@@ -57,9 +61,9 @@ fn validate_zone_name(name: &str) -> Result<String, ApiError> {
 /// into `AppState`. Called after every add/remove so DNS behaviour is
 /// immediately updated without a restart.
 async fn reload_trie(state: &Arc<AppState>) -> Result<(), ApiError> {
-    let zone_names = records::listZoneNames(&state.db)
+    let zone_names = records::list_zone_names(&state.db)
         .await
-        .map_err(|e| ApiError::Internal(e))?;
+        .map_err(ApiError::Internal)?;
     let new_trie = ZoneTrie::from_zones(&zone_names);
     *state.zone_trie.write().await = new_trie;
     tracing::info!(zones = ?zone_names, "Zone trie reloaded");
@@ -67,18 +71,16 @@ async fn reload_trie(state: &Arc<AppState>) -> Result<(), ApiError> {
 }
 
 /// `GET /api/v1/zones`
-#[allow(non_snake_case)]
-pub async fn listZones(
+pub async fn list_zones(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let zones = records::listZones(&state.db).await?;
+    let zones = records::list_zones(&state.db).await?;
     Ok(Json(serde_json::json!({ "zones": zones })))
 }
 
 /// `POST /api/v1/zones`
-#[allow(non_snake_case)]
-pub async fn addZone(
+pub async fn add_zone(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Json(body): Json<AddZoneRequest>,
@@ -86,7 +88,7 @@ pub async fn addZone(
     let canonical = validate_zone_name(&body.name)?;
 
     // Attempt insert; if it fails with a unique constraint the zone already exists.
-    let zone = records::addZone(&state.db, &canonical)
+    let zone = records::add_zone(&state.db, &canonical)
         .await
         .map_err(|e| {
             let msg = e.to_string();
@@ -100,25 +102,22 @@ pub async fn addZone(
     reload_trie(&state).await?;
 
     tracing::info!(zone = %canonical, "Authoritative zone added");
-    let _ = state
-        .log_tx
-        .send(format!("[ZONES] ADD zone={}", canonical));
+    let _ = state.log_tx.send(format!("[ZONES] ADD zone={}", canonical));
 
     Ok(Json(serde_json::json!({ "zone": zone })))
 }
 
 /// `DELETE /api/v1/zones/:name`
-#[allow(non_snake_case)]
-pub async fn removeZone(
+pub async fn remove_zone(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let canonical = validate_zone_name(&name)?;
 
-    let removed = records::removeZone(&state.db, &canonical)
+    let removed = records::remove_zone(&state.db, &canonical)
         .await
-        .map_err(|e| ApiError::Internal(e))?;
+        .map_err(ApiError::Internal)?;
 
     if !removed {
         return Err(ApiError::NotFound(format!(

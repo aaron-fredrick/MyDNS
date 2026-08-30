@@ -56,7 +56,9 @@ impl RequestHandler for DnsHandler {
 
         let recursion_desired = request.metadata.recursion_desired;
         tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, recursion_desired, "DNS query received");
-        let result = self.processResolution(&name, rtype, src, recursion_desired).await;
+        let result = self
+            .processResolution(&name, rtype, src, recursion_desired)
+            .await;
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut metadata = Metadata::response_from_request(&request.metadata);
         metadata.recursion_available = true;
@@ -194,7 +196,7 @@ impl DnsHandler {
     ) -> Option<ResolutionResult> {
         let cache = self.state.cache.read().await;
         if let Some((result, records)) = cache.get(name, rtype) {
-            self.state.cache_stats.recordHit();
+            self.state.cache_stats.record_hit();
             return Some(match result {
                 CacheResult::Positive => {
                     self.logResolution(src, name, rtype, records, "memory");
@@ -206,7 +208,7 @@ impl DnsHandler {
                 }
             });
         }
-        self.state.cache_stats.recordMiss();
+        self.state.cache_stats.record_miss();
         None
     }
 
@@ -231,7 +233,7 @@ impl DnsHandler {
         }
 
         let rows =
-            match crate::db::records::getCache(&self.state.db, name, &rtype.to_string()).await {
+            match crate::db::records::get_cache(&self.state.db, name, &rtype.to_string()).await {
                 Ok(r) => r,
                 Err(e) => {
                     tracing::error!(error = %e, name = %name, "Failed to query persistent cache");
@@ -260,7 +262,7 @@ impl DnsHandler {
 
         if rtype != RecordType::CNAME {
             if let Ok(cname_rows) =
-                crate::db::records::getCache(&self.state.db, name, "CNAME").await
+                crate::db::records::get_cache(&self.state.db, name, "CNAME").await
             {
                 if !cname_rows.is_empty() {
                     let target = cname_rows[0].value.trim_end_matches('.').to_string();
@@ -315,7 +317,8 @@ impl DnsHandler {
                 }
                 let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
                 self.logResolution(src, name, rtype, &records, "INDEX");
-                self.saveToMemoryCache(name, rtype, records.clone(), ttl).await;
+                self.saveToMemoryCache(name, rtype, records.clone(), ttl)
+                    .await;
                 Some(ResolutionResult::Positive(records, true))
             }
             IndexResolution::Nodata => Some(ResolutionResult::Nodata(true)),
@@ -323,7 +326,6 @@ impl DnsHandler {
             IndexResolution::ServFail => Some(ResolutionResult::ServFail),
         }
     }
-
 
     async fn querySpecialRecords(
         &self,
@@ -439,7 +441,7 @@ impl DnsHandler {
                 RData::MX(mx) => Some(mx.preference as i64),
                 _ => None,
             };
-            let _ = crate::db::records::insertCache(
+            let _ = crate::db::records::insert_cache(
                 &self.state.db,
                 &owner,
                 &rtype.to_string(),
@@ -519,7 +521,7 @@ impl DnsHandler {
     }
 
     async fn saveNegativeCache(&self, name: &str, rtype: RecordType, ttl: u32) {
-        let _ = crate::db::records::insertCache(
+        let _ = crate::db::records::insert_cache(
             &self.state.db,
             name,
             &rtype.to_string(),
@@ -562,7 +564,10 @@ pub fn build_record(
             } else {
                 format!("{}.", value)
             };
-            RData::MX(MX::new(priority.unwrap_or(10) as u16, target_str.parse().ok()?))
+            RData::MX(MX::new(
+                priority.unwrap_or(10) as u16,
+                target_str.parse().ok()?,
+            ))
         }
         RecordType::NS => {
             let target_str = if value.ends_with('.') {

@@ -3,7 +3,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use hickory_proto::rr::Name;
 
 use crate::db::records::{CreateRecord, UpdateRecord};
-use crate::web::error::ApiError;
+use crate::error::ApiError;
 
 pub const MIN_TTL: u32 = 1;
 pub const MAX_TTL: u32 = 86_400;
@@ -40,7 +40,6 @@ pub fn validate_zone(name: &str, allowed_zones: &[String]) -> Result<(), ApiErro
         )))
     }
 }
-
 
 pub fn validate_create_record(req: &CreateRecord) -> Result<(), ApiError> {
     validate_record(

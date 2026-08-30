@@ -49,43 +49,43 @@ async fn main() -> anyhow::Result<()> {
 
     let pool = db::init(&cfg.db_path).await?;
 
-    if let Some(prio) = db::getSetting(&pool, "resolver_priority").await? {
-        if let Ok(p) = prio.parse() {
+    if let Some(prio) = db::get_setting(&pool, "resolver_priority").await? {
+        if let Ok(p) = prio.parse::<config::ResolverPriority>() {
             cfg.resolver_priority = p;
         }
     }
-    if let Some(cf) = db::getSetting(&pool, "cloudflare_dns").await? {
-        if let Ok(a) = cf.parse() {
+    if let Some(cf) = db::get_setting(&pool, "cloudflare_dns").await? {
+        if let Ok(a) = cf.parse::<std::net::SocketAddr>() {
             cfg.cloudflare_dns = a;
         }
     }
-    if let Some(rt) = db::getSetting(&pool, "router_dns").await? {
-        cfg.router_dns = rt.parse().ok();
+    if let Some(rt) = db::get_setting(&pool, "router_dns").await? {
+        cfg.router_dns = rt.parse::<std::net::SocketAddr>().ok();
     }
 
     if cfg.jwt_secret.is_empty() {
-        if let Some(saved_secret) = db::getSetting(&pool, "jwt_secret").await? {
+        if let Some(saved_secret) = db::get_setting(&pool, "jwt_secret").await? {
             cfg.jwt_secret = saved_secret;
         } else {
             cfg.jwt_secret = config::generate_secret(64);
-            db::setSetting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
+            db::set_setting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
             tracing::info!("Generated and persisted new JWT secret");
         }
     }
 
-    privileges::checkAndExitIfInsufficient(cfg.dns_port, cfg.http_port);
+    privileges::check_and_exit_if_insufficient(cfg.dns_port, cfg.http_port);
 
-    if db::records::findUserHash(&pool, &cfg.admin_username)
+    if db::records::find_user_hash(&pool, &cfg.admin_username)
         .await?
         .is_none()
     {
-        let hash = web::auth::hashPassword(&cfg.admin_password)?;
-        db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await?;
+        let hash = web::auth::hash_password(&cfg.admin_password)?;
+        db::records::seed_admin(&pool, &cfg.admin_username, &hash).await?;
         tracing::info!(username = %cfg.admin_username, "Admin user seeded");
     }
     cfg.admin_password.clear();
 
-    let upstream = UpstreamResolver::fromConfig(
+    let upstream = UpstreamResolver::from_config(
         cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
@@ -95,23 +95,31 @@ async fn main() -> anyhow::Result<()> {
 
     // Purge ephemeral dev records before building the index so they never
     // survive a restart. This must happen before RecordIndex::load_from_db.
-    let purged = db::records::deleteDevRecords(&pool).await?;
+    let purged = db::records::delete_dev_records(&pool).await?;
     if purged > 0 {
         tracing::info!(count = purged, "Purged ephemeral dev records on startup");
     }
 
     // Seed DB zones from config (idempotent — skips duplicates).
-    db::records::seedZones(&pool, &cfg.allowed_zones).await?;
+    db::records::seed_zones(&pool, &cfg.allowed_zones).await?;
 
     // Build the live trie from DB so zone changes made via the API persist
     // across restarts without requiring a config file edit.
-    let zone_names = db::records::listZoneNames(&pool).await?;
+    let zone_names = db::records::list_zone_names(&pool).await?;
     tracing::info!(zones = ?zone_names, "Authoritative zones loaded from DB");
     let zone_trie = ZoneTrie::from_zones(&zone_names);
     let record_index = RecordIndex::load_from_db(&pool).await?;
 
     let cancel = CancellationToken::new();
-    let state = state::AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone(), record_index, zone_trie);
+    let state = state::AppState::new(
+        pool.clone(),
+        cfg,
+        upstream,
+        log_tx,
+        cancel.clone(),
+        record_index,
+        zone_trie,
+    );
 
     // Attach the shared collector after AppState owns the resolver. This keeps
     // upstream telemetry in the resolver implementation without coupling it to HTTP.
@@ -120,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         state.upstream.write().await.attach_metrics(metrics);
     }
 
-    cache::spawnPruner(Arc::clone(&state.cache), pool.clone(), cancel.clone());
+    cache::spawn_pruner(Arc::clone(&state.cache), pool.clone(), cancel.clone());
 
     {
         let signal_cancel = cancel.clone();

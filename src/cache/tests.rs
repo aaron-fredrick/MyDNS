@@ -21,7 +21,7 @@ fn insert_and_hit() {
 #[test]
 fn negative_entry_is_distinguishable_from_empty_positive_response() {
     let mut cache = DnsCache::new();
-    cache.insertNegative("missing.example.", RecordType::A, Duration::from_secs(60));
+    cache.insert_negative("missing.example.", RecordType::A, Duration::from_secs(60));
 
     let (result, records) = cache
         .get("missing.example.", RecordType::A)
@@ -96,7 +96,7 @@ fn list_all_returns_correct_data() {
         vec![],
         Duration::from_secs(300),
     );
-    let all = cache.listAll();
+    let all = cache.list_all();
     assert_eq!(all.len(), 1);
     assert_eq!(all[0].0, "list.test.");
 }

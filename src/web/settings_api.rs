@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::config::{self, ResolverMode, ResolverPriority};
 use crate::db;
 use crate::dns::upstream::UpstreamResolver;
+use crate::error::ApiError;
 use crate::state::AppState;
 use crate::web::auth::JwtClaims;
-use crate::web::error::ApiError;
 
 #[derive(Serialize)]
 pub struct SettingsResponse {
@@ -28,14 +28,16 @@ pub struct UpdateSettings {
 }
 
 /// `GET /api/v1/settings`
-#[allow(non_snake_case)]
-pub async fn getSettings(
+pub async fn get_settings(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<SettingsResponse>, ApiError> {
     let cfg = state.config.read().await;
     let root_hints = if cfg.root_hints.is_empty() {
-        config::default_root_hints().into_iter().map(|a| a.to_string()).collect()
+        config::default_root_hints()
+            .into_iter()
+            .map(|a| a.to_string())
+            .collect()
     } else {
         cfg.root_hints.iter().map(|a| a.to_string()).collect()
     };
@@ -53,8 +55,7 @@ pub async fn getSettings(
 ///
 /// Applies changes immediately to the live [`AppState`] and persists them to
 /// the `settings` DB table so they survive a restart.
-#[allow(non_snake_case)]
-pub async fn updateSettings(
+pub async fn update_settings(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
     Json(body): Json<UpdateSettings>,
@@ -65,21 +66,21 @@ pub async fn updateSettings(
         cfg.resolver_mode = mode_str
             .parse::<ResolverMode>()
             .map_err(|e| ApiError::BadRequest(e.to_string()))?;
-        db::setSetting(&state.db, "resolver_mode", mode_str).await?;
+        db::set_setting(&state.db, "resolver_mode", mode_str).await?;
     }
 
     if let Some(ref prio_str) = body.resolver_priority {
         cfg.resolver_priority = prio_str
             .parse::<ResolverPriority>()
             .map_err(|e| ApiError::BadRequest(e.to_string()))?;
-        db::setSetting(&state.db, "resolver_priority", prio_str).await?;
+        db::set_setting(&state.db, "resolver_priority", prio_str).await?;
     }
 
     if let Some(ref addr_str) = body.cloudflare_dns {
         cfg.cloudflare_dns = addr_str
             .parse()
             .map_err(|_| ApiError::BadRequest("Invalid cloudflare_dns address".into()))?;
-        db::setSetting(&state.db, "cloudflare_dns", addr_str).await?;
+        db::set_setting(&state.db, "cloudflare_dns", addr_str).await?;
     }
 
     if let Some(ref addr_str) = body.router_dns {
@@ -87,11 +88,11 @@ pub async fn updateSettings(
             .parse()
             .map_err(|_| ApiError::BadRequest("Invalid router_dns address".into()))?;
         cfg.router_dns = Some(addr);
-        db::setSetting(&state.db, "router_dns", addr_str).await?;
+        db::set_setting(&state.db, "router_dns", addr_str).await?;
     }
 
     // Rebuild the upstream resolver chain with the updated config.
-    let new_upstream = UpstreamResolver::fromConfig(
+    let new_upstream = UpstreamResolver::from_config(
         cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
@@ -109,7 +110,10 @@ pub async fn updateSettings(
     // Re-read to build response.
     let cfg = state.config.read().await;
     let root_hints = if cfg.root_hints.is_empty() {
-        config::default_root_hints().into_iter().map(|a| a.to_string()).collect()
+        config::default_root_hints()
+            .into_iter()
+            .map(|a| a.to_string())
+            .collect()
     } else {
         cfg.root_hints.iter().map(|a| a.to_string()).collect()
     };

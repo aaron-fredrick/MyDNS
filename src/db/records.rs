@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use anyhow::Context;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -61,7 +59,7 @@ pub struct UpdateRecord {
 
 /// Returns all authoritative (non-dev) DNS records ordered by name.
 /// Used to build the in-memory record index at startup.
-pub async fn listRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
+pub async fn list_records(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
          FROM dns_records WHERE is_dev = 0 ORDER BY name",
@@ -73,7 +71,7 @@ pub async fn listRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
 
 /// Returns all DNS records including dev records, ordered by name.
 /// Used by the management API so the UI can display dev records.
-pub async fn listAllRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
+pub async fn list_all_records(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
          FROM dns_records ORDER BY name",
@@ -84,7 +82,7 @@ pub async fn listAllRecords(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord>>
 }
 
 /// Returns records matching a specific name (case-insensitive domain normalisation).
-pub async fn findByName(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
+pub async fn find_by_name(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
          FROM dns_records WHERE lower(name) = lower(?)",
@@ -96,7 +94,7 @@ pub async fn findByName(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<Dns
 }
 
 /// Returns a single record by its primary key.
-pub async fn getRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsRecord>> {
+pub async fn get_record(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
          FROM dns_records WHERE id = ?",
@@ -108,7 +106,7 @@ pub async fn getRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<Option<DnsR
 }
 
 /// Inserts a new DNS record and returns the inserted row.
-pub async fn createRecord(pool: &SqlitePool, req: &CreateRecord) -> anyhow::Result<DnsRecord> {
+pub async fn create_record(pool: &SqlitePool, req: &CreateRecord) -> anyhow::Result<DnsRecord> {
     let id = sqlx::query(
         "INSERT INTO dns_records (name, record_type, value, ttl, priority, is_dev) \
          VALUES (?, upper(?), ?, ?, ?, ?)",
@@ -124,13 +122,13 @@ pub async fn createRecord(pool: &SqlitePool, req: &CreateRecord) -> anyhow::Resu
     .context("Failed to insert DNS record")?
     .last_insert_rowid();
 
-    getRecord(pool, id)
+    get_record(pool, id)
         .await?
         .context("Inserted record not found after insert")
 }
 
 /// Updates a record in-place. Only non-`None` fields are changed.
-pub async fn updateRecord(
+pub async fn update_record(
     pool: &SqlitePool,
     id: i64,
     req: &UpdateRecord,
@@ -155,11 +153,11 @@ pub async fn updateRecord(
     .await
     .context("Failed to update DNS record")?;
 
-    getRecord(pool, id).await
+    get_record(pool, id).await
 }
 
 /// Deletes a record by ID. Returns `true` if a row was removed.
-pub async fn deleteRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
+pub async fn delete_record(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
     let rows = sqlx::query("DELETE FROM dns_records WHERE id = ?")
         .bind(id)
         .execute(pool)
@@ -170,7 +168,7 @@ pub async fn deleteRecord(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
 }
 
 /// Looks up a user's hashed password by username.
-pub async fn findUserHash(pool: &SqlitePool, username: &str) -> anyhow::Result<Option<String>> {
+pub async fn find_user_hash(pool: &SqlitePool, username: &str) -> anyhow::Result<Option<String>> {
     sqlx::query_scalar::<_, String>("SELECT password_hash FROM users WHERE username = ?")
         .bind(username)
         .fetch_optional(pool)
@@ -179,7 +177,7 @@ pub async fn findUserHash(pool: &SqlitePool, username: &str) -> anyhow::Result<O
 }
 
 /// Inserts the admin user if not already present.
-pub async fn seedAdmin(
+pub async fn seed_admin(
     pool: &SqlitePool,
     username: &str,
     password_hash: &str,
@@ -207,17 +205,15 @@ pub struct Zone {
 }
 
 /// Returns all configured authoritative zones ordered by name.
-pub async fn listZones(pool: &SqlitePool) -> anyhow::Result<Vec<Zone>> {
-    sqlx::query_as::<_, Zone>(
-        "SELECT id, name, created_at FROM zones ORDER BY name",
-    )
-    .fetch_all(pool)
-    .await
-    .context("Failed to list zones")
+pub async fn list_zones(pool: &SqlitePool) -> anyhow::Result<Vec<Zone>> {
+    sqlx::query_as::<_, Zone>("SELECT id, name, created_at FROM zones ORDER BY name")
+        .fetch_all(pool)
+        .await
+        .context("Failed to list zones")
 }
 
 /// Returns just the zone name strings from the DB (used to rebuild the trie).
-pub async fn listZoneNames(pool: &SqlitePool) -> anyhow::Result<Vec<String>> {
+pub async fn list_zone_names(pool: &SqlitePool) -> anyhow::Result<Vec<String>> {
     sqlx::query_scalar::<_, String>("SELECT name FROM zones ORDER BY name")
         .fetch_all(pool)
         .await
@@ -226,26 +222,28 @@ pub async fn listZoneNames(pool: &SqlitePool) -> anyhow::Result<Vec<String>> {
 
 /// Inserts zones from the config file that are not already present in the DB.
 /// Called once at startup; subsequent zone management is done via the API.
-pub async fn seedZones(pool: &SqlitePool, zones: &[String]) -> anyhow::Result<()> {
+pub async fn seed_zones(pool: &SqlitePool, zones: &[String]) -> anyhow::Result<()> {
     for zone in zones {
         let normalized = zone.trim_end_matches('.').to_lowercase();
         if normalized.is_empty() && zone != "." {
             continue;
         }
-        let canonical = if zone == "." { ".".to_string() } else { normalized };
-        sqlx::query(
-            "INSERT INTO zones (name) VALUES (?) ON CONFLICT(name) DO NOTHING",
-        )
-        .bind(&canonical)
-        .execute(pool)
-        .await
-        .context("Failed to seed zone")?;
+        let canonical = if zone == "." {
+            ".".to_string()
+        } else {
+            normalized
+        };
+        sqlx::query("INSERT INTO zones (name) VALUES (?) ON CONFLICT(name) DO NOTHING")
+            .bind(&canonical)
+            .execute(pool)
+            .await
+            .context("Failed to seed zone")?;
     }
     Ok(())
 }
 
 /// Inserts a new zone. Returns the inserted row or an error on duplicate.
-pub async fn addZone(pool: &SqlitePool, name: &str) -> anyhow::Result<Zone> {
+pub async fn add_zone(pool: &SqlitePool, name: &str) -> anyhow::Result<Zone> {
     let id = sqlx::query("INSERT INTO zones (name) VALUES (?)")
         .bind(name)
         .execute(pool)
@@ -261,7 +259,7 @@ pub async fn addZone(pool: &SqlitePool, name: &str) -> anyhow::Result<Zone> {
 }
 
 /// Deletes a zone by name. Returns `true` if a row was removed.
-pub async fn removeZone(pool: &SqlitePool, name: &str) -> anyhow::Result<bool> {
+pub async fn remove_zone(pool: &SqlitePool, name: &str) -> anyhow::Result<bool> {
     let rows = sqlx::query("DELETE FROM zones WHERE name = ?")
         .bind(name)
         .execute(pool)
@@ -275,7 +273,7 @@ pub async fn removeZone(pool: &SqlitePool, name: &str) -> anyhow::Result<bool> {
 
 /// Deletes all records marked `is_dev = 1`. Called on startup before loading
 /// the record index so that ephemeral dev records do not persist across restarts.
-pub async fn deleteDevRecords(pool: &SqlitePool) -> anyhow::Result<u64> {
+pub async fn delete_dev_records(pool: &SqlitePool) -> anyhow::Result<u64> {
     let rows = sqlx::query("DELETE FROM dns_records WHERE is_dev = 1")
         .execute(pool)
         .await
@@ -283,9 +281,10 @@ pub async fn deleteDevRecords(pool: &SqlitePool) -> anyhow::Result<u64> {
         .rows_affected();
     Ok(rows)
 }
+
 // ── Cache Persistence ───────────────────────────────────────────────────────
 
-pub async fn getCache(
+pub async fn get_cache(
     pool: &SqlitePool,
     name: &str,
     record_type: &str,
@@ -304,7 +303,7 @@ pub async fn getCache(
     .context("Failed to query DNS cache")
 }
 
-pub async fn insertCache(
+pub async fn insert_cache(
     pool: &SqlitePool,
     name: &str,
     record_type: &str,
@@ -333,7 +332,7 @@ pub async fn insertCache(
     Ok(())
 }
 
-pub async fn listCacheEntries(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRow>> {
+pub async fn list_cache_entries(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRow>> {
     let now = Utc::now().timestamp();
     sqlx::query_as::<_, CacheRow>(
         "SELECT id, name, record_type, value, ttl, expires_at, priority \
@@ -345,7 +344,7 @@ pub async fn listCacheEntries(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRow>
     .context("Failed to list DNS cache")
 }
 
-pub async fn deleteCacheEntry(pool: &SqlitePool, name: &str, rtype: &str) -> anyhow::Result<()> {
+pub async fn delete_cache_entry(pool: &SqlitePool, name: &str, rtype: &str) -> anyhow::Result<()> {
     sqlx::query(
         "DELETE FROM dns_cache WHERE lower(name) = lower(?) AND upper(record_type) = upper(?)",
     )
@@ -361,7 +360,7 @@ pub async fn deleteCacheEntry(pool: &SqlitePool, name: &str, rtype: &str) -> any
 ///
 /// A dependent is a DNS name whose CNAME chain eventually points at `name`.
 /// `UNION` (rather than `UNION ALL`) makes the traversal cycle-safe.
-pub async fn findCnameDependents(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<String>> {
+pub async fn find_cname_dependents(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<String>> {
     sqlx::query_scalar::<_, String>(
         r#"
         WITH RECURSIVE dependents(name) AS (
@@ -387,7 +386,7 @@ pub async fn findCnameDependents(pool: &SqlitePool, name: &str) -> anyhow::Resul
 
 /// Removes every persistent cache entry for a DNS name and its authoritative
 /// CNAME dependents.
-pub async fn deleteCacheForName(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
+pub async fn delete_cache_for_name(pool: &SqlitePool, name: &str) -> anyhow::Result<()> {
     sqlx::query(
         r#"
         WITH RECURSIVE dependents(name) AS (
@@ -415,7 +414,7 @@ pub async fn deleteCacheForName(pool: &SqlitePool, name: &str) -> anyhow::Result
     Ok(())
 }
 
-pub async fn clearCache(pool: &SqlitePool) -> anyhow::Result<()> {
+pub async fn clear_cache(pool: &SqlitePool) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM dns_cache")
         .execute(pool)
         .await
@@ -423,7 +422,7 @@ pub async fn clearCache(pool: &SqlitePool) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn pruneCache(pool: &SqlitePool) -> anyhow::Result<u64> {
+pub async fn prune_cache(pool: &SqlitePool) -> anyhow::Result<u64> {
     let now = Utc::now().timestamp();
     let rows = sqlx::query("DELETE FROM dns_cache WHERE expires_at <= ?")
         .bind(now)

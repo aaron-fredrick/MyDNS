@@ -70,11 +70,8 @@ export function Zones() {
 
         <div className="info-banner" style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'var(--bg-card)', borderRadius: '4px', borderLeft: '4px solid var(--primary)' }}>
           <p style={{ margin: '0 0 0.5rem 0' }}><strong>About Authoritative Zones</strong></p>
-          <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.9rem', color: 'var(--fg-muted)' }}>
-            These are the domains your MyDNS server is authoritative for. Any query for a name within these zones will be resolved locally using your DNS Records, and will <em>never</em> be forwarded upstream.
-          </p>
           <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--fg-muted)' }}>
-            <strong>Special Root Zone (.):</strong> If you add <code>.</code> as a zone, your server becomes authoritative for the <em>entire</em> internet. All queries will resolve locally (or return NXDOMAIN if no record exists).
+            These are the domains your MyDNS server is authoritative for. Any query for a name within these zones will be resolved locally using your DNS Records, and will <em>never</em> be forwarded upstream.
           </p>
         </div>
 
@@ -83,7 +80,7 @@ export function Zones() {
             <input
               type="text"
               id="newZoneName"
-              placeholder="e.g. home.local or ."
+              placeholder="e.g. home.local or mydns.local"
               value={newZoneName}
               onChange={(e) => setNewZoneName(e.target.value)}
               disabled={submitting || loading}
@@ -113,7 +110,6 @@ export function Zones() {
                 <tr key={zone.id}>
                   <td>
                     <strong>{zone.name}</strong>
-                    {zone.name === '.' && <span className="badge" style={{ marginLeft: '0.5rem' }}>Root Zone</span>}
                   </td>
                   <td className="muted">{new Date(zone.created_at).toLocaleString()}</td>
                   <td style={{ textAlign: 'right' }}>

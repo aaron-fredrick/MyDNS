@@ -35,14 +35,29 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
     // API routes must remain 404 instead of receiving index.html.
     let api_routes = Router::new()
         .route("/auth/login", post(auth::login))
-        .route("/records", get(records_api::listRecords).post(records_api::createRecord))
-        .route("/records/:id", put(records_api::updateRecord).delete(records_api::deleteRecord))
+        .route(
+            "/records",
+            get(records_api::list_records).post(records_api::create_record),
+        )
+        .route(
+            "/records/:id",
+            put(records_api::update_record).delete(records_api::delete_record),
+        )
         .route("/stats", get(stats_api::get_stats))
-        .route("/settings", get(settings_api::getSettings).put(settings_api::updateSettings))
-        .route("/cache", get(cache_api::listCache).delete(cache_api::clearCache))
-        .route("/cache/:name/:rtype", delete(cache_api::deleteCacheEntry))
-        .route("/zones", get(zones_api::listZones).post(zones_api::addZone))
-        .route("/zones/:name", delete(zones_api::removeZone))
+        .route(
+            "/settings",
+            get(settings_api::get_settings).put(settings_api::update_settings),
+        )
+        .route(
+            "/cache",
+            get(cache_api::list_cache).delete(cache_api::clear_cache),
+        )
+        .route("/cache/:name/:rtype", delete(cache_api::delete_cache_entry))
+        .route(
+            "/zones",
+            get(zones_api::list_zones).post(zones_api::add_zone),
+        )
+        .route("/zones/:name", delete(zones_api::remove_zone))
         .fallback(|| async { StatusCode::NOT_FOUND });
 
     let security_headers = ServiceBuilder::new()
@@ -67,7 +82,7 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
 
     let app = Router::new()
         .nest("/api/v1", api_routes)
-        .route("/ws", get(ws::wsHandler))
+        .route("/ws", get(ws::ws_handler))
         .route("/", get(serve_frontend_root))
         .route("/*path", get(serve_frontend))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
@@ -99,7 +114,9 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
 
 /// Serve a concrete Vite asset when it exists, otherwise fall back to the SPA
 /// entry point so client-side routes such as `/records` work on refresh.
-async fn serve_frontend(axum::extract::Path(path): axum::extract::Path<String>) -> axum::response::Response {
+async fn serve_frontend(
+    axum::extract::Path(path): axum::extract::Path<String>,
+) -> axum::response::Response {
     serve_asset(&path)
 }
 
@@ -143,8 +160,8 @@ fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Result<CorsLay
 
     #[cfg(not(debug_assertions))]
     {
-        use std::net::IpAddr;
         use axum::http::{header, HeaderValue, Method};
+        use std::net::IpAddr;
 
         let mut origins = Vec::new();
         let bind_hosts = if config.http_host.is_unspecified() {
@@ -189,11 +206,7 @@ fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Result<CorsLay
         Ok(CorsLayer::new()
             .allow_origin(origins)
             .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-            .allow_headers([
-                header::AUTHORIZATION,
-                header::CONTENT_TYPE,
-                header::ACCEPT,
-            ]))
+            .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT]))
     }
 }
 

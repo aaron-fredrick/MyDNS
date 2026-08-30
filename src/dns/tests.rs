@@ -61,7 +61,10 @@ fn test_zone_trie_find_zone() {
     ];
     let trie = ZoneTrie::from_zones(&zones);
 
-    assert_eq!(trie.find_zone("api.sub.example.com"), Some("sub.example.com"));
+    assert_eq!(
+        trie.find_zone("api.sub.example.com"),
+        Some("sub.example.com")
+    );
     assert_eq!(trie.find_zone("example.com"), Some("example.com"));
     assert_eq!(trie.find_zone("www.example.com."), Some("example.com"));
     assert_eq!(trie.find_zone("notexample.com"), None);

@@ -17,17 +17,15 @@ use crate::web::auth::JwtClaims;
 /// Upgrades an authenticated connection to a WebSocket and streams every log
 /// event that passes through the broadcast channel. Clients receive
 /// newline-delimited plain-text log strings in real time.
-#[allow(non_snake_case)]
-pub async fn wsHandler(
+pub async fn ws_handler(
     _claims: JwtClaims,
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handleSocket(socket, state))
+    ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
-#[allow(non_snake_case)]
-async fn handleSocket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.log_tx.subscribe();
     let (mut sender, mut receiver) = socket.split();
 
