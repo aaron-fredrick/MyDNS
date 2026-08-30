@@ -2,7 +2,7 @@
 name: "🚀 Feature Request"
 about: Suggest an idea or enhancement for MyDNS
 title: "[FEATURE] "
-labels: enhancement
+labels: enhancement, triage
 assignees: ''
 
 ---
@@ -15,6 +15,12 @@ A clear and concise description of what you want to happen.
 
 ## How would this benefit MyDNS users?
 Explain why this feature is valuable to the community.
+
+## Proposed Implementation
+If you have ideas on how this could be implemented:
+- Which components would need changes? (e.g., DNS handler, web API, database schema)
+- Are there any performance considerations?
+- Would this require breaking changes to the API or configuration?
 
 ## Describe alternatives you've considered
 A clear and concise description of any alternative solutions or features you've considered.

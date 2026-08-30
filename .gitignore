@@ -1,10 +1,11 @@
 # Rust
 /target/
-*.rs.bk
+**/*.rs.bk
 
 # Node / frontend
 node_modules/
 frontend/dist/
+frontend/.vite/
 
 # Compiled binaries
 /mydns
@@ -34,9 +35,16 @@ screenshots/temp/
 .idea/
 *.swp
 *.swo
+*.swn
+*~
 
 # OS-specific
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
 # Agent / AI tool state
