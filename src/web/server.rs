@@ -20,9 +20,9 @@ const MAX_BODY_BYTES: usize = 64 * 1024;
 
 /// Production frontend assets are embedded into the MyDNS binary after the
 /// Vite build. `allow_missing` keeps ordinary Rust-only development builds
-/// possible; the release build is responsible for producing `frontend/dist`.
+/// possible; release builds must produce `out/web` before packaging.
 #[derive(Embed)]
-#[folder = "frontend/dist/"]
+#[folder = "out/web/"]
 #[allow_missing = true]
 struct FrontendAssets;
 
@@ -161,7 +161,6 @@ fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Result<CorsLay
     #[cfg(not(debug_assertions))]
     {
         use axum::http::{header, HeaderValue, Method};
-        use std::net::IpAddr;
 
         let mut origins = Vec::new();
         let bind_hosts = if config.http_host.is_unspecified() {
