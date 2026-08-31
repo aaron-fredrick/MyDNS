@@ -4,7 +4,30 @@ import { api, type DnsRecord, type Zone } from '../api';
 
 const RECORD_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'PTR', 'SOA'] as const;
 
-const defaultForm = { name: '', record_type: 'A', value: '', ttl: 300, priority: 10, is_dev: false, zoneSuffix: '' };
+type RecordForm = {
+  name: string;
+  record_type: string;
+  value: string;
+  ttl: number;
+  priority: number;
+  is_dev: boolean;
+  zoneSuffix: string;
+};
+
+const defaultForm: RecordForm = {
+  name: '', record_type: 'A', value: '', ttl: 300, priority: 10, is_dev: false, zoneSuffix: '',
+};
+
+const valuePlaceholders: Record<string, string> = {
+  A: '192.168.1.1',
+  AAAA: '2001:db8::1',
+  CNAME: 'target.example.com.',
+  MX: 'mail.example.com.',
+  NS: 'ns1.example.com.',
+  TXT: 'text value',
+  PTR: 'host.example.com.',
+  SOA: 'ns1.example.com. hostmaster.example.com. 1 3600 600 86400 300',
+};
 
 export function Records() {
   const [records, setRecords] = useState<DnsRecord[]>([]);
@@ -12,7 +35,8 @@ export function Records() {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [zones, setZones] = useState<Zone[]>([]);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState<RecordForm>(defaultForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -20,9 +44,7 @@ export function Records() {
       const [recs, zns] = await Promise.all([api.records(), api.zones()]);
       setRecords(recs);
       setZones(zns || []);
-      
-      // Select the first zone by default if available
-      if (zns && zns.length > 0 && !form.zoneSuffix) {
+      if (zns && zns.length > 0 && !form.zoneSuffix && editingId === null) {
         setForm(f => ({ ...f, zoneSuffix: zns[0].name === '.' ? '.' : `.${zns[0].name}` }));
       }
     } finally {
@@ -37,20 +59,54 @@ export function Records() {
     `${r.name} ${r.value}`.toLowerCase().includes(query.toLowerCase())
   );
 
-  async function handleAdd() {
-    let finalName = form.name;
-    if (!form.is_dev && form.zoneSuffix && form.zoneSuffix !== '.') {
+  function resetForm() {
+    setForm(f => ({ ...defaultForm, zoneSuffix: f.zoneSuffix }));
+    setEditingId(null);
+  }
+
+  function beginEdit(record: DnsRecord) {
+    setEditingId(record.id);
+    setForm({
+      name: record.name,
+      record_type: record.record_type,
+      value: record.value,
+      ttl: record.ttl,
+      priority: record.priority ?? 10,
+      is_dev: record.is_dev ?? false,
+      zoneSuffix: '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function handleSubmit() {
+    let finalName = form.name.trim();
+    if (editingId === null && !form.is_dev && form.zoneSuffix && form.zoneSuffix !== '.') {
       finalName = form.name ? `${form.name}${form.zoneSuffix}` : form.zoneSuffix.substring(1);
     }
-    
-    await api.createRecord({ ...form, name: finalName });
-    setForm({ ...defaultForm, zoneSuffix: form.zoneSuffix });
+
+    const payload = {
+      name: finalName,
+      record_type: form.record_type,
+      value: form.value.trim(),
+      ttl: form.ttl,
+      priority: form.record_type === 'MX' ? form.priority : undefined,
+      is_dev: form.is_dev,
+    };
+
+    if (editingId === null) {
+      await api.createRecord(payload);
+    } else {
+      await api.updateRecord(editingId, payload);
+    }
+
+    resetForm();
     await load();
   }
 
   async function handleDelete(id: number) {
     if (!window.confirm('Delete this DNS record?')) return;
     await api.deleteRecord(id);
+    if (editingId === id) resetForm();
     await load();
   }
 
@@ -77,31 +133,33 @@ export function Records() {
       </div>
 
       <div className="form-panel">
-        <h3>Add record</h3>
-        
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', width: 'fit-content' }}>
-            <input 
-              type="checkbox" 
-              checked={form.is_dev} 
-              onChange={e => setForm({ ...form, is_dev: e.target.checked })} 
-            />
-            <span><strong>Dev record (ephemeral)</strong> — bypasses zone rules, deleted on restart</span>
-          </label>
-        </div>
+        <h3>{editingId === null ? 'Add record' : 'Edit record'}</h3>
+
+        {editingId === null && (
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', width: 'fit-content' }}>
+              <input
+                type="checkbox"
+                checked={form.is_dev}
+                onChange={e => setForm({ ...form, is_dev: e.target.checked })}
+              />
+              <span><strong>Dev record (ephemeral)</strong> — bypasses zone rules, deleted on restart</span>
+            </label>
+          </div>
+        )}
 
         <div className="form-grid">
           <div style={{ display: 'flex', gap: '0.25rem' }}>
-            <input 
-              id="record-name" 
-              placeholder={form.is_dev ? "FQDN (e.g. google.com)" : "Subdomain (e.g. www)"} 
-              value={form.name} 
-              onChange={e => setForm({ ...form, name: e.target.value })} 
+            <input
+              id="record-name"
+              placeholder={form.is_dev ? 'FQDN (e.g. google.com)' : 'Subdomain (e.g. www)'}
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
               style={{ flex: 1 }}
             />
-            {!form.is_dev && zones.length > 0 && (
-              <select 
-                value={form.zoneSuffix} 
+            {editingId === null && !form.is_dev && zones.length > 0 && (
+              <select
+                value={form.zoneSuffix}
                 onChange={e => setForm({ ...form, zoneSuffix: e.target.value })}
                 style={{ width: 'auto', minWidth: '120px' }}
               >
@@ -112,14 +170,44 @@ export function Records() {
               </select>
             )}
           </div>
-          <select id="record-type" value={form.record_type} onChange={e => setForm({ ...form, record_type: e.target.value })}>
+          <select
+            id="record-type"
+            value={form.record_type}
+            onChange={e => setForm({ ...form, record_type: e.target.value })}
+          >
             {RECORD_TYPES.map(t => <option key={t}>{t}</option>)}
           </select>
-          <input id="record-value" placeholder="Value" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} />
-          <input id="record-ttl" type="number" min="0" value={form.ttl} onChange={e => setForm({ ...form, ttl: Number(e.target.value) })} />
-          <button id="record-add" className="primary" type="button" onClick={() => handleAdd().catch(e => alert(e.message))}>Add</button>
+          <input
+            id="record-value"
+            placeholder={valuePlaceholders[form.record_type] || 'Value'}
+            value={form.value}
+            onChange={e => setForm({ ...form, value: e.target.value })}
+          />
+          <input
+            id="record-ttl"
+            type="number"
+            min="0"
+            value={form.ttl}
+            onChange={e => setForm({ ...form, ttl: Number(e.target.value) })}
+          />
+          {form.record_type === 'MX' && (
+            <input
+              id="record-priority"
+              type="number"
+              min="0"
+              value={form.priority}
+              onChange={e => setForm({ ...form, priority: Number(e.target.value) })}
+              placeholder="Priority"
+            />
+          )}
+          <button id="record-save" className="primary" type="button" onClick={() => handleSubmit().catch(e => alert(e.message))}>
+            {editingId === null ? 'Add' : 'Update'}
+          </button>
+          {editingId !== null && (
+            <button className="button" type="button" onClick={resetForm}>Cancel</button>
+          )}
         </div>
-        {!form.is_dev && zones.length === 0 && (
+        {!form.is_dev && editingId === null && zones.length === 0 && (
           <div className="error-banner" style={{ marginTop: '1rem', padding: '0.5rem' }}>
             No authoritative zones configured. Please <a href="/zones" style={{ color: 'inherit', textDecoration: 'underline' }}>add a zone</a> first, or check the "Dev record" box.
           </div>
@@ -149,13 +237,10 @@ export function Records() {
                     <td>{r.ttl}s</td>
                     <td>{r.priority ?? '—'}</td>
                     <td>
-                      <button
-                        className="danger-link"
-                        type="button"
-                        onClick={() => handleDelete(r.id).catch(e => alert(e.message))}
-                      >
-                        Delete
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button className="button" type="button" onClick={() => beginEdit(r)}>Edit</button>
+                        <button className="danger-link" type="button" onClick={() => handleDelete(r.id).catch(e => alert(e.message))}>Delete</button>
+                      </div>
                     </td>
                   </tr>
                 ))
