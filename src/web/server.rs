@@ -160,7 +160,7 @@ fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Result<CorsLay
 
     #[cfg(not(debug_assertions))]
     {
-        use axum::http::{header, HeaderValue, Method};
+        use axum::http::{header, Method};
 
         let mut origins = Vec::new();
         let bind_hosts = if config.http_host.is_unspecified() {
