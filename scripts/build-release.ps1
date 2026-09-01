@@ -22,11 +22,8 @@ foreach ($target in $targets) {
 
     $targetOut = Join-Path $out $target.Name
     $binOut = Join-Path $targetOut "bin"
-    $webSource = Join-Path $out "web"
-    $webOut = Join-Path $targetOut "web"
 
     New-Item -ItemType Directory -Force -Path $binOut | Out-Null
-    New-Item -ItemType Directory -Force -Path $webOut | Out-Null
 
     $binarySource = Join-Path $root "target\$($target.Triple)\release\$($target.Binary)"
     $binaryDestination = Join-Path $binOut $target.Binary
@@ -36,11 +33,8 @@ foreach ($target in $targets) {
     }
 
     Copy-Item -Force $binarySource $binaryDestination
-
-    if (Test-Path $webSource) {
-        Copy-Item -Path (Join-Path $webSource "*") -Destination $webOut -Recurse -Force
-    }
 }
 
 Write-Host "`nRelease builds completed." -ForegroundColor Green
 Write-Host "Artifacts: $out"
+Write-Host "Frontend: $out\web"
