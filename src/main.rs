@@ -6,6 +6,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use mydns::{cache, config, db, dns, privileges, state, web};
 
+use tracing_samply::SamplyLayer;
+
 use config::AppConfig;
 use dns::record_index::RecordIndex;
 use dns::upstream::UpstreamResolver;
@@ -28,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
 
-    tracing_subscriber::registry()
+    let subscriber = tracing_subscriber::registry()
         .with(env_filter)
         .with(
             tracing_subscriber::fmt::layer()
@@ -39,8 +41,21 @@ async fn main() -> anyhow::Result<()> {
             tracing_subscriber::fmt::layer()
                 .with_writer(std::io::stdout)
                 .with_ansi(true),
-        )
-        .init();
+        );
+
+    let samply_layer = match SamplyLayer::new() {
+        Ok(layer) => {
+            println!("SamplyLayer initialized successfully");
+            Some(layer)
+        }
+        Err(e) => {
+            println!("SamplyLayer initialization failed: {e}");
+            None
+        }
+    };
+
+    let subscriber = subscriber.with(samply_layer);
+    subscriber.init();
 
     tracing::info!(log_file = %log_filename, "MyDNS starting");
 

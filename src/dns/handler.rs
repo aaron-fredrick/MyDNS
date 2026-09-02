@@ -117,6 +117,12 @@ impl RequestHandler for DnsHandler {
 
 #[allow(non_snake_case)]
 impl DnsHandler {
+    #[tracing::instrument(
+        name = "process_resolution",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype, client = %src),
+        skip(self)
+    )]
     async fn processResolution(
         &self,
         name: &str,
@@ -188,6 +194,12 @@ impl DnsHandler {
         }
     }
 
+    #[tracing::instrument(
+        name = "query_memory_cache",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype),
+        skip(self)
+    )]
     async fn queryMemoryCache(
         &self,
         name: &str,
@@ -197,6 +209,7 @@ impl DnsHandler {
         let cache = self.state.cache.read().await;
         if let Some((result, records)) = cache.get(name, rtype) {
             self.state.cache_stats.record_hit();
+            tracing::debug!(cache_type = "memory", result = ?result, "Cache hit");
             return Some(match result {
                 CacheResult::Positive => {
                     self.logResolution(src, name, rtype, records, "memory");
@@ -212,6 +225,12 @@ impl DnsHandler {
         None
     }
 
+    #[tracing::instrument(
+        name = "query_persistent_cache",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype),
+        skip(self)
+    )]
     async fn queryPersistentCache(
         &self,
         name: &str,
@@ -291,6 +310,12 @@ impl DnsHandler {
         None
     }
 
+    #[tracing::instrument(
+        name = "query_record_index",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype),
+        skip(self)
+    )]
     async fn queryRecordIndex(
         &self,
         name: &str,
@@ -364,6 +389,12 @@ impl DnsHandler {
         None
     }
 
+    #[tracing::instrument(
+        name = "query_upstream",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype, client = %src),
+        skip(self)
+    )]
     async fn queryUpstream(
         &self,
         name: &str,
@@ -380,6 +411,7 @@ impl DnsHandler {
         };
         let upstream = self.state.upstream.read().await;
         let addr = self.getUpstreamAddressString(&upstream).await;
+        tracing::debug!(upstream_addr = %addr, "Querying upstream");
 
         let result = tokio::time::timeout(
             Duration::from_secs(5),
@@ -390,7 +422,7 @@ impl DnsHandler {
         match result {
             Ok(UpstreamResolution::Positive(records, _ttl)) => {
                 let values = self.getRecordValuesString(&records);
-                tracing::info!(client = %src, query = %name, r#type = %rtype, value = %values, upstream = %addr, "Upstream resolve hit");
+                tracing::debug!(client = %src, query = %name, r#type = %rtype, value = %values, upstream = %addr, "Upstream resolve hit");
                 let _ = self.state.log_tx.send(format!(
                     "[UPSTREAM] client={} query={} type={} value=[{}] server={}",
                     src, name, rtype, values, addr
@@ -619,7 +651,7 @@ fn isLoopbackPtrName(name: &str) -> bool {
     // IPv4 loopback: 127.0.0.0/8 → ends with .127.in-addr.arpa
     if let Some(rest) = name.strip_suffix(".in-addr.arpa") {
         // The PTR name is the reversed octets, so 127.x.x.x becomes x.x.x.127
-        if rest.split('.').last() == Some("127") {
+        if rest.split('.').next_back() == Some("127") {
             return true;
         }
     }

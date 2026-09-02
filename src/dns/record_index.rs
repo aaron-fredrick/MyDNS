@@ -112,6 +112,11 @@ impl RecordIndex {
     /// CNAME loop detection terminates after 10 hops and returns `Miss` so the
     /// caller can fall back gracefully (the DB path returns `ServFail` for this
     /// case, but the index is meant to be a full replacement, not a partial one).
+    #[tracing::instrument(
+        name = "resolve_authoritative",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = %rtype_str)
+    )]
     pub fn resolve_authoritative(&self, name: &str, rtype_str: &str) -> IndexResolution {
         let mut current = name.trim_end_matches('.').to_lowercase();
         let mut chain: Vec<DnsRecord> = Vec::new();

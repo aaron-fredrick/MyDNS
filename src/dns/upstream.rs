@@ -5,6 +5,9 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use std::net::Ipv4Addr;
 
+use colored::Colorize;
+use hickory_proto::op::ResponseCode;
+use hickory_proto::rr::RData;
 use hickory_proto::rr::{Name, Record, RecordType};
 use hickory_resolver::config::{ConnectionConfig, NameServerConfig, ResolverConfig, ResolverOpts};
 use hickory_resolver::net::runtime::TokioRuntimeProvider;
@@ -140,7 +143,7 @@ impl UpstreamResolver {
         };
 
         if let Some(addr) = effective_router {
-            tracing::info!(%addr, "Router/gateway DNS detected");
+            tracing::debug!(%addr, "Router/gateway DNS detected");
         } else {
             tracing::warn!("Could not detect gateway DNS; router fallback unavailable");
         }
@@ -151,9 +154,9 @@ impl UpstreamResolver {
             } else {
                 root_hints.len()
             };
-            tracing::info!(%mode, hint_count, "Recursive resolver configured with root hints");
+            tracing::debug!(%mode, hint_count, "Recursive resolver configured with root hints");
         } else {
-            tracing::info!(%mode, "Resolver engine configured");
+            tracing::debug!(%mode, "Resolver engine configured");
         }
 
         Ok(Self {
@@ -172,6 +175,12 @@ impl UpstreamResolver {
         self.metrics = Some(metrics);
     }
 
+    #[tracing::instrument(
+        name = "resolve",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype, mode = ?self.mode),
+        skip(self)
+    )]
     pub async fn resolve(&self, name: &Name, rtype: RecordType) -> UpstreamResolution {
         let started = Instant::now();
         if let Some(metrics) = &self.metrics {
@@ -197,6 +206,12 @@ impl UpstreamResolver {
         result
     }
 
+    #[tracing::instrument(
+        name = "resolve_forwarding",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype, has_fallback = second.is_some()),
+        skip(self)
+    )]
     async fn resolve_forwarding(
         &self,
         first: &TokioResolver,
@@ -206,20 +221,28 @@ impl UpstreamResolver {
     ) -> UpstreamResolution {
         match query_resolver(first, name, rtype).await {
             UpstreamResolution::Positive(records, ttl) => {
+                tracing::debug!("Primary resolver succeeded");
                 UpstreamResolution::Positive(records, ttl)
             }
-            UpstreamResolution::NxDomain => UpstreamResolution::NxDomain,
+            UpstreamResolution::NxDomain => {
+                tracing::debug!("Primary resolver returned NXDOMAIN");
+                UpstreamResolution::NxDomain
+            }
             UpstreamResolution::Nodata => {
                 if let Some(resolver) = second {
+                    tracing::debug!("Primary resolver returned NODATA, trying fallback");
                     query_resolver(resolver, name, rtype).await
                 } else {
+                    tracing::debug!("Primary resolver returned NODATA, no fallback available");
                     UpstreamResolution::Nodata
                 }
             }
             UpstreamResolution::ServFail => {
                 if let Some(resolver) = second {
+                    tracing::warn!("Primary resolver failed, trying fallback");
                     query_resolver(resolver, name, rtype).await
                 } else {
+                    tracing::warn!("Primary resolver failed, no fallback available");
                     UpstreamResolution::ServFail
                 }
             }
@@ -239,11 +262,13 @@ impl UpstreamResolver {
         }
     }
 
+    #[tracing::instrument(
+        name = "resolve_iterative",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype, root_hints_count = self.root_hints.len()),
+        skip(self)
+    )]
     async fn resolve_iterative(&self, name: &Name, rtype: RecordType) -> UpstreamResolution {
-        use colored::Colorize;
-        use hickory_proto::op::ResponseCode;
-        use hickory_proto::rr::RData;
-
         let mut current_servers = self.root_hints.clone();
         eprintln!(
             "{} Starting iterative recursion for {} (type {}) with {} root hints",
@@ -254,6 +279,14 @@ impl UpstreamResolver {
         );
 
         for depth in 0..10usize {
+            let depth_span = tracing::span!(
+                tracing::Level::DEBUG,
+                "recursion_depth",
+                depth = depth,
+                servers_count = current_servers.len()
+            );
+            let _depth_enter = depth_span.enter();
+
             let mut next_servers: Vec<SocketAddr> = Vec::new();
             let mut ns_names: Vec<Name> = Vec::new();
             let mut got_response = false;
@@ -263,12 +296,22 @@ impl UpstreamResolver {
                 1 => "TLD",
                 _ => "AUTH/DELEGATION",
             };
+            tracing::debug!(level = %level_tag, "Starting recursion depth");
 
             let step_indent = "  ".repeat(depth);
             let res_indent = format!("{}  ↳", step_indent);
 
             // Try up to 3 servers at this delegation level
             for (idx, &server) in current_servers.iter().take(3).enumerate() {
+                let server_span = tracing::span!(
+                    tracing::Level::DEBUG,
+                    "server_query",
+                    server = %server,
+                    candidate_index = idx + 1,
+                    total_candidates = current_servers.len().min(3)
+                );
+                let _server_enter = server_span.enter();
+
                 eprintln!(
                     "{}{} Querying {} (candidate {}/{}) for {}",
                     step_indent,
@@ -282,6 +325,7 @@ impl UpstreamResolver {
                 );
 
                 let Some(response) = raw_dns_query(server, name, rtype).await else {
+                    tracing::warn!(server = %server, "Server query timed out");
                     eprintln!(
                         "{} {} Server {} timed out, trying next server...",
                         res_indent,
@@ -291,6 +335,7 @@ impl UpstreamResolver {
                     continue;
                 };
                 got_response = true;
+                tracing::debug!(server = %server, "Server query succeeded");
 
                 // Authoritative answer
                 if !response.answers.is_empty() {
@@ -301,6 +346,12 @@ impl UpstreamResolver {
                         .map(|r| r.data.to_string())
                         .collect::<Vec<_>>()
                         .join(", ");
+                    tracing::debug!(
+                        server = %server,
+                        record_count = records.len(),
+                        ttl = ttl,
+                        "Authoritative answer received"
+                    );
                     eprintln!(
                         "{} {} Authoritative answer from {}: {} (TTL={}s)",
                         res_indent,
@@ -314,6 +365,7 @@ impl UpstreamResolver {
 
                 match response.metadata.response_code {
                     ResponseCode::NXDomain => {
+                        tracing::debug!(server = %server, "Server returned NXDOMAIN");
                         eprintln!(
                             "{} {} Server {} returned NXDOMAIN for {}",
                             res_indent,
@@ -323,8 +375,13 @@ impl UpstreamResolver {
                         );
                         return UpstreamResolution::NxDomain;
                     }
-                    ResponseCode::NoError => {}
-                    _ => continue,
+                    ResponseCode::NoError => {
+                        tracing::debug!(server = %server, "Server returned NoError");
+                    }
+                    _ => {
+                        tracing::warn!(server = %server, response_code = ?response.metadata.response_code, "Server returned error code");
+                        continue;
+                    }
                 }
 
                 // Check if this is an authoritative NODATA (NoError, 0 answers, SOA in authority, no NS)
@@ -338,6 +395,7 @@ impl UpstreamResolver {
                     .any(|r| matches!(r.data, RData::NS(_)));
 
                 if has_soa && !has_ns {
+                    tracing::debug!(server = %server, "Server returned NODATA");
                     eprintln!(
                         "{} {} Server {} returned NODATA for {} (type {})",
                         res_indent,
@@ -361,6 +419,13 @@ impl UpstreamResolver {
                         _ => {}
                     }
                 }
+                if !next_servers.is_empty() {
+                    tracing::debug!(
+                        server = %server,
+                        glue_count = next_servers.len(),
+                        "Extracted glue records"
+                    );
+                }
 
                 // No glue: save NS hostnames for resolution
                 if next_servers.is_empty() {
@@ -368,6 +433,13 @@ impl UpstreamResolver {
                         if let RData::NS(ns) = &rec.data {
                             ns_names.push(ns.0.clone());
                         }
+                    }
+                    if !ns_names.is_empty() {
+                        tracing::debug!(
+                            server = %server,
+                            ns_count = ns_names.len(),
+                            "No glue, need to resolve NS hostnames"
+                        );
                     }
                 }
 
@@ -377,6 +449,11 @@ impl UpstreamResolver {
                         .map(|s| s.to_string())
                         .collect::<Vec<_>>()
                         .join(", ");
+                    tracing::debug!(
+                        server = %server,
+                        next_hops = %glue_str,
+                        "Referral with glue records"
+                    );
                     eprintln!(
                         "{} {} Server {} referred with {} glue IPs: {}",
                         res_indent,
@@ -393,6 +470,7 @@ impl UpstreamResolver {
             let res_indent = format!("{}  ↳", step_indent);
 
             if !got_response {
+                tracing::error!(depth = depth, "All servers timed out at this depth");
                 eprintln!(
                     "{} {} All iterative servers timed out at step {} for query {}",
                     res_indent,
@@ -411,6 +489,7 @@ impl UpstreamResolver {
                     .map(|n| n.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
+                tracing::debug!(ns_names = %ns_str, "Resolving un-glued NS hostnames");
                 eprintln!(
                     "{} {} Un-glued referral to NS [{}]; resolving NS IP addresses via upstream...",
                     res_indent,
@@ -427,6 +506,7 @@ impl UpstreamResolver {
                                 next_servers.push(SocketAddr::new(IpAddr::V4(a.0), 53));
                             }
                         }
+                        tracing::debug!(ns_name = %ns_name, resolved_count = next_servers.len(), "Resolved NS hostname");
                     }
                     if !next_servers.is_empty() {
                         break;
@@ -435,6 +515,7 @@ impl UpstreamResolver {
             }
 
             if next_servers.is_empty() {
+                tracing::error!(depth = depth, "Could not resolve any next-hop servers");
                 eprintln!(
                     "{} {} Referral with no resolvable next-hop servers at step {} for {}",
                     res_indent,
@@ -448,6 +529,7 @@ impl UpstreamResolver {
             current_servers = next_servers;
         }
 
+        tracing::error!("Iterative resolution exceeded maximum depth");
         eprintln!(
             "{} Iterative resolution exceeded maximum depth for {}",
             "[RECURSE LIMIT]".red().bold(),
@@ -457,6 +539,11 @@ impl UpstreamResolver {
     }
 }
 
+#[tracing::instrument(
+    name = "query_resolver",
+    level = tracing::Level::DEBUG,
+    fields(name = %name, rtype = ?rtype)
+)]
 async fn query_resolver(
     resolver: &TokioResolver,
     name: &Name,
@@ -466,20 +553,26 @@ async fn query_resolver(
         Ok(lookup) => {
             let records: Vec<Record> = lookup.answers().to_vec();
             if records.is_empty() {
+                tracing::debug!("Resolver returned NODATA");
                 return UpstreamResolution::Nodata;
             }
             let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
+            tracing::debug!(
+                record_count = records.len(),
+                ttl = ttl,
+                "Resolver query succeeded"
+            );
             UpstreamResolution::Positive(records, ttl)
         }
         Err(e) => {
             if e.is_nx_domain() {
-                tracing::info!(query=%name, "Upstream returned NXDOMAIN");
+                tracing::debug!("Resolver returned NXDOMAIN");
                 UpstreamResolution::NxDomain
             } else if e.is_no_records_found() {
-                tracing::info!(query=%name, "Upstream returned NODATA");
+                tracing::debug!("Resolver returned NODATA");
                 UpstreamResolution::Nodata
             } else {
-                tracing::warn!(query=%name, error=%e, "Upstream lookup failed; returning SERVFAIL");
+                tracing::debug!(error = %e, "Resolver lookup failed");
                 UpstreamResolution::ServFail
             }
         }
