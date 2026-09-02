@@ -1,17 +1,18 @@
 //! Cross-platform privilege helpers.
 //!
 //! MyDNS must bind to port 53, which requires Administrator rights on Windows
-//! and root (UID 0) on Linux/macOS. This module provides:
+//! and appropriate port-binding privileges on Unix. This module provides:
 //! - [`check_and_exit_if_insufficient`] – called once at startup.
-//! - [`drop_privileges`] – called on Unix after the socket is bound.
+//! - [`drop_privileges`] – called on Unix after the socket is bound when MyDNS
+//!   was started as root.
 
 // `drop_privileges` and `drop_privileges_impl` are compiled out on Windows
-// (they are called only inside a `#[cfg(unix)]` block in main.rs).\
+// (they are called only inside a `#[cfg(unix)]` block in dns/server.rs).
 #[allow(dead_code)]
 pub fn check_and_exit_if_insufficient(dns_port: u16, http_port: u16) {
-    if (dns_port < 1024 || http_port < 1024) && !is_running_elevated() {
+    if (dns_port < 1024 || http_port < 1024) && !has_required_privileges() {
         eprintln!(
-            "[CRITICAL] MyDNS requires elevated privileges to bind to privileged ports (DNS: {}, HTTP: {}).\n\
+            "[CRITICAL] MyDNS requires permission to bind privileged ports (DNS: {}, HTTP: {}).\n\\
              {}",
             dns_port,
             http_port,
@@ -33,7 +34,7 @@ pub fn drop_privileges(user: &str, group: &str) -> anyhow::Result<()> {
 // ── platform implementations ──────────────────────────────────────────────────
 
 #[cfg(windows)]
-fn is_running_elevated() -> bool {
+fn has_required_privileges() -> bool {
     use std::ptr;
     use winapi::um::{
         processthreadsapi::{GetCurrentProcess, OpenProcessToken},
@@ -59,13 +60,44 @@ fn is_running_elevated() -> bool {
     }
 }
 
-#[cfg(unix)]
-fn is_running_elevated() -> bool {
+#[cfg(target_os = "linux")]
+fn has_required_privileges() -> bool {
+    if nix::unistd::getuid().is_root() {
+        return true;
+    }
+
+    has_cap_net_bind_service()
+}
+
+#[cfg(target_os = "linux")]
+fn has_cap_net_bind_service() -> bool {
+    const CAP_NET_BIND_SERVICE: u32 = 10;
+
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return false;
+    };
+
+    let Some(cap_eff) = status
+        .lines()
+        .find_map(|line| line.strip_prefix("CapEff:\t"))
+    else {
+        return false;
+    };
+
+    let Ok(cap_eff) = u64::from_str_radix(cap_eff.trim(), 16) else {
+        return false;
+    };
+
+    (cap_eff & (1u64 << CAP_NET_BIND_SERVICE)) != 0
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn has_required_privileges() -> bool {
     nix::unistd::getuid().is_root()
 }
 
 #[cfg(not(any(windows, unix)))]
-fn is_running_elevated() -> bool {
+fn has_required_privileges() -> bool {
     // Conservative fallback: assume no privileges and let bind fail loudly.
     false
 }
@@ -77,16 +109,16 @@ fn elevation_hint() -> &'static str {
 
 #[cfg(unix)]
 fn elevation_hint() -> &'static str {
-    "  → Re-run with: sudo ./mydns\n\
-     \n\
-     Alternatively, grant the binary CAP_NET_BIND_SERVICE:\n\
-     \n\
+    "  → Re-run with: sudo ./mydns\n\\
+     \n\\
+     Alternatively, on Linux grant the binary CAP_NET_BIND_SERVICE:\n\\
+     \n\\
        sudo setcap cap_net_bind_service=ep ./target/release/mydns"
 }
 
 #[cfg(not(any(windows, unix)))]
 fn elevation_hint() -> &'static str {
-    "  → Run with sufficient OS privileges to bind port 53."
+    "  → Run with sufficient OS privileges to bind privileged ports."
 }
 
 // ── privilege dropping ────────────────────────────────────────────────────────
@@ -124,4 +156,16 @@ fn drop_privileges_impl(user_name: &str, group_name: &str) -> anyhow::Result<()>
 fn drop_privileges_impl(_user: &str, _group: &str) -> anyhow::Result<()> {
     tracing::warn!("Privilege dropping is not supported on this platform");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn detects_cap_net_bind_service_bit() {
+        const CAP_NET_BIND_SERVICE: u32 = 10;
+        let cap_eff = 1u64 << CAP_NET_BIND_SERVICE;
+        assert_ne!(cap_eff & (1u64 << CAP_NET_BIND_SERVICE), 0);
+        assert_eq!(cap_eff & (1u64 << 9), 0);
+    }
 }

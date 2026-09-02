@@ -29,9 +29,18 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
 
     #[cfg(unix)]
     {
-        let cfg = state.config.read().await;
-        crate::privileges::drop_privileges(&cfg.run_as_user, &cfg.run_as_group)
-            .context("Failed to drop Unix privileges after binding DNS sockets")?;
+        // Privilege dropping is only meaningful when the process started as
+        // root. A non-root process with CAP_NET_BIND_SERVICE is already at
+        // its intended runtime identity and must not attempt setuid/setgid.
+        if nix::unistd::getuid().is_root() {
+            let cfg = state.config.read().await;
+            crate::privileges::drop_privileges(&cfg.run_as_user, &cfg.run_as_group)
+                .context("Failed to drop Unix privileges after binding DNS sockets")?;
+        } else {
+            tracing::debug!(
+                "Running as non-root user; skipping Unix privilege drop"
+            );
+        }
     }
 
     let handler = MetricsHandler::new(state);
