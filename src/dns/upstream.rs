@@ -197,13 +197,10 @@ async fn raw_dns_query_tcp(
         .ok()? as usize;
 
     let mut recv_buf = vec![0u8; response_len];
-    tokio::time::timeout(
-        Duration::from_secs(4),
-        stream.read_exact(&mut recv_buf),
-    )
-    .await
-    .ok()?
-    .ok()?;
+    tokio::time::timeout(Duration::from_secs(4), stream.read_exact(&mut recv_buf))
+        .await
+        .ok()?
+        .ok()?;
 
     let parsed = Message::from_vec(&recv_buf).ok()?;
 

@@ -476,7 +476,7 @@ impl DnsHandler {
             let _ = crate::db::records::insert_cache(
                 &self.state.db,
                 &owner,
-                &rtype.to_string(),
+                &r.record_type().to_string(),
                 &val,
                 r.ttl,
                 prio,
