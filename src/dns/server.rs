@@ -37,9 +37,7 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
             crate::privileges::drop_privileges(&cfg.run_as_user, &cfg.run_as_group)
                 .context("Failed to drop Unix privileges after binding DNS sockets")?;
         } else {
-            tracing::debug!(
-                "Running as non-root user; skipping Unix privilege drop"
-            );
+            tracing::debug!("Running as non-root user; skipping Unix privilege drop");
         }
     }
 

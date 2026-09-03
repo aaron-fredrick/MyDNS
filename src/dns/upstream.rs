@@ -91,7 +91,8 @@ async fn raw_dns_query(
 ) -> Option<hickory_proto::op::Message> {
     use hickory_proto::op::{Message, MessageType, OpCode, Query as DnsQuery};
 
-    let mut msg = Message::new(rand::random::<u16>(), MessageType::Query, OpCode::Query);
+    let id = rand::random::<u16>();
+    let mut msg = Message::new(id, MessageType::Query, OpCode::Query);
     msg.metadata.recursion_desired = false;
     msg.add_query(DnsQuery::query(name.clone(), rtype));
 
@@ -106,12 +107,58 @@ async fn raw_dns_query(
     socket.send_to(&bytes, server).await.ok()?;
 
     let mut recv_buf = vec![0u8; 4096];
-    let (len, _) = tokio::time::timeout(Duration::from_secs(2), socket.recv_from(&mut recv_buf))
-        .await
-        .ok()?
-        .ok()?;
+    let timeout = Duration::from_secs(2);
+    let start = tokio::time::Instant::now();
 
-    Message::from_vec(&recv_buf[..len]).ok()
+    loop {
+        let elapsed = start.elapsed();
+        if elapsed >= timeout {
+            return None;
+        }
+
+        let recv_result =
+            tokio::time::timeout(timeout - elapsed, socket.recv_from(&mut recv_buf)).await;
+        let (len, src_addr) = match recv_result {
+            Ok(Ok(res)) => res,
+            _ => return None,
+        };
+
+        if src_addr != server {
+            continue;
+        }
+
+        let parsed = match Message::from_vec(&recv_buf[..len]) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        if parsed.id != id {
+            continue;
+        }
+
+        if parsed.message_type != MessageType::Response {
+            continue;
+        }
+
+        if parsed.op_code != OpCode::Query {
+            continue;
+        }
+
+        let has_matching_query = parsed.queries.iter().any(|q| {
+            q.name() == name
+                && (q.query_type() == rtype || rtype == hickory_proto::rr::RecordType::ANY)
+        });
+
+        if !has_matching_query {
+            // Some servers might omit the question section in the response,
+            // but generally we expect it to match if present.
+            if !parsed.queries.is_empty() {
+                continue;
+            }
+        }
+
+        return Some(parsed);
+    }
 }
 
 pub struct UpstreamResolver {
