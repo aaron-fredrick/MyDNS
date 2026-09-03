@@ -157,6 +157,12 @@ impl RecordIndex {
                     current = cname.value.trim_end_matches('.').to_lowercase();
                 }
                 _ => {
+                    // If we have accumulated a CNAME chain but the final target is
+                    // outside the local zone, return the chain as an authoritative
+                    // answer. The caller is responsible for resolving the target.
+                    if !chain.is_empty() {
+                        return IndexResolution::Found(chain);
+                    }
                     return if self.name_exists(&current) {
                         IndexResolution::Nodata
                     } else {
