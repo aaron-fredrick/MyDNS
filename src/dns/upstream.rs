@@ -16,6 +16,9 @@ use hickory_resolver::TokioResolver;
 use crate::config::{default_root_hints, ResolverMode, ResolverPriority};
 use crate::observability::Metrics;
 
+/// Maximum number of delegation hops before an iterative resolution is aborted.
+const MAX_RECURSION_DEPTH: usize = 10;
+
 #[derive(Debug)]
 pub enum UpstreamResolution {
     Positive(Vec<Record>, u32),
@@ -82,7 +85,8 @@ fn build_resolver(addr: SocketAddr) -> anyhow::Result<TokioResolver> {
     Ok(builder.build()?)
 }
 
-/// Sends a single non-recursive DNS query via UDP and returns the raw response message.
+/// Sends a single non-recursive DNS query via UDP, with automatic TCP fallback
+/// when the server signals response truncation (TC bit set).
 /// Returns `None` on timeout or any I/O error.
 async fn raw_dns_query(
     server: SocketAddr,
@@ -110,7 +114,7 @@ async fn raw_dns_query(
     let timeout = Duration::from_secs(2);
     let start = tokio::time::Instant::now();
 
-    loop {
+    let udp_response = loop {
         let elapsed = start.elapsed();
         if elapsed >= timeout {
             return None;
@@ -149,16 +153,65 @@ async fn raw_dns_query(
                 && (q.query_type() == rtype || rtype == hickory_proto::rr::RecordType::ANY)
         });
 
-        if !has_matching_query {
-            // Some servers might omit the question section in the response,
-            // but generally we expect it to match if present.
-            if !parsed.queries.is_empty() {
-                continue;
-            }
+        if !has_matching_query && !parsed.queries.is_empty() {
+            continue;
         }
 
-        return Some(parsed);
+        break parsed;
+    };
+
+    // If the server indicated the response was truncated, retry over TCP.
+    if udp_response.metadata.truncation {
+        tracing::debug!(server = %server, "UDP response truncated; retrying over TCP");
+        return raw_dns_query_tcp(server, &bytes, id).await;
     }
+
+    Some(udp_response)
+}
+
+/// Sends the pre-built query bytes over TCP and validates the response.
+async fn raw_dns_query_tcp(
+    server: SocketAddr,
+    query_bytes: &[u8],
+    expected_id: u16,
+) -> Option<hickory_proto::op::Message> {
+    use hickory_proto::op::Message;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut stream = tokio::time::timeout(
+        Duration::from_secs(4),
+        tokio::net::TcpStream::connect(server),
+    )
+    .await
+    .ok()?
+    .ok()?;
+
+    // DNS over TCP prefixes the message with a 2-byte big-endian length.
+    let len_prefix = (query_bytes.len() as u16).to_be_bytes();
+    stream.write_all(&len_prefix).await.ok()?;
+    stream.write_all(query_bytes).await.ok()?;
+
+    let response_len = tokio::time::timeout(Duration::from_secs(4), stream.read_u16())
+        .await
+        .ok()?
+        .ok()? as usize;
+
+    let mut recv_buf = vec![0u8; response_len];
+    tokio::time::timeout(
+        Duration::from_secs(4),
+        stream.read_exact(&mut recv_buf),
+    )
+    .await
+    .ok()?
+    .ok()?;
+
+    let parsed = Message::from_vec(&recv_buf).ok()?;
+
+    if parsed.id != expected_id {
+        return None;
+    }
+
+    Some(parsed)
 }
 
 pub struct UpstreamResolver {
@@ -202,6 +255,10 @@ impl UpstreamResolver {
                 root_hints.len()
             };
             tracing::debug!(%mode, hint_count, "Recursive resolver configured with root hints");
+            tracing::warn!(
+                "Recursive mode is active. DNSSEC validation is not implemented. \
+                 This mode is suitable for trusted networks only."
+            );
         } else {
             tracing::debug!(%mode, "Resolver engine configured");
         }
@@ -325,7 +382,7 @@ impl UpstreamResolver {
             current_servers.len()
         );
 
-        for depth in 0..10usize {
+        for depth in 0..MAX_RECURSION_DEPTH {
             let depth_span = tracing::span!(
                 tracing::Level::DEBUG,
                 "recursion_depth",
@@ -549,6 +606,7 @@ impl UpstreamResolver {
                 );
 
                 for ns_name in ns_names.iter().take(2) {
+                    // Prefer IPv4 glue; also collect IPv6 for full NS reachability.
                     if let UpstreamResolution::Positive(a_records, _) =
                         query_resolver(&self.cloudflare, ns_name, RecordType::A).await
                     {
@@ -557,8 +615,24 @@ impl UpstreamResolver {
                                 next_servers.push(SocketAddr::new(IpAddr::V4(a.0), 53));
                             }
                         }
-                        tracing::debug!(ns_name = %ns_name, resolved_count = next_servers.len(), "Resolved NS hostname");
                     }
+
+                    if let UpstreamResolution::Positive(aaaa_records, _) =
+                        query_resolver(&self.cloudflare, ns_name, RecordType::AAAA).await
+                    {
+                        for rec in &aaaa_records {
+                            if let RData::AAAA(aaaa) = &rec.data {
+                                next_servers.push(SocketAddr::new(IpAddr::V6(aaaa.0), 53));
+                            }
+                        }
+                    }
+
+                    tracing::debug!(
+                        ns_name = %ns_name,
+                        resolved_count = next_servers.len(),
+                        "Resolved NS hostname (A + AAAA)"
+                    );
+
                     if !next_servers.is_empty() {
                         break;
                     }
