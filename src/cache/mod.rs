@@ -23,6 +23,9 @@ pub struct CacheEntry {
     pub records: Vec<Record>,
     /// Whether this entry represents a negative DNS result.
     pub result: CacheResult,
+    /// Whether the origin of this entry was an authoritative record-index lookup.
+    /// Preserved so that repeated cache hits can set `AA=1` correctly.
+    pub is_authoritative: bool,
     /// Absolute point-in-time after which this entry is considered stale.
     pub expires_at: Instant,
 }
@@ -48,22 +51,42 @@ impl DnsCache {
     }
 
     /// Returns the cached result for the key if present and not expired.
-    pub fn get(&self, name: &str, rtype: RecordType) -> Option<(CacheResult, &Vec<Record>)> {
+    ///
+    /// The returned tuple carries `(result, is_authoritative, records)` so callers
+    /// can reconstruct the correct `AA` flag without re-querying the record index.
+    pub fn get(&self, name: &str, rtype: RecordType) -> Option<(CacheResult, bool, &Vec<Record>)> {
         let key = (name.to_lowercase(), rtype);
         self.inner
             .get(&key)
             .filter(|e| !e.is_expired())
-            .map(|e| (e.result, &e.records))
+            .map(|e| (e.result, e.is_authoritative, &e.records))
     }
 
     /// Inserts a positive cache entry with the given TTL.
-    pub fn insert(&mut self, name: &str, rtype: RecordType, records: Vec<Record>, ttl: Duration) {
-        self.insert_result(name, rtype, CacheResult::Positive, records, ttl);
+    ///
+    /// `is_authoritative` should be `true` when the records came from the local
+    /// authoritative record index so that subsequent cache hits preserve `AA=1`.
+    pub fn insert(
+        &mut self,
+        name: &str,
+        rtype: RecordType,
+        records: Vec<Record>,
+        ttl: Duration,
+        is_authoritative: bool,
+    ) {
+        self.insert_result(
+            name,
+            rtype,
+            CacheResult::Positive,
+            records,
+            ttl,
+            is_authoritative,
+        );
     }
 
     /// Inserts a negative cache entry with the given TTL.
     pub fn insert_negative(&mut self, name: &str, rtype: RecordType, ttl: Duration) {
-        self.insert_result(name, rtype, CacheResult::Negative, Vec::new(), ttl);
+        self.insert_result(name, rtype, CacheResult::Negative, Vec::new(), ttl, false);
     }
 
     fn insert_result(
@@ -73,6 +96,7 @@ impl DnsCache {
         result: CacheResult,
         records: Vec<Record>,
         ttl: Duration,
+        is_authoritative: bool,
     ) {
         let key = (name.to_lowercase(), rtype);
 
@@ -89,6 +113,7 @@ impl DnsCache {
             CacheEntry {
                 records,
                 result,
+                is_authoritative,
                 expires_at: Instant::now() + ttl,
             },
         );

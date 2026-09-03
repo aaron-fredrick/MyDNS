@@ -217,13 +217,13 @@ impl DnsHandler {
         src: SocketAddr,
     ) -> Option<ResolutionResult> {
         let cache = self.state.cache.read().await;
-        if let Some((result, records)) = cache.get(name, rtype) {
+        if let Some((result, is_authoritative, records)) = cache.get(name, rtype) {
             self.state.cache_stats.record_hit();
             tracing::debug!(cache_type = "memory", result = ?result, "Cache hit");
             return Some(match result {
                 CacheResult::Positive => {
                     self.logResolution(src, name, rtype, records, "memory");
-                    ResolutionResult::Positive(records.clone(), false)
+                    ResolutionResult::Positive(records.clone(), is_authoritative)
                 }
                 CacheResult::Negative => {
                     self.logNegativeCacheHit(src, name, rtype, "memory");
@@ -468,9 +468,16 @@ impl DnsHandler {
         rtype: RecordType,
         records: Vec<Record>,
         ttl: u32,
+        is_authoritative: bool,
     ) {
         let mut cache = self.state.cache.write().await;
-        cache.insert(name, rtype, records, Duration::from_secs(ttl as u64));
+        cache.insert(
+            name,
+            rtype,
+            records,
+            Duration::from_secs(ttl as u64),
+            is_authoritative,
+        );
     }
 
     async fn saveToAllCaches(&self, name: &str, rtype: RecordType, records: Vec<Record>, ttl: u32) {

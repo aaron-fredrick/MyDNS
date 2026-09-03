@@ -258,7 +258,7 @@ Confirmed by source inspection.
 Define zone-removal semantics. Either delete associated records and invalidate cache entries, or make record serving require active zone ownership.
 
 ---
->
+x
 ### [HIGH] Cached data can bypass authoritative-zone enforcement
 
 **Location**
@@ -292,7 +292,7 @@ Confirmed by source inspection.
 Check active zone ownership before reading recursive/upstream caches. Invalidate affected cache entries whenever zones change.
 
 ---
-
+>
 ### [HIGH] Authoritative answers lose the `AA` flag after caching
 
 **Location**
