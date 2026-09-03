@@ -128,6 +128,13 @@ pub async fn remove_zone(
 
     reload_trie(&state).await?;
 
+    let new_index = crate::dns::record_index::RecordIndex::load_from_db(&state.db)
+        .await
+        .map_err(ApiError::Internal)?;
+    *state.record_index.write().await = new_index;
+
+    state.cache.write().await.clear();
+
     tracing::info!(zone = %canonical, "Authoritative zone removed");
     let _ = state
         .log_tx

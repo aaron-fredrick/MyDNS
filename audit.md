@@ -179,7 +179,7 @@ Confirmed by control-flow analysis.
 Return the authoritative CNAME record even when the target is not locally available. Only append target records when they are known.
 
 ---
->
+x
 ### [HIGH] Persistent upstream CNAME answers are stored under the wrong type
 
 **Location**
@@ -220,7 +220,7 @@ Confirmed by source inspection.
 Persist each record using its actual record type and preserve complete answer chains transactionally.
 
 ---
-
+x
 ### [HIGH] Removing a zone leaves its records actively served
 
 **Location**

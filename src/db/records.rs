@@ -260,12 +260,25 @@ pub async fn add_zone(pool: &SqlitePool, name: &str) -> anyhow::Result<Zone> {
 
 /// Deletes a zone by name. Returns `true` if a row was removed.
 pub async fn remove_zone(pool: &SqlitePool, name: &str) -> anyhow::Result<bool> {
+    let mut tx = pool.begin().await.context("Failed to begin transaction")?;
+
     let rows = sqlx::query("DELETE FROM zones WHERE name = ?")
         .bind(name)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .context("Failed to remove zone")?
         .rows_affected();
+
+    let pattern = format!("%.{}", name);
+    sqlx::query("DELETE FROM dns_records WHERE name = ? OR name LIKE ?")
+        .bind(name)
+        .bind(pattern)
+        .execute(&mut *tx)
+        .await
+        .context("Failed to remove associated records")?;
+
+    tx.commit().await.context("Failed to commit zone removal")?;
+
     Ok(rows > 0)
 }
 
