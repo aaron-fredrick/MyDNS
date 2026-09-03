@@ -135,15 +135,25 @@ impl DnsHandler {
             trie.find_zone(name).is_some()
         };
 
-        if let Some(result) = self.queryMemoryCache(name, rtype, src).await {
-            return result;
+        // For authoritative zones: consult authoritative sources only.
+        // Upstream caches (memory and persistent) are skipped entirely to
+        // prevent stale upstream data from shadowing authoritative records.
+        if !is_authoritative_zone {
+            if let Some(result) = self.queryMemoryCache(name, rtype, src).await {
+                return result;
+            }
         }
+
         if let Some(result) = self.queryRecordIndex(name, rtype, src).await {
             return result;
         }
-        if let Some(result) = self.queryPersistentCache(name, rtype).await {
-            return result;
+
+        if !is_authoritative_zone {
+            if let Some(result) = self.queryPersistentCache(name, rtype).await {
+                return result;
+            }
         }
+
         if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
             return ResolutionResult::Positive(records, true);
         }

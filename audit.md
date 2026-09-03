@@ -258,7 +258,7 @@ Confirmed by source inspection.
 Define zone-removal semantics. Either delete associated records and invalidate cache entries, or make record serving require active zone ownership.
 
 ---
-
+>
 ### [HIGH] Cached data can bypass authoritative-zone enforcement
 
 **Location**

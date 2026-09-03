@@ -100,3 +100,58 @@ fn list_all_returns_correct_data() {
     assert_eq!(all.len(), 1);
     assert_eq!(all[0].0, "list.test.");
 }
+
+#[test]
+fn clear_zone_evicts_apex_and_subdomains() {
+    let mut cache = DnsCache::new();
+    // Zone apex
+    cache.insert(
+        "example.com",
+        RecordType::A,
+        vec![],
+        Duration::from_secs(300),
+    );
+    // Subdomain
+    cache.insert(
+        "host.example.com",
+        RecordType::A,
+        vec![],
+        Duration::from_secs(300),
+    );
+    // Unrelated — must survive
+    cache.insert("other.net", RecordType::A, vec![], Duration::from_secs(300));
+
+    cache.clear_zone("example.com");
+
+    assert!(
+        cache.get("example.com", RecordType::A).is_none(),
+        "apex should be evicted"
+    );
+    assert!(
+        cache.get("host.example.com", RecordType::A).is_none(),
+        "subdomain should be evicted"
+    );
+    assert!(
+        cache.get("other.net", RecordType::A).is_some(),
+        "unrelated entry must be preserved"
+    );
+}
+
+#[test]
+fn clear_zone_does_not_evict_parent_zone() {
+    let mut cache = DnsCache::new();
+    cache.insert("com", RecordType::NS, vec![], Duration::from_secs(300));
+    cache.insert(
+        "example.com",
+        RecordType::A,
+        vec![],
+        Duration::from_secs(300),
+    );
+
+    cache.clear_zone("example.com");
+
+    assert!(
+        cache.get("com", RecordType::NS).is_some(),
+        "parent zone entry must be preserved"
+    );
+}

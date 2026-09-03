@@ -101,6 +101,14 @@ pub async fn add_zone(
 
     reload_trie(&state).await?;
 
+    // Evict any upstream-cached data for names that now fall under this
+    // authoritative zone. Without this, a previously cached answer could
+    // bypass the zone enforcement on the next query.
+    records::delete_cache_for_zone(&state.db, &canonical)
+        .await
+        .map_err(ApiError::Internal)?;
+    state.cache.write().await.clear_zone(&canonical);
+
     tracing::info!(zone = %canonical, "Authoritative zone added");
     let _ = state.log_tx.send(format!("[ZONES] ADD zone={}", canonical));
 

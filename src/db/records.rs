@@ -427,6 +427,22 @@ pub async fn delete_cache_for_name(pool: &SqlitePool, name: &str) -> anyhow::Res
     Ok(())
 }
 
+/// Removes every persistent cache entry for the zone apex and all subdomains.
+///
+/// Called when a new authoritative zone is added so that any upstream-resolved
+/// data cached before the zone was registered cannot shadow authoritative records.
+pub async fn delete_cache_for_zone(pool: &SqlitePool, zone: &str) -> anyhow::Result<()> {
+    let zone_lower = zone.trim_end_matches('.').to_lowercase();
+    let subdomain_pattern = format!("%.{}", zone_lower);
+    sqlx::query("DELETE FROM dns_cache WHERE lower(name) = ? OR lower(name) LIKE ?")
+        .bind(&zone_lower)
+        .bind(&subdomain_pattern)
+        .execute(pool)
+        .await
+        .context("Failed to delete DNS cache entries for zone")?;
+    Ok(())
+}
+
 pub async fn clear_cache(pool: &SqlitePool) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM dns_cache")
         .execute(pool)

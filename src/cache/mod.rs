@@ -129,6 +129,17 @@ impl DnsCache {
         self.inner.clear();
     }
 
+    /// Removes all entries for a zone apex and every subdomain beneath it.
+    ///
+    /// Used when a new authoritative zone is registered to evict any upstream
+    /// data that was cached before the zone existed.
+    pub fn clear_zone(&mut self, zone: &str) {
+        let zone_lower = zone.trim_end_matches('.').to_lowercase();
+        let suffix = format!(".{}", zone_lower);
+        self.inner
+            .retain(|(name, _), _| name != &zone_lower && !name.ends_with(&suffix));
+    }
+
     /// Returns a list of all non-expired cache entries for the UI.
     ///
     /// Returns: Vec<(Name, RecordType, TTL_Remaining_Secs, Values)>
