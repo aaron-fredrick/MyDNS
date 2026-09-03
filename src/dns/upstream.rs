@@ -454,40 +454,44 @@ impl UpstreamResolver {
                     return UpstreamResolution::Nodata;
                 }
 
-                // Extract glue A/AAAA records from the additional section
-                for rec in &response.additionals {
-                    match &rec.data {
-                        RData::A(a) => {
-                            next_servers.push(SocketAddr::new(IpAddr::V4(a.0), 53));
+                // Gather valid NS hostnames first (with bailiwick validation)
+                for rec in &response.authorities {
+                    if let RData::NS(ns) = &rec.data {
+                        // Bailiwick check: the NS record's domain must be a super-domain of the queried name
+                        if rec.name.zone_of(name) {
+                            ns_names.push(ns.0.clone());
                         }
-                        RData::AAAA(aaaa) => {
-                            next_servers.push(SocketAddr::new(IpAddr::V6(aaaa.0), 53));
-                        }
-                        _ => {}
                     }
                 }
+
+                // Extract glue A/AAAA records from the additional section
+                for rec in &response.additionals {
+                    // Bailiwick check: the glue record name MUST match one of the valid NS names
+                    if ns_names.contains(&rec.name) {
+                        match &rec.data {
+                            RData::A(a) => {
+                                next_servers.push(SocketAddr::new(IpAddr::V4(a.0), 53));
+                            }
+                            RData::AAAA(aaaa) => {
+                                next_servers.push(SocketAddr::new(IpAddr::V6(aaaa.0), 53));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
                 if !next_servers.is_empty() {
                     tracing::debug!(
                         server = %server,
                         glue_count = next_servers.len(),
-                        "Extracted glue records"
+                        "Extracted valid glue records"
                     );
-                }
-
-                // No glue: save NS hostnames for resolution
-                if next_servers.is_empty() {
-                    for rec in &response.authorities {
-                        if let RData::NS(ns) = &rec.data {
-                            ns_names.push(ns.0.clone());
-                        }
-                    }
-                    if !ns_names.is_empty() {
-                        tracing::debug!(
-                            server = %server,
-                            ns_count = ns_names.len(),
-                            "No glue, need to resolve NS hostnames"
-                        );
-                    }
+                } else if !ns_names.is_empty() {
+                    tracing::debug!(
+                        server = %server,
+                        ns_count = ns_names.len(),
+                        "No valid glue, need to resolve NS hostnames"
+                    );
                 }
 
                 if !next_servers.is_empty() {
