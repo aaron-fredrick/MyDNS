@@ -272,3 +272,109 @@ async fn test_dns_udp_txt_record() {
     assert_eq!(response.answers.len(), 1);
     assert_eq!(response.answers[0].record_type(), RecordType::TXT);
 }
+
+#[tokio::test]
+async fn test_authoritative_zone_missing_soa_returns_nodata() {
+    let server = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // dns-test.local has an A record but no SOA record
+    // Should return NOERROR (NODATA) with AA flag set, not NXDOMAIN
+    let response = udp_query(&socket, server.addr, "dns-test.local.", RecordType::SOA).await;
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError,
+        "Expected NOERROR (NODATA) for missing SOA on existing name"
+    );
+    assert!(response.answers.is_empty(), "Expected zero answers for NODATA");
+    assert!(
+        response.metadata.authoritative,
+        "Expected AA flag set for authoritative zone"
+    );
+}
+
+#[tokio::test]
+async fn test_authoritative_zone_missing_ns_returns_nodata() {
+    let server = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // dns-test.local has an A record but no NS record
+    // Should return NOERROR (NODATA) with AA flag set, not NXDOMAIN
+    let response = udp_query(&socket, server.addr, "dns-test.local.", RecordType::NS).await;
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError,
+        "Expected NOERROR (NODATA) for missing NS on existing name"
+    );
+    assert!(response.answers.is_empty(), "Expected zero answers for NODATA");
+    assert!(
+        response.metadata.authoritative,
+        "Expected AA flag set for authoritative zone"
+    );
+}
+
+#[tokio::test]
+async fn test_authoritative_zone_missing_rr_type_returns_nodata() {
+    let server = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // dns-test.local has an A record but no MX record
+    // Should return NOERROR (NODATA) with AA flag set, not NXDOMAIN
+    let response = udp_query(&socket, server.addr, "dns-test.local.", RecordType::MX).await;
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError,
+        "Expected NOERROR (NODATA) for missing RR type on existing name"
+    );
+    assert!(response.answers.is_empty(), "Expected zero answers for NODATA");
+    assert!(
+        response.metadata.authoritative,
+        "Expected AA flag set for authoritative zone"
+    );
+}
+
+#[tokio::test]
+async fn test_authoritative_zone_nonexistent_name_returns_nxdomain() {
+    let server = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // nonexistent.dns-test.local does not exist in the zone
+    // Should return NXDOMAIN with AA flag set
+    let response = udp_query(
+        &socket,
+        server.addr,
+        "nonexistent.dns-test.local.",
+        RecordType::A,
+    )
+    .await;
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NXDomain,
+        "Expected NXDOMAIN for nonexistent name in authoritative zone"
+    );
+    assert!(response.answers.is_empty(), "Expected zero answers for NXDOMAIN");
+    assert!(
+        response.metadata.authoritative,
+        "Expected AA flag set for authoritative zone"
+    );
+}
+
+#[tokio::test]
+async fn test_authoritative_zone_a_query_with_aa_flag() {
+    let server = start_dns_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // dns-test.local has an A record
+    // Should return NOERROR with AA flag set and the A record
+    let response = udp_query(&socket, server.addr, "dns-test.local.", RecordType::A).await;
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!response.answers.is_empty(), "Expected A answer");
+    assert_eq!(response.answers[0].record_type(), RecordType::A);
+    assert!(
+        response.metadata.authoritative,
+        "Expected AA flag set for authoritative zone"
+    );
+}

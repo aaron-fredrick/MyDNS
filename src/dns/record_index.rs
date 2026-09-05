@@ -140,15 +140,6 @@ impl RecordIndex {
                 return IndexResolution::Found(result);
             }
 
-            // When querying CNAME explicitly and none found, distinguish Nodata vs Miss.
-            if upper_rtype == "CNAME" {
-                return if self.name_exists(&current) {
-                    IndexResolution::Nodata
-                } else {
-                    IndexResolution::Miss
-                };
-            }
-
             // Follow a CNAME if present.
             match self.lookup_raw(&current, "CNAME") {
                 Some(cname_records) if !cname_records.is_empty() => {
@@ -163,6 +154,8 @@ impl RecordIndex {
                     if !chain.is_empty() {
                         return IndexResolution::Found(chain);
                     }
+                    // Direct lookup failed and no CNAME to follow.
+                    // Distinguish between Nodata (name exists but type doesn't) and Miss (name doesn't exist).
                     return if self.name_exists(&current) {
                         IndexResolution::Nodata
                     } else {
@@ -357,6 +350,53 @@ mod tests {
         assert!(matches!(
             idx.resolve_authoritative("example.com", "CNAME"),
             IndexResolution::Nodata
+        ));
+    }
+
+    #[test]
+    fn nodata_for_missing_soa_when_name_exists() {
+        let mut idx = RecordIndex::default();
+        idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
+        assert!(matches!(
+            idx.resolve_authoritative("example.com", "SOA"),
+            IndexResolution::Nodata
+        ));
+    }
+
+    #[test]
+    fn nodata_for_missing_ns_when_name_exists() {
+        let mut idx = RecordIndex::default();
+        idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
+        assert!(matches!(
+            idx.resolve_authoritative("example.com", "NS"),
+            IndexResolution::Nodata
+        ));
+    }
+
+    #[test]
+    fn nodata_for_missing_aaaa_when_name_exists() {
+        let mut idx = RecordIndex::default();
+        idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
+        assert!(matches!(
+            idx.resolve_authoritative("example.com", "AAAA"),
+            IndexResolution::Nodata
+        ));
+    }
+
+    #[test]
+    fn miss_for_nonexistent_name() {
+        let idx = RecordIndex::default();
+        assert!(matches!(
+            idx.resolve_authoritative("nonexistent.com", "SOA"),
+            IndexResolution::Miss
+        ));
+        assert!(matches!(
+            idx.resolve_authoritative("nonexistent.com", "NS"),
+            IndexResolution::Miss
+        ));
+        assert!(matches!(
+            idx.resolve_authoritative("nonexistent.com", "A"),
+            IndexResolution::Miss
         ));
     }
 }
