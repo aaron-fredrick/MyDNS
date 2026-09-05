@@ -292,7 +292,7 @@ Confirmed by source inspection.
 Check active zone ownership before reading recursive/upstream caches. Invalidate affected cache entries whenever zones change.
 
 ---
->
+x
 ### [HIGH] Authoritative answers lose the `AA` flag after caching
 
 **Location**
@@ -325,7 +325,7 @@ Confirmed by source inspection.
 Separate authoritative records from recursive cache entries, or store origin/authority metadata in cache entries and preserve it when constructing responses.
 
 ---
-
+>
 ### [HIGH] Unix privileged HTTP binding races with privilege dropping
 
 **Location**
