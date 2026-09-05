@@ -32,6 +32,7 @@ pub enum IndexResolution {
 #[derive(Debug, Default)]
 pub struct RecordIndex {
     inner: HashMap<(String, String), Vec<DnsRecord>>,
+    owner_names: HashSet<String>,
 }
 
 impl RecordIndex {
@@ -46,7 +47,24 @@ impl RecordIndex {
             entry_count = index.inner.len(),
             "Authoritative record index loaded"
         );
+        index.rebuild_owner_names();
         Ok(index)
+    }
+
+    fn rebuild_owner_names(&mut self) {
+        self.owner_names.clear();
+        for (name, _) in self.inner.keys() {
+            let trimmed = name.trim_end_matches('.');
+            self.owner_names.insert(trimmed.to_string());
+            let mut current = trimmed;
+            while let Some(idx) = current.find('.') {
+                current = &current[idx + 1..];
+                if current.is_empty() {
+                    break;
+                }
+                self.owner_names.insert(current.to_string());
+            }
+        }
     }
 
     /// Inserts or updates a single record in the index.
@@ -62,6 +80,7 @@ impl RecordIndex {
         let bucket = self.inner.entry(key).or_default();
         bucket.retain(|r| r.id != record.id);
         bucket.push(record);
+        self.rebuild_owner_names();
     }
 
     /// Removes a record by its primary key, scanning all buckets.
@@ -74,6 +93,7 @@ impl RecordIndex {
             bucket.retain(|r| r.id != id);
         }
         self.inner.retain(|_, bucket| !bucket.is_empty());
+        self.rebuild_owner_names();
     }
 
     /// Removes records by name and optionally by type.
@@ -90,6 +110,7 @@ impl RecordIndex {
                 self.inner.retain(|(n, _), _| n != &lower_name);
             }
         }
+        self.rebuild_owner_names();
     }
 
     /// Flat lookup — returns raw records for an exact `(name, rtype)` pair
@@ -117,7 +138,12 @@ impl RecordIndex {
         level = tracing::Level::DEBUG,
         fields(name = %name, rtype = %rtype_str)
     )]
-    pub fn resolve_authoritative(&self, name: &str, rtype_str: &str) -> IndexResolution {
+    pub fn resolve_authoritative(
+        &self,
+        name: &str,
+        rtype_str: &str,
+        zone_apex: Option<&str>,
+    ) -> IndexResolution {
         let mut current = name.trim_end_matches('.').to_lowercase();
         let mut chain: Vec<DnsRecord> = Vec::new();
         let mut visited: HashSet<String> = HashSet::new();
@@ -146,7 +172,8 @@ impl RecordIndex {
                     }
                     _ => {
                         // No CNAME, collect all records at the current name
-                        let all_records: Vec<DnsRecord> = self.inner
+                        let all_records: Vec<DnsRecord> = self
+                            .inner
                             .keys()
                             .filter(|(n, _)| n == &current)
                             .flat_map(|key| self.inner.get(key).unwrap().clone())
@@ -163,7 +190,7 @@ impl RecordIndex {
                             // We followed a CNAME chain but found no records at the target
                             return IndexResolution::Found(chain);
                         }
-                        return if self.name_exists(&current) {
+                        return if self.name_exists(&current, zone_apex) {
                             IndexResolution::Nodata
                         } else {
                             IndexResolution::Miss
@@ -195,7 +222,7 @@ impl RecordIndex {
                     }
                     // Direct lookup failed and no CNAME to follow.
                     // Distinguish between Nodata (name exists but type doesn't) and Miss (name doesn't exist).
-                    return if self.name_exists(&current) {
+                    return if self.name_exists(&current, zone_apex) {
                         IndexResolution::Nodata
                     } else {
                         IndexResolution::Miss
@@ -212,10 +239,18 @@ impl RecordIndex {
         IndexResolution::ServFail
     }
 
-    /// Returns `true` if any record exists for `name` regardless of type.
-    fn name_exists(&self, name: &str) -> bool {
-        let lower = name.to_lowercase();
-        self.inner.keys().any(|(n, _)| n == &lower)
+    /// Returns `true` if any record exists for `name` regardless of type,
+    /// or if the name matches the configured authoritative zone apex.
+    fn name_exists(&self, name: &str, zone_apex: Option<&str>) -> bool {
+        let lower = name.trim_end_matches('.').to_lowercase();
+        if Some(lower.as_str())
+            == zone_apex
+                .map(|s| s.trim_end_matches('.').to_lowercase())
+                .as_deref()
+        {
+            return true;
+        }
+        self.owner_names.contains(&lower)
     }
 }
 
@@ -241,7 +276,7 @@ mod tests {
     fn found_existing_record() {
         let mut idx = RecordIndex::default();
         idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
-        match idx.resolve_authoritative("example.com", "A") {
+        match idx.resolve_authoritative("example.com", "A", None) {
             IndexResolution::Found(r) => {
                 assert_eq!(r.len(), 1);
                 assert_eq!(r[0].value, "1.2.3.4");
@@ -254,7 +289,7 @@ mod tests {
     fn miss_for_unknown_name() {
         let idx = RecordIndex::default();
         assert!(matches!(
-            idx.resolve_authoritative("unknown.com", "A"),
+            idx.resolve_authoritative("unknown.com", "A", None),
             IndexResolution::Miss
         ));
     }
@@ -264,7 +299,7 @@ mod tests {
         let mut idx = RecordIndex::default();
         idx.upsert(make_record(1, "example.com", "MX", "mail.example.com"));
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "A"),
+            idx.resolve_authoritative("example.com", "A", None),
             IndexResolution::Nodata
         ));
     }
@@ -279,7 +314,7 @@ mod tests {
             "target.example.com",
         ));
         idx.upsert(make_record(2, "target.example.com", "A", "1.2.3.4"));
-        match idx.resolve_authoritative("alias.example.com", "A") {
+        match idx.resolve_authoritative("alias.example.com", "A", None) {
             IndexResolution::Found(r) => {
                 assert_eq!(r.len(), 2);
                 assert_eq!(r[0].record_type, "CNAME");
@@ -297,7 +332,7 @@ mod tests {
         idx.upsert(make_record(1, "a.example.com", "CNAME", "b.example.com"));
         idx.upsert(make_record(2, "b.example.com", "CNAME", "c.example.com"));
         idx.upsert(make_record(3, "c.example.com", "A", "10.0.0.1"));
-        match idx.resolve_authoritative("a.example.com", "A") {
+        match idx.resolve_authoritative("a.example.com", "A", None) {
             IndexResolution::Found(r) => {
                 assert_eq!(r.len(), 3);
                 assert_eq!(r[0].name, "a.example.com");
@@ -324,7 +359,7 @@ mod tests {
             "loop-a.example.com",
         ));
         assert!(matches!(
-            idx.resolve_authoritative("loop-a.example.com", "A"),
+            idx.resolve_authoritative("loop-a.example.com", "A", None),
             IndexResolution::ServFail
         ));
     }
@@ -334,7 +369,7 @@ mod tests {
         let mut idx = RecordIndex::default();
         idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
         idx.upsert(make_record(1, "example.com", "A", "5.6.7.8"));
-        match idx.resolve_authoritative("example.com", "A") {
+        match idx.resolve_authoritative("example.com", "A", None) {
             IndexResolution::Found(r) => {
                 assert_eq!(r.len(), 1);
                 assert_eq!(r[0].value, "5.6.7.8");
@@ -349,7 +384,7 @@ mod tests {
         idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
         idx.remove_by_id(1);
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "A"),
+            idx.resolve_authoritative("example.com", "A", None),
             IndexResolution::Miss
         ));
     }
@@ -361,11 +396,11 @@ mod tests {
         idx.upsert(make_record(2, "example.com", "MX", "mail.example.com"));
         idx.remove("example.com", Some("A"));
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "A"),
+            idx.resolve_authoritative("example.com", "A", None),
             IndexResolution::Nodata
         ));
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "MX"),
+            idx.resolve_authoritative("example.com", "MX", None),
             IndexResolution::Found(_)
         ));
     }
@@ -377,7 +412,7 @@ mod tests {
         idx.upsert(make_record(2, "example.com", "MX", "mail.example.com"));
         idx.remove("example.com", None);
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "A"),
+            idx.resolve_authoritative("example.com", "A", None),
             IndexResolution::Miss
         ));
     }
@@ -387,7 +422,7 @@ mod tests {
         let mut idx = RecordIndex::default();
         idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "CNAME"),
+            idx.resolve_authoritative("example.com", "CNAME", None),
             IndexResolution::Nodata
         ));
     }
@@ -397,7 +432,7 @@ mod tests {
         let mut idx = RecordIndex::default();
         idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "SOA"),
+            idx.resolve_authoritative("example.com", "SOA", None),
             IndexResolution::Nodata
         ));
     }
@@ -407,7 +442,7 @@ mod tests {
         let mut idx = RecordIndex::default();
         idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "NS"),
+            idx.resolve_authoritative("example.com", "NS", None),
             IndexResolution::Nodata
         ));
     }
@@ -417,7 +452,7 @@ mod tests {
         let mut idx = RecordIndex::default();
         idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "AAAA"),
+            idx.resolve_authoritative("example.com", "AAAA", None),
             IndexResolution::Nodata
         ));
     }
@@ -426,15 +461,15 @@ mod tests {
     fn miss_for_nonexistent_name() {
         let idx = RecordIndex::default();
         assert!(matches!(
-            idx.resolve_authoritative("nonexistent.com", "SOA"),
+            idx.resolve_authoritative("nonexistent.com", "SOA", None),
             IndexResolution::Miss
         ));
         assert!(matches!(
-            idx.resolve_authoritative("nonexistent.com", "NS"),
+            idx.resolve_authoritative("nonexistent.com", "NS", None),
             IndexResolution::Miss
         ));
         assert!(matches!(
-            idx.resolve_authoritative("nonexistent.com", "A"),
+            idx.resolve_authoritative("nonexistent.com", "A", None),
             IndexResolution::Miss
         ));
     }
@@ -447,7 +482,7 @@ mod tests {
         idx.upsert(make_record(3, "example.com", "MX", "mail.example.com"));
         idx.upsert(make_record(4, "example.com", "TXT", "v=spf1 ~all"));
 
-        match idx.resolve_authoritative("example.com", "ANY") {
+        match idx.resolve_authoritative("example.com", "ANY", None) {
             IndexResolution::Found(records) => {
                 assert_eq!(records.len(), 4);
                 let types: Vec<&str> = records.iter().map(|r| r.record_type.as_str()).collect();
@@ -464,7 +499,7 @@ mod tests {
     fn any_returns_nodata_when_name_exists_no_records() {
         let idx = RecordIndex::default();
         assert!(matches!(
-            idx.resolve_authoritative("example.com", "ANY"),
+            idx.resolve_authoritative("example.com", "ANY", None),
             IndexResolution::Miss
         ));
     }
@@ -473,7 +508,7 @@ mod tests {
     fn any_returns_miss_for_nonexistent_name() {
         let idx = RecordIndex::default();
         assert!(matches!(
-            idx.resolve_authoritative("nonexistent.com", "ANY"),
+            idx.resolve_authoritative("nonexistent.com", "ANY", None),
             IndexResolution::Miss
         ));
     }
@@ -481,12 +516,17 @@ mod tests {
     #[test]
     fn any_with_cname_chain() {
         let mut idx = RecordIndex::default();
-        idx.upsert(make_record(1, "alias.example.com", "CNAME", "target.example.com"));
+        idx.upsert(make_record(
+            1,
+            "alias.example.com",
+            "CNAME",
+            "target.example.com",
+        ));
         idx.upsert(make_record(2, "target.example.com", "A", "1.2.3.4"));
         idx.upsert(make_record(3, "target.example.com", "AAAA", "2001:db8::1"));
 
         // ANY on the alias should return CNAME + all records at the target
-        match idx.resolve_authoritative("alias.example.com", "ANY") {
+        match idx.resolve_authoritative("alias.example.com", "ANY", None) {
             IndexResolution::Found(records) => {
                 // ANY returns CNAME chain + all records at the final target
                 assert_eq!(records.len(), 3);
@@ -498,5 +538,124 @@ mod tests {
             }
             other => panic!("Expected Found, got {:?}", other),
         }
+    }
+
+    // --- Regression tests for authoritative zone / owner / RRset distinction ---
+
+    /// Zone apex exists in ZoneTrie but has zero dns_records.
+    /// Querying any type at the apex MUST return Nodata (not Miss).
+    /// The zone_apex parameter acts as the proof-of-existence for the apex.
+    #[test]
+    fn empty_zone_apex_returns_nodata_not_miss() {
+        let idx = RecordIndex::default(); // no records loaded
+        let apex = Some("mydns.local");
+        // Any type query on an empty apex must be Nodata, not Miss.
+        assert!(
+            matches!(
+                idx.resolve_authoritative("mydns.local", "SOA", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for SOA on empty zone apex"
+        );
+        assert!(
+            matches!(
+                idx.resolve_authoritative("mydns.local", "NS", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for NS on empty zone apex"
+        );
+        assert!(
+            matches!(
+                idx.resolve_authoritative("mydns.local", "A", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for A on empty zone apex"
+        );
+        assert!(
+            matches!(
+                idx.resolve_authoritative("mydns.local", "MX", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for MX on empty zone apex"
+        );
+        assert!(
+            matches!(
+                idx.resolve_authoritative("mydns.local", "TXT", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for TXT on empty zone apex"
+        );
+    }
+
+    /// A genuinely non-existent name within the zone still returns Miss
+    /// even when zone_apex is provided, so the handler correctly maps it to NXDOMAIN.
+    #[test]
+    fn nonexistent_owner_within_zone_returns_miss() {
+        let idx = RecordIndex::default(); // no records at all
+        let apex = Some("mydns.local");
+        assert!(
+            matches!(
+                idx.resolve_authoritative("nonexistent.mydns.local", "A", apex),
+                IndexResolution::Miss
+            ),
+            "Expected Miss for nonexistent owner within zone"
+        );
+    }
+
+    /// Empty Non-Terminal (ENT): a record exists at a.b.zone but b.zone has no
+    /// direct records. b.zone must resolve as Nodata (owner exists implicitly).
+    #[test]
+    fn empty_non_terminal_returns_nodata() {
+        let mut idx = RecordIndex::default();
+        // Insert a record at a deep name — this makes "sub.mydns.local" an ENT.
+        idx.upsert(make_record(1, "deep.sub.mydns.local", "TXT", "hello"));
+        let apex = Some("mydns.local");
+        // ENT must be Nodata for any RR type, not Miss.
+        assert!(
+            matches!(
+                idx.resolve_authoritative("sub.mydns.local", "TXT", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for ENT sub.mydns.local"
+        );
+        assert!(
+            matches!(
+                idx.resolve_authoritative("sub.mydns.local", "A", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for ENT sub.mydns.local queried for A"
+        );
+    }
+
+    /// After all records under a name are removed, the name must no longer
+    /// appear as an ENT and must return Miss (without zone_apex).
+    #[test]
+    fn ent_disappears_after_record_removal() {
+        let mut idx = RecordIndex::default();
+        idx.upsert(make_record(1, "deep.sub.mydns.local", "TXT", "hello"));
+        idx.remove_by_id(1);
+        // Now sub.mydns.local is no longer an ENT.
+        assert!(
+            matches!(
+                idx.resolve_authoritative("sub.mydns.local", "A", None),
+                IndexResolution::Miss
+            ),
+            "Expected Miss for sub.mydns.local after all records removed"
+        );
+    }
+
+    /// Existing owner with a record, missing RR type — must be Nodata, not Miss.
+    #[test]
+    fn existing_owner_missing_rrtype_is_nodata() {
+        let mut idx = RecordIndex::default();
+        idx.upsert(make_record(1, "host.mydns.local", "A", "10.0.0.1"));
+        let apex = Some("mydns.local");
+        assert!(
+            matches!(
+                idx.resolve_authoritative("host.mydns.local", "AAAA", apex),
+                IndexResolution::Nodata
+            ),
+            "Expected Nodata for missing AAAA when A exists"
+        );
     }
 }

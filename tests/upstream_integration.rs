@@ -57,6 +57,7 @@ async fn start_mock_upstream() -> (SocketAddr, tokio::sync::mpsc::Receiver<Messa
     (addr, rx)
 }
 
+#[allow(dead_code)]
 struct TestUpstreamServerContext {
     pub db: common::TestDb,
     pub addr: SocketAddr,

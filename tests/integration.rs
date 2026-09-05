@@ -6,7 +6,6 @@
 mod common;
 
 use mydns::db;
-use reqwest::Client;
 use serde_json::{json, Value};
 
 fn client() -> reqwest::Client {

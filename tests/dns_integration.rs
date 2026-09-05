@@ -286,7 +286,10 @@ async fn test_authoritative_zone_missing_soa_returns_nodata() {
         hickory_proto::op::ResponseCode::NoError,
         "Expected NOERROR (NODATA) for missing SOA on existing name"
     );
-    assert!(response.answers.is_empty(), "Expected zero answers for NODATA");
+    assert!(
+        response.answers.is_empty(),
+        "Expected zero answers for NODATA"
+    );
     assert!(
         response.metadata.authoritative,
         "Expected AA flag set for authoritative zone"
@@ -306,7 +309,10 @@ async fn test_authoritative_zone_missing_ns_returns_nodata() {
         hickory_proto::op::ResponseCode::NoError,
         "Expected NOERROR (NODATA) for missing NS on existing name"
     );
-    assert!(response.answers.is_empty(), "Expected zero answers for NODATA");
+    assert!(
+        response.answers.is_empty(),
+        "Expected zero answers for NODATA"
+    );
     assert!(
         response.metadata.authoritative,
         "Expected AA flag set for authoritative zone"
@@ -326,7 +332,10 @@ async fn test_authoritative_zone_missing_rr_type_returns_nodata() {
         hickory_proto::op::ResponseCode::NoError,
         "Expected NOERROR (NODATA) for missing RR type on existing name"
     );
-    assert!(response.answers.is_empty(), "Expected zero answers for NODATA");
+    assert!(
+        response.answers.is_empty(),
+        "Expected zero answers for NODATA"
+    );
     assert!(
         response.metadata.authoritative,
         "Expected AA flag set for authoritative zone"
@@ -352,7 +361,10 @@ async fn test_authoritative_zone_nonexistent_name_returns_nxdomain() {
         hickory_proto::op::ResponseCode::NXDomain,
         "Expected NXDOMAIN for nonexistent name in authoritative zone"
     );
-    assert!(response.answers.is_empty(), "Expected zero answers for NXDOMAIN");
+    assert!(
+        response.answers.is_empty(),
+        "Expected zero answers for NXDOMAIN"
+    );
     assert!(
         response.metadata.authoritative,
         "Expected AA flag set for authoritative zone"

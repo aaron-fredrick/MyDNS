@@ -130,10 +130,11 @@ impl DnsHandler {
         src: SocketAddr,
         recursion_desired: bool,
     ) -> ResolutionResult {
-        let is_authoritative_zone = {
+        let authoritative_zone: Option<String> = {
             let trie = self.state.zone_trie.read().await;
-            trie.find_zone(name).is_some()
+            trie.find_zone(name).map(|s| s.to_string())
         };
+        let is_authoritative_zone = authoritative_zone.is_some();
 
         //println!(">>>>>> Processing resolution <<<<<< src: {}, query: {}, rtype: {:?}, is_authoritative_zone: {}", src, name, rtype, is_authoritative_zone);
         //tracing::info!(">>>>>> Processing resolution <<<<<<", client = %src, query = %name, r#type = %rtype, is_authoritative_zone = is_authoritative_zone);
@@ -147,7 +148,10 @@ impl DnsHandler {
             }
         }
 
-        if let Some(result) = self.queryRecordIndex(name, rtype, src).await {
+        if let Some(result) = self
+            .queryRecordIndex(name, rtype, src, authoritative_zone.as_deref())
+            .await
+        {
             return result;
         }
 
@@ -334,11 +338,12 @@ impl DnsHandler {
         name: &str,
         rtype: RecordType,
         src: SocketAddr,
+        zone_apex: Option<&str>,
     ) -> Option<ResolutionResult> {
         let rtype_str = rtype.to_string().to_uppercase();
         let resolution = {
             let index = self.state.record_index.read().await;
-            index.resolve_authoritative(name, &rtype_str)
+            index.resolve_authoritative(name, &rtype_str, zone_apex)
         };
 
         match resolution {
