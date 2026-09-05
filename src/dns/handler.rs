@@ -352,7 +352,7 @@ impl DnsHandler {
                 }
                 let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
                 self.logResolution(src, name, rtype, &records, "INDEX");
-                self.saveToMemoryCache(name, rtype, records.clone(), ttl)
+                self.saveToMemoryCache(name, rtype, records.clone(), ttl, true)
                     .await;
                 Some(ResolutionResult::Positive(records, true))
             }
@@ -481,7 +481,7 @@ impl DnsHandler {
     }
 
     async fn saveToAllCaches(&self, name: &str, rtype: RecordType, records: Vec<Record>, ttl: u32) {
-        self.saveToMemoryCache(name, rtype, records.clone(), ttl)
+        self.saveToMemoryCache(name, rtype, records.clone(), ttl, false)
             .await;
         for r in &records {
             let owner = r.name.to_string().trim_end_matches('.').to_lowercase();

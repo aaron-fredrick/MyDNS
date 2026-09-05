@@ -10,8 +10,9 @@ fn insert_and_hit() {
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
-    let (result, records) = cache
+    let (result, _, records) = cache
         .get("example.com.", RecordType::A)
         .expect("cache entry should exist");
     assert_eq!(result, CacheResult::Positive);
@@ -23,7 +24,7 @@ fn negative_entry_is_distinguishable_from_empty_positive_response() {
     let mut cache = DnsCache::new();
     cache.insert_negative("missing.example.", RecordType::A, Duration::from_secs(60));
 
-    let (result, records) = cache
+    let (result, _, records) = cache
         .get("missing.example.", RecordType::A)
         .expect("negative cache entry should exist");
     assert_eq!(result, CacheResult::Negative);
@@ -38,6 +39,7 @@ fn miss_on_wrong_type() {
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
     assert!(cache.get("example.com.", RecordType::AAAA).is_none());
 }
@@ -50,6 +52,7 @@ fn expired_entry_returns_none() {
         RecordType::A,
         vec![],
         Duration::from_millis(0),
+        false,
     );
     assert!(cache.get("example.com.", RecordType::A).is_none());
 }
@@ -62,12 +65,14 @@ fn prune_removes_expired_entries() {
         RecordType::A,
         vec![],
         Duration::from_millis(0),
+        false,
     );
     cache.insert(
         "valid.test.",
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
     let pruned = cache.prune();
     assert_eq!(pruned, 1);
@@ -82,6 +87,7 @@ fn remove_specific_entry() {
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
     cache.remove("target.test.", RecordType::A);
     assert!(cache.get("target.test.", RecordType::A).is_none());
@@ -95,6 +101,7 @@ fn list_all_returns_correct_data() {
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
     let all = cache.list_all();
     assert_eq!(all.len(), 1);
@@ -110,6 +117,7 @@ fn clear_zone_evicts_apex_and_subdomains() {
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
     // Subdomain
     cache.insert(
@@ -117,9 +125,16 @@ fn clear_zone_evicts_apex_and_subdomains() {
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
     // Unrelated — must survive
-    cache.insert("other.net", RecordType::A, vec![], Duration::from_secs(300));
+    cache.insert(
+        "other.net",
+        RecordType::A,
+        vec![],
+        Duration::from_secs(300),
+        false,
+    );
 
     cache.clear_zone("example.com");
 
@@ -140,12 +155,19 @@ fn clear_zone_evicts_apex_and_subdomains() {
 #[test]
 fn clear_zone_does_not_evict_parent_zone() {
     let mut cache = DnsCache::new();
-    cache.insert("com", RecordType::NS, vec![], Duration::from_secs(300));
+    cache.insert(
+        "com",
+        RecordType::NS,
+        vec![],
+        Duration::from_secs(300),
+        false,
+    );
     cache.insert(
         "example.com",
         RecordType::A,
         vec![],
         Duration::from_secs(300),
+        false,
     );
 
     cache.clear_zone("example.com");
