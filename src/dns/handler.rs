@@ -166,10 +166,10 @@ impl DnsHandler {
         if is_authoritative_zone {
             tracing::info!(client = %src, query = %name, r#type = %rtype, "Authoritative zone record not found");
             let _ = self.state.log_tx.send(format!(
-                "[AUTHORITATIVE NODATA] client={} query={} type={}",
+                "[AUTHORITATIVE NXDOMAIN] client={} query={} type={}",
                 src, name, rtype
             ));
-            return ResolutionResult::Nodata(true);
+            return ResolutionResult::NxDomain(true);
         }
 
         if !recursion_desired {

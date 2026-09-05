@@ -133,6 +133,45 @@ impl RecordIndex {
                 return IndexResolution::ServFail;
             }
 
+            // ANY queries return all record types for the name.
+            // Follow CNAME chains and return all records at the final target.
+            if upper_rtype == "ANY" {
+                // Check if there's a CNAME to follow first
+                match self.lookup_raw(&current, "CNAME") {
+                    Some(cname_records) if !cname_records.is_empty() => {
+                        let cname = &cname_records[0];
+                        chain.push(cname.clone());
+                        current = cname.value.trim_end_matches('.').to_lowercase();
+                        continue; // Loop to collect records at the target
+                    }
+                    _ => {
+                        // No CNAME, collect all records at the current name
+                        let all_records: Vec<DnsRecord> = self.inner
+                            .keys()
+                            .filter(|(n, _)| n == &current)
+                            .flat_map(|key| self.inner.get(key).unwrap().clone())
+                            .collect();
+
+                        if !all_records.is_empty() {
+                            let mut result = chain;
+                            result.extend(all_records);
+                            return IndexResolution::Found(result);
+                        }
+
+                        // No records at all - check if name exists
+                        if !chain.is_empty() {
+                            // We followed a CNAME chain but found no records at the target
+                            return IndexResolution::Found(chain);
+                        }
+                        return if self.name_exists(&current) {
+                            IndexResolution::Nodata
+                        } else {
+                            IndexResolution::Miss
+                        };
+                    }
+                }
+            }
+
             // Attempt direct match for the requested type.
             if let Some(target_records) = self.lookup_raw(&current, &upper_rtype) {
                 let mut result = chain;
@@ -398,5 +437,66 @@ mod tests {
             idx.resolve_authoritative("nonexistent.com", "A"),
             IndexResolution::Miss
         ));
+    }
+
+    #[test]
+    fn any_returns_all_record_types() {
+        let mut idx = RecordIndex::default();
+        idx.upsert(make_record(1, "example.com", "A", "1.2.3.4"));
+        idx.upsert(make_record(2, "example.com", "AAAA", "2001:db8::1"));
+        idx.upsert(make_record(3, "example.com", "MX", "mail.example.com"));
+        idx.upsert(make_record(4, "example.com", "TXT", "v=spf1 ~all"));
+
+        match idx.resolve_authoritative("example.com", "ANY") {
+            IndexResolution::Found(records) => {
+                assert_eq!(records.len(), 4);
+                let types: Vec<&str> = records.iter().map(|r| r.record_type.as_str()).collect();
+                assert!(types.contains(&"A"));
+                assert!(types.contains(&"AAAA"));
+                assert!(types.contains(&"MX"));
+                assert!(types.contains(&"TXT"));
+            }
+            other => panic!("Expected Found, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn any_returns_nodata_when_name_exists_no_records() {
+        let idx = RecordIndex::default();
+        assert!(matches!(
+            idx.resolve_authoritative("example.com", "ANY"),
+            IndexResolution::Miss
+        ));
+    }
+
+    #[test]
+    fn any_returns_miss_for_nonexistent_name() {
+        let idx = RecordIndex::default();
+        assert!(matches!(
+            idx.resolve_authoritative("nonexistent.com", "ANY"),
+            IndexResolution::Miss
+        ));
+    }
+
+    #[test]
+    fn any_with_cname_chain() {
+        let mut idx = RecordIndex::default();
+        idx.upsert(make_record(1, "alias.example.com", "CNAME", "target.example.com"));
+        idx.upsert(make_record(2, "target.example.com", "A", "1.2.3.4"));
+        idx.upsert(make_record(3, "target.example.com", "AAAA", "2001:db8::1"));
+
+        // ANY on the alias should return CNAME + all records at the target
+        match idx.resolve_authoritative("alias.example.com", "ANY") {
+            IndexResolution::Found(records) => {
+                // ANY returns CNAME chain + all records at the final target
+                assert_eq!(records.len(), 3);
+                assert_eq!(records[0].record_type, "CNAME");
+                assert_eq!(records[0].name, "alias.example.com");
+                let types: Vec<&str> = records.iter().map(|r| r.record_type.as_str()).collect();
+                assert!(types.contains(&"A"));
+                assert!(types.contains(&"AAAA"));
+            }
+            other => panic!("Expected Found, got {:?}", other),
+        }
     }
 }
