@@ -135,6 +135,9 @@ impl DnsHandler {
             trie.find_zone(name).is_some()
         };
 
+        //println!(">>>>>> Processing resolution <<<<<< src: {}, query: {}, rtype: {:?}, is_authoritative_zone: {}", src, name, rtype, is_authoritative_zone);
+        //tracing::info!(">>>>>> Processing resolution <<<<<<", client = %src, query = %name, r#type = %rtype, is_authoritative_zone = is_authoritative_zone);
+
         // For authoritative zones: consult authoritative sources only.
         // Upstream caches (memory and persistent) are skipped entirely to
         // prevent stale upstream data from shadowing authoritative records.
@@ -163,10 +166,10 @@ impl DnsHandler {
         if is_authoritative_zone {
             tracing::info!(client = %src, query = %name, r#type = %rtype, "Authoritative zone record not found");
             let _ = self.state.log_tx.send(format!(
-                "[AUTHORITATIVE NXDOMAIN] client={} query={} type={}",
+                "[AUTHORITATIVE NODATA] client={} query={} type={}",
                 src, name, rtype
             ));
-            return ResolutionResult::NxDomain(true);
+            return ResolutionResult::Nodata(true);
         }
 
         if !recursion_desired {
