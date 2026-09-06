@@ -274,52 +274,6 @@ async fn test_dns_udp_txt_record() {
 }
 
 #[tokio::test]
-async fn test_authoritative_zone_missing_soa_returns_nodata() {
-    let server = start_dns_server().await;
-    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-
-    // dns-test.local has an A record but no SOA record
-    // Should return NOERROR (NODATA) with AA flag set, not NXDOMAIN
-    let response = udp_query(&socket, server.addr, "dns-test.local.", RecordType::SOA).await;
-    assert_eq!(
-        response_code(&response),
-        hickory_proto::op::ResponseCode::NoError,
-        "Expected NOERROR (NODATA) for missing SOA on existing name"
-    );
-    assert!(
-        response.answers.is_empty(),
-        "Expected zero answers for NODATA"
-    );
-    assert!(
-        response.metadata.authoritative,
-        "Expected AA flag set for authoritative zone"
-    );
-}
-
-#[tokio::test]
-async fn test_authoritative_zone_missing_ns_returns_nodata() {
-    let server = start_dns_server().await;
-    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-
-    // dns-test.local has an A record but no NS record
-    // Should return NOERROR (NODATA) with AA flag set, not NXDOMAIN
-    let response = udp_query(&socket, server.addr, "dns-test.local.", RecordType::NS).await;
-    assert_eq!(
-        response_code(&response),
-        hickory_proto::op::ResponseCode::NoError,
-        "Expected NOERROR (NODATA) for missing NS on existing name"
-    );
-    assert!(
-        response.answers.is_empty(),
-        "Expected zero answers for NODATA"
-    );
-    assert!(
-        response.metadata.authoritative,
-        "Expected AA flag set for authoritative zone"
-    );
-}
-
-#[tokio::test]
 async fn test_authoritative_zone_missing_rr_type_returns_nodata() {
     let server = start_dns_server().await;
     let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -389,4 +343,430 @@ async fn test_authoritative_zone_a_query_with_aa_flag() {
         response.metadata.authoritative,
         "Expected AA flag set for authoritative zone"
     );
+}
+
+// ── Apex SOA / NS tests ───────────────────────────────────────────────────────
+
+/// Helper: start a server with a single zone and no extra user records.
+/// The DB layer automatically inserts apex SOA and NS on zone creation.
+async fn start_apex_server() -> common::TestDnsServer {
+    common::TestDnsServer::start_with_zones_only(vec!["apex-test.local".to_string()]).await
+}
+
+// --- UDP: apex SOA ---
+
+#[tokio::test]
+async fn test_apex_soa_udp_noerror_aa_with_answer() {
+    let server = start_apex_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let response = udp_query(&socket, server.addr, "apex-test.local.", RecordType::SOA).await;
+
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError,
+        "Apex SOA must return NOERROR"
+    );
+    assert!(
+        response.metadata.authoritative,
+        "Apex SOA must have AA flag set"
+    );
+    assert!(
+        !response.answers.is_empty(),
+        "Apex SOA must have at least one answer record"
+    );
+    assert_eq!(
+        response.answers[0].record_type(),
+        RecordType::SOA,
+        "Answer must be a SOA record"
+    );
+}
+
+// --- UDP: apex NS ---
+
+#[tokio::test]
+async fn test_apex_ns_udp_noerror_aa_with_answer() {
+    let server = start_apex_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let response = udp_query(&socket, server.addr, "apex-test.local.", RecordType::NS).await;
+
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError,
+        "Apex NS must return NOERROR"
+    );
+    assert!(
+        response.metadata.authoritative,
+        "Apex NS must have AA flag set"
+    );
+    assert!(
+        !response.answers.is_empty(),
+        "Apex NS must have at least one answer record"
+    );
+    assert_eq!(
+        response.answers[0].record_type(),
+        RecordType::NS,
+        "Answer must be an NS record"
+    );
+}
+
+// --- TCP: apex SOA ---
+
+#[tokio::test]
+async fn test_apex_soa_tcp_noerror_aa_with_answer() {
+    let server = start_apex_server().await;
+    let mut stream = None;
+    for _ in 0..10 {
+        if let Ok(Ok(s)) =
+            tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(server.addr)).await
+        {
+            stream = Some(s);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let mut stream = stream.expect("TCP DNS connection failed after retries");
+
+    let query = query_message("apex-test.local.", RecordType::SOA);
+    let len = u16::try_from(query.len()).unwrap();
+    stream.write_all(&len.to_be_bytes()).await.unwrap();
+    stream.write_all(&query).await.unwrap();
+
+    let mut length = [0u8; 2];
+    tokio::time::timeout(Duration::from_secs(2), stream.read_exact(&mut length))
+        .await
+        .expect("TCP SOA length timed out")
+        .unwrap();
+    let response_len = u16::from_be_bytes(length) as usize;
+    let mut response_bytes = vec![0u8; response_len];
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        stream.read_exact(&mut response_bytes),
+    )
+    .await
+    .expect("TCP SOA response timed out")
+    .unwrap();
+
+    use hickory_proto::serialize::binary::BinDecodable;
+    let response: hickory_proto::op::Message =
+        BinDecodable::from_bytes(&response_bytes).expect("Invalid TCP SOA response");
+
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(response.metadata.authoritative, "TCP SOA must have AA flag");
+    assert!(!response.answers.is_empty(), "TCP SOA must have answers");
+    assert_eq!(response.answers[0].record_type(), RecordType::SOA);
+}
+
+// --- TCP: apex NS ---
+
+#[tokio::test]
+async fn test_apex_ns_tcp_noerror_aa_with_answer() {
+    let server = start_apex_server().await;
+    let mut stream = None;
+    for _ in 0..10 {
+        if let Ok(Ok(s)) =
+            tokio::time::timeout(Duration::from_millis(500), TcpStream::connect(server.addr)).await
+        {
+            stream = Some(s);
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let mut stream = stream.expect("TCP DNS connection failed after retries");
+
+    let query = query_message("apex-test.local.", RecordType::NS);
+    let len = u16::try_from(query.len()).unwrap();
+    stream.write_all(&len.to_be_bytes()).await.unwrap();
+    stream.write_all(&query).await.unwrap();
+
+    let mut length = [0u8; 2];
+    tokio::time::timeout(Duration::from_secs(2), stream.read_exact(&mut length))
+        .await
+        .expect("TCP NS length timed out")
+        .unwrap();
+    let response_len = u16::from_be_bytes(length) as usize;
+    let mut response_bytes = vec![0u8; response_len];
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        stream.read_exact(&mut response_bytes),
+    )
+    .await
+    .expect("TCP NS response timed out")
+    .unwrap();
+
+    use hickory_proto::serialize::binary::BinDecodable;
+    let response: hickory_proto::op::Message =
+        BinDecodable::from_bytes(&response_bytes).expect("Invalid TCP NS response");
+
+    assert_eq!(
+        response_code(&response),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(response.metadata.authoritative, "TCP NS must have AA flag");
+    assert!(!response.answers.is_empty(), "TCP NS must have answers");
+    assert_eq!(response.answers[0].record_type(), RecordType::NS);
+}
+
+// --- Restart persistence ---
+
+#[tokio::test]
+async fn test_apex_soa_ns_survive_restart() {
+    let mut server = start_apex_server().await;
+
+    // Verify SOA/NS exist before restart.
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let pre_soa = udp_query(&socket, server.addr, "apex-test.local.", RecordType::SOA).await;
+    assert_eq!(
+        response_code(&pre_soa),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!pre_soa.answers.is_empty(), "SOA must exist before restart");
+
+    let pre_ns = udp_query(&socket, server.addr, "apex-test.local.", RecordType::NS).await;
+    assert_eq!(
+        response_code(&pre_ns),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!pre_ns.answers.is_empty(), "NS must exist before restart");
+
+    // Simulate restart against the same DB file.
+    server.restart().await;
+    let socket2 = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    let post_soa = udp_query(&socket2, server.addr, "apex-test.local.", RecordType::SOA).await;
+    assert_eq!(
+        response_code(&post_soa),
+        hickory_proto::op::ResponseCode::NoError,
+        "SOA must still be present after restart"
+    );
+    assert!(
+        !post_soa.answers.is_empty(),
+        "SOA answer must survive restart"
+    );
+    assert!(post_soa.metadata.authoritative);
+
+    let post_ns = udp_query(&socket2, server.addr, "apex-test.local.", RecordType::NS).await;
+    assert_eq!(
+        response_code(&post_ns),
+        hickory_proto::op::ResponseCode::NoError,
+        "NS must still be present after restart"
+    );
+    assert!(
+        !post_ns.answers.is_empty(),
+        "NS answer must survive restart"
+    );
+    assert!(post_ns.metadata.authoritative);
+}
+
+// --- Zone deletion cleanup ---
+
+#[tokio::test]
+async fn test_apex_soa_ns_removed_on_zone_deletion() {
+    use mydns::db::records;
+
+    let server = start_apex_server().await;
+
+    // Confirm SOA/NS exist before deletion.
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let pre_soa = udp_query(&socket, server.addr, "apex-test.local.", RecordType::SOA).await;
+    assert!(
+        !pre_soa.answers.is_empty(),
+        "SOA must exist before zone deletion"
+    );
+
+    // Delete the zone via DB (same as zones_api::remove_zone).
+    records::remove_zone(&server.pool, "apex-test.local")
+        .await
+        .expect("Zone removal failed");
+
+    // Verify no SOA/NS records remain in the DB.
+    let rows = records::find_by_name(&server.pool, "apex-test.local")
+        .await
+        .expect("find_by_name failed");
+    assert!(
+        rows.iter().all(|r| r.record_type != "SOA"),
+        "SOA record must be purged from dns_records after zone deletion"
+    );
+    assert!(
+        rows.iter().all(|r| r.record_type != "NS"),
+        "NS record must be purged from dns_records after zone deletion"
+    );
+
+    // Verify zone is gone from zones table.
+    let zone_names = records::list_zone_names(&server.pool)
+        .await
+        .expect("Failed to reload zone names");
+    assert!(
+        !zone_names.contains(&"apex-test.local".to_string()),
+        "Zone must not appear in zone names after deletion"
+    );
+}
+
+// --- Multiple zones: isolation ---
+
+#[tokio::test]
+async fn test_multiple_zones_soa_ns_isolated() {
+    let server = common::TestDnsServer::start_with_zones_only(vec![
+        "zone-a.local".to_string(),
+        "zone-b.local".to_string(),
+    ])
+    .await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // zone-a SOA and NS
+    let resp = udp_query(&socket, server.addr, "zone-a.local.", RecordType::SOA).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!resp.answers.is_empty(), "zone-a SOA must have answers");
+    assert_eq!(resp.answers[0].record_type(), RecordType::SOA);
+
+    let resp = udp_query(&socket, server.addr, "zone-a.local.", RecordType::NS).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!resp.answers.is_empty(), "zone-a NS must have answers");
+
+    // zone-b SOA and NS
+    let resp = udp_query(&socket, server.addr, "zone-b.local.", RecordType::SOA).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!resp.answers.is_empty(), "zone-b SOA must have answers");
+    assert_eq!(resp.answers[0].record_type(), RecordType::SOA);
+
+    let resp = udp_query(&socket, server.addr, "zone-b.local.", RecordType::NS).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!resp.answers.is_empty(), "zone-b NS must have answers");
+
+    // Verify SOA mname for zone-a refers to zone-a, not zone-b.
+    let resp = udp_query(&socket, server.addr, "zone-a.local.", RecordType::SOA).await;
+    if let hickory_proto::rr::RData::SOA(ref soa) = resp.answers[0].data {
+        let mname = soa.mname.to_string();
+        assert!(
+            mname.contains("zone-a"),
+            "zone-a SOA mname must reference zone-a, got: {mname}"
+        );
+    } else {
+        panic!("Expected SOA rdata for zone-a");
+    }
+
+    // Verify SOA mname for zone-b refers to zone-b.
+    let resp = udp_query(&socket, server.addr, "zone-b.local.", RecordType::SOA).await;
+    if let hickory_proto::rr::RData::SOA(ref soa) = resp.answers[0].data {
+        let mname = soa.mname.to_string();
+        assert!(
+            mname.contains("zone-b"),
+            "zone-b SOA mname must reference zone-b, got: {mname}"
+        );
+    } else {
+        panic!("Expected SOA rdata for zone-b");
+    }
+
+    // Non-apex child with no record → NXDOMAIN (zones must not bleed answers).
+    let resp = udp_query(&socket, server.addr, "child.zone-a.local.", RecordType::SOA).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NXDomain,
+        "Non-apex child with no record must be NXDOMAIN"
+    );
+}
+
+// --- Regression: NODATA / NXDOMAIN semantics preserved ---
+
+#[tokio::test]
+async fn test_regression_nodata_nxdomain_with_apex_records_present() {
+    let server = common::TestDnsServer::start_with_records(
+        vec!["reg-test.local".to_string()],
+        &[("host.reg-test.local", "A", "10.0.0.1")],
+    )
+    .await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // Existing child + matching RR → NOERROR with answer.
+    let resp = udp_query(&socket, server.addr, "host.reg-test.local.", RecordType::A).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(
+        !resp.answers.is_empty(),
+        "Existing A must produce an answer"
+    );
+
+    // Existing child + missing RR → NODATA.
+    let resp = udp_query(
+        &socket,
+        server.addr,
+        "host.reg-test.local.",
+        RecordType::AAAA,
+    )
+    .await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(resp.answers.is_empty(), "Missing AAAA must be NODATA");
+    assert!(resp.metadata.authoritative);
+
+    // Nonexistent name inside zone → NXDOMAIN + AA.
+    let resp = udp_query(&socket, server.addr, "ghost.reg-test.local.", RecordType::A).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NXDomain
+    );
+    assert!(resp.answers.is_empty());
+    assert!(resp.metadata.authoritative);
+
+    // Apex SOA exists → must return NOERROR with answer.
+    let resp = udp_query(&socket, server.addr, "reg-test.local.", RecordType::SOA).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(!resp.answers.is_empty(), "Apex SOA must have an answer");
+    assert!(resp.metadata.authoritative);
+
+    // Apex has SOA/NS but no A → must be NODATA for A.
+    let resp = udp_query(&socket, server.addr, "reg-test.local.", RecordType::A).await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NoError
+    );
+    assert!(
+        resp.answers.is_empty(),
+        "Apex with no A record must be NODATA for A query"
+    );
+    assert!(resp.metadata.authoritative);
+}
+
+#[tokio::test]
+async fn test_regression_authoritative_miss_not_forwarded_upstream() {
+    let server = start_apex_server().await;
+    let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+
+    // Nonexistent name inside authoritative zone → NXDOMAIN, not forwarded.
+    let resp = udp_query(
+        &socket,
+        server.addr,
+        "does-not-exist.apex-test.local.",
+        RecordType::A,
+    )
+    .await;
+    assert_eq!(
+        response_code(&resp),
+        hickory_proto::op::ResponseCode::NXDomain,
+        "Authoritative miss must be NXDOMAIN, never forwarded upstream"
+    );
+    assert!(resp.metadata.authoritative);
 }

@@ -101,6 +101,13 @@ pub async fn add_zone(
 
     reload_trie(&state).await?;
 
+    // Reload the record index so the newly inserted apex SOA/NS records are
+    // immediately visible to the DNS handler without requiring a restart.
+    let new_index = crate::dns::record_index::RecordIndex::load_from_db(&state.db)
+        .await
+        .map_err(ApiError::Internal)?;
+    *state.record_index.write().await = new_index;
+
     // Evict any upstream-cached data for names that now fall under this
     // authoritative zone. Without this, a previously cached answer could
     // bypass the zone enforcement on the next query.

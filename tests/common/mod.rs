@@ -103,6 +103,10 @@ impl TestServer {
             .await
             .expect("Failed to seed admin user");
 
+        mydns::db::records::seed_zones(&pool, &cfg.allowed_zones)
+            .await
+            .expect("Failed to seed zones in TestServer");
+
         let upstream = dns::upstream::UpstreamResolver::from_config(
             cfg.resolver_mode.clone(),
             cfg.resolver_priority.clone(),
@@ -223,6 +227,10 @@ impl TestDnsServer {
 
         let pool = db.init_pool().await;
 
+        mydns::db::records::seed_zones(&pool, &cfg.allowed_zones)
+            .await
+            .expect("Failed to seed zones in TestDnsServer");
+
         for r in records {
             db::records::create_record(
                 &pool,
@@ -286,6 +294,109 @@ impl TestDnsServer {
             cancel,
             handle,
         }
+    }
+    /// Creates a DNS server fixture with only zone entries — no additional records.
+    ///
+    /// Apex SOA and NS records are created automatically by the DB layer, so
+    /// this helper is useful for testing bare-apex SOA/NS behaviour.
+    pub async fn start_with_zones_only(allowed_zones: Vec<String>) -> Self {
+        Self::start_with_records(allowed_zones, &[]).await
+    }
+
+    /// Simulates a server restart by cancelling the current server and starting
+    /// a new one against the same database path.
+    ///
+    /// Records stored in `dns_records` (including apex SOA/NS) must survive
+    /// this cycle unchanged. The original `TestDb` is moved into the new server
+    /// so its temp directory is not deleted prematurely.
+    pub async fn restart(&mut self) {
+        // Stop the current server.
+        self.cancel.cancel();
+
+        // Wait for the old server task to exit by swapping out its handle.
+        let dummy_handle = tokio::spawn(async {});
+        let old_handle = std::mem::replace(&mut self.handle, dummy_handle);
+        let _ = old_handle.await;
+
+        let db_path = self.db.path_str();
+        let port = get_ephemeral_port().await;
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+        let cfg = AppConfig {
+            bind_host: "127.0.0.1".parse().unwrap(),
+            dns_port: port,
+            http_host: "127.0.0.1".parse().unwrap(),
+            http_port: port + 1,
+            cors_domains: vec!["mydns.local".to_string()],
+            dashboard_domain: "mydns.local".to_string(),
+            db_path: db_path.clone(),
+            jwt_secret: mydns::config::generate_secret(64),
+            admin_username: "admin".to_string(),
+            admin_password: "changeme123".to_string(),
+            resolver_mode: ResolverMode::Forwarding,
+            resolver_priority: ResolverPriority::CloudflareFirst,
+            cloudflare_dns: "1.1.1.1:53".parse().unwrap(),
+            router_dns: None,
+            run_as_user: "nobody".to_string(),
+            run_as_group: "nobody".to_string(),
+            // No allowed_zones on restart — zones are loaded from DB.
+            allowed_zones: vec![],
+            root_hints: vec![],
+        };
+
+        // Re-open the same DB (pool must be a fresh connection to the same file).
+        let pool = mydns::db::init(&db_path)
+            .await
+            .expect("Failed to reopen test database on restart");
+
+        let upstream = dns::upstream::UpstreamResolver::from_config(
+            cfg.resolver_mode.clone(),
+            cfg.resolver_priority.clone(),
+            cfg.cloudflare_dns,
+            cfg.router_dns,
+            cfg.root_hints.clone(),
+        )
+        .expect("Failed to create UpstreamResolver on restart");
+
+        let (log_tx, _) = tokio::sync::broadcast::channel(256);
+        let cancel = CancellationToken::new();
+        let zone_trie = ZoneTrie::from_zones(
+            &mydns::db::records::list_zone_names(&pool)
+                .await
+                .expect("Failed to load zone names on restart"),
+        );
+        let record_index = RecordIndex::load_from_db(&pool)
+            .await
+            .expect("Failed to load RecordIndex on restart");
+        let state = AppState::new(
+            pool.clone(),
+            cfg,
+            upstream,
+            log_tx,
+            cancel.clone(),
+            record_index,
+            zone_trie,
+        );
+
+        let server_state = Arc::clone(&state);
+        let server_cancel = cancel.clone();
+
+        let handle = tokio::spawn(async move {
+            let _ = dns::server::run(server_state, server_cancel).await;
+        });
+
+        // Wait until TCP socket is ready.
+        for _ in 0..50 {
+            if tokio::net::TcpStream::connect(addr).await.is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
+        self.addr = addr;
+        self.pool = pool;
+        self.cancel = cancel;
+        self.handle = handle;
     }
 }
 
