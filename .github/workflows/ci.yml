@@ -31,6 +31,11 @@ jobs:
       - name: Build Dashboard
         run: npm run build
 
+      # NOTE: Frontend coverage is not yet configured.
+      # The frontend (React + Vite) currently has no test framework installed.
+      # When frontend tests are added (e.g., Vitest), add a coverage step here
+      # and upload to Codecov with: flags: frontend
+
   lint-and-format:
     name: Rust Format & Clippy
     runs-on: ubuntu-latest
@@ -63,7 +68,7 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
 
   test-and-coverage:
-    name: Test & Codecov (${{ matrix.os }})
+    name: Test & Coverage (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -92,17 +97,23 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Run Tests with Coverage (Single Job)
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+      - name: Run Tests with Coverage
+        # --all-targets includes all integration test crates in tests/
+        # --all-features ensures conditional-compilation paths are covered
+        # --lcov produces a Codecov-compatible LCOV report
+        run: cargo llvm-cov --all-targets --all-features --lcov --output-path lcov.info
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload Backend Coverage to Codecov
+        # Only upload from ubuntu-latest to avoid double-counting the same
+        # coverage data from the windows-latest matrix leg.
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
-          flags: unittests
-          name: codecov-${{ matrix.os }}
+          flags: backend
+          name: backend-coverage
 
   build-release:
     name: Release Build (${{ matrix.os }})
@@ -133,3 +144,4 @@ jobs:
 
       - name: Build Release Binary
         run: cargo build --release --verbose
+
