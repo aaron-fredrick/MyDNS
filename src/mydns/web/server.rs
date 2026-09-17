@@ -13,10 +13,12 @@ use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
-use crate::state::AppState;
-use crate::web::{
-    auth, blocklist_api, cache_api, records_api, settings_api, stats_api, ws, zones_api,
+use crate::api::v1::{
+    blocklist as blocklist_api, cache as cache_api, records as records_api,
+    settings as settings_api, stats as stats_api, zones as zones_api,
 };
+use crate::state::AppState;
+use crate::web::{auth, ws};
 
 const MAX_BODY_BYTES: usize = 64 * 1024;
 
