@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -82,6 +82,8 @@ jobs:
           Copy-Item -Recurse "out\web\*" "$targetDir\web"
           Copy-Item "config.toml.example" "$targetDir\config\mydns.toml.example"
           .\scripts\package-release.ps1 -Target "${{ matrix.package }}" -Version $version -Installer
+          $zip = "out\packages\MyDNS-v$version-${{ matrix.package }}.zip"
+          (Get-FileHash $zip -Algorithm SHA256).Hash | Out-File -Encoding ascii "$zip.sha256"
 
       - name: Assemble Linux package
         if: runner.os == 'Linux'
@@ -105,6 +107,7 @@ jobs:
           name: MyDNS-${{ matrix.package }}
           path: |
             out/packages/*.zip
+            out/packages/*.zip.sha256
             out/installers/*.exe
           if-no-files-found: error
 
@@ -117,3 +120,20 @@ jobs:
             out/packages/*.tar.gz
             out/packages/*.tar.gz.sha256
           if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: MyDNS-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**
+          generate_release_notes: true
