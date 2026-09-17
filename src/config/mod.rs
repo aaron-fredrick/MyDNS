@@ -238,7 +238,7 @@ impl AppConfig {
         let resolver = parsed.resolver.unwrap_or_default();
         let zones = parsed.zones.unwrap_or_default();
 
-        let allowed_zones = zones
+        let mut allowed_zones: Vec<String> = zones
             .authoritative
             .or(zones.allowed)
             .unwrap_or_default()
@@ -246,6 +246,10 @@ impl AppConfig {
             .map(|z| z.trim_end_matches('.').to_lowercase())
             .filter(|z| !z.is_empty())
             .collect();
+
+        if allowed_zones.is_empty() {
+            allowed_zones.push("home.arpa".to_string());
+        }
 
         let cors_domains = zones
             .cors_domains
@@ -340,16 +344,22 @@ impl AppConfig {
                 .get("run_as_group")
                 .cloned()
                 .unwrap_or_else(|| "nobody".to_string()),
-            allowed_zones: values
-                .get("allowed_zones")
-                .map(|v| {
-                    v.split(',')
-                        .map(str::trim)
-                        .filter(|z| !z.is_empty())
-                        .map(|z| z.trim_end_matches('.').to_lowercase())
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default(),
+            allowed_zones: {
+                let mut zones = values
+                    .get("allowed_zones")
+                    .map(|v| {
+                        v.split(',')
+                            .map(str::trim)
+                            .filter(|z| !z.is_empty())
+                            .map(|z| z.trim_end_matches('.').to_lowercase())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                if zones.is_empty() {
+                    zones.push("home.arpa".to_string());
+                }
+                zones
+            },
             root_hints: values
                 .get("root_hints")
                 .map(|v| {
@@ -509,7 +519,8 @@ admin_password = "password"
         assert_eq!(cfg.db_path, "mydns.db");
         assert_eq!(cfg.resolver_mode, ResolverMode::Forwarding);
         assert_eq!(cfg.resolver_priority, ResolverPriority::CloudflareFirst);
-        assert_eq!(cfg.allowed_zones.len(), 0);
+        assert_eq!(cfg.allowed_zones.len(), 1);
+        assert_eq!(cfg.allowed_zones[0], "home.arpa");
         // When not set, root_hints should be empty (resolved to IANA defaults at runtime).
         assert_eq!(cfg.root_hints.len(), 0);
     }

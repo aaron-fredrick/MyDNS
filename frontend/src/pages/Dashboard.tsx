@@ -15,7 +15,7 @@ export function Dashboard() {
       <section className="metrics-grid">
         <Metric label="Cache hit rate" value={stats ? `${stats.cache_hit_rate.toFixed(1)}%` : '—'} detail="vs last hour" />
         <Metric label="Upstream latency" value={stats ? `${stats.upstream.latency.avg_ms.toFixed(1)} ms` : '—'} detail="vs last hour" />
-        <Metric label="Avg response time" value={stats ? `${stats.response_time.avg_ms.toFixed(1)} ms` : '—'} detail="vs last hour" />
+        <Metric label="Queries blocked" value={stats ? `${stats.queries_blocked.toLocaleString()}` : '—'} detail="by blocklist" />
         <Metric label="Requests" value={stats ? `${stats.requests_per_minute.toLocaleString()}/min` : '—'} detail="current rate" />
         <Metric label="Upstream availability" value={stats ? `${stats.upstream.availability_pct.toFixed(1)}%` : '—'} detail={`${stats?.upstream.failures ?? 0} failures`} />
       </section>
@@ -31,6 +31,7 @@ export function Dashboard() {
           <p>Uptime <b>{stats ? formatUptime(stats.uptime_secs) : '—'}</b></p>
           <p>Total queries <b>{stats?.queries_total.toLocaleString() ?? '—'}</b></p>
           <p>DNS errors <b>{stats?.dns_errors.toLocaleString() ?? '—'}</b></p>
+          <p>Blocklist size <b>{stats?.blocklist_size.toLocaleString() ?? '—'} domains</b></p>
         </div>
         <div className="card">
           <h3>Latency distribution</h3>

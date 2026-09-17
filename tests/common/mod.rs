@@ -122,6 +122,10 @@ impl TestServer {
         let record_index = RecordIndex::load_from_db(&pool)
             .await
             .expect("Failed to load RecordIndex");
+        let domains = mydns::db::blocklist::list_enabled_domains(&pool)
+            .await
+            .expect("Failed to load blocklist domains");
+        let blocklist_index = mydns::dns::blocklist::BlocklistIndex::from_domains(&domains);
         let state = AppState::new(
             pool.clone(),
             cfg.clone(),
@@ -130,6 +134,7 @@ impl TestServer {
             cancel.clone(),
             record_index,
             zone_trie,
+            blocklist_index,
         );
 
         let server_state = Arc::clone(&state);
@@ -262,6 +267,10 @@ impl TestDnsServer {
         let record_index = RecordIndex::load_from_db(&pool)
             .await
             .expect("Failed to load RecordIndex");
+        let domains = mydns::db::blocklist::list_enabled_domains(&pool)
+            .await
+            .expect("Failed to load blocklist domains");
+        let blocklist_index = mydns::dns::blocklist::BlocklistIndex::from_domains(&domains);
         let state = AppState::new(
             pool.clone(),
             cfg,
@@ -270,6 +279,7 @@ impl TestDnsServer {
             cancel.clone(),
             record_index,
             zone_trie,
+            blocklist_index,
         );
 
         let server_state = Arc::clone(&state);
@@ -368,6 +378,10 @@ impl TestDnsServer {
         let record_index = RecordIndex::load_from_db(&pool)
             .await
             .expect("Failed to load RecordIndex on restart");
+        let domains = mydns::db::blocklist::list_enabled_domains(&pool)
+            .await
+            .expect("Failed to load blocklist domains");
+        let blocklist_index = mydns::dns::blocklist::BlocklistIndex::from_domains(&domains);
         let state = AppState::new(
             pool.clone(),
             cfg,
@@ -376,6 +390,7 @@ impl TestDnsServer {
             cancel.clone(),
             record_index,
             zone_trie,
+            blocklist_index,
         );
 
         let server_state = Arc::clone(&state);

@@ -20,6 +20,10 @@ pub async fn get_stats(
         .fetch_one(&state.db)
         .await
         .unwrap_or(0);
+    let blocklist_size: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM blocklist")
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
 
     let total_cache = hits + misses;
     let cache_hit_rate = if total_cache == 0 {
@@ -38,6 +42,7 @@ pub async fn get_stats(
         object.insert("cache_hit_rate".into(), json!(cache_hit_rate));
         object.insert("cache_size".into(), json!(cache_size));
         object.insert("record_count".into(), json!(record_count));
+        object.insert("blocklist_size".into(), json!(blocklist_size));
     }
 
     Ok(Json(value))

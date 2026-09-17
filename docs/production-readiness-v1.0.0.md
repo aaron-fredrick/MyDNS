@@ -119,7 +119,7 @@ Each useful request flow should expose, where applicable:
 - Query type.
 - UDP/TCP transport.
 - Normalized query name.
-- Resolution path: memory cache, persistent cache, authoritative DB, special record, or upstream.
+- Resolution path: memory cache, persistent cache, Local DNS, special record, or upstream.
 - Cache hit/miss.
 - Upstream destination.
 - CNAME hops.
@@ -264,7 +264,7 @@ Complete and verify:
 - Enforcement on create/update.
 - Regression coverage for boundaries.
 
-Retain protocol coverage for UDP/TCP, supported records, authoritative responses, TTLs, positive/NODATA/NXDOMAIN/SERVFAIL, CNAME chains, and loops.
+Retain protocol coverage for UDP/TCP, supported records, Local DNS responses, TTLs, positive/NODATA/NXDOMAIN/SERVFAIL, CNAME chains, and loops.
 
 ### 2.10 API, authentication, and lifecycle — REQUIRED
 

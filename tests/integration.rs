@@ -272,3 +272,72 @@ async fn test_release_cors_is_restricted() {
         .get("access-control-allow-origin")
         .is_none();
 }
+
+// ── blocklist ────────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_blocklist_crud_cycle() {
+    let server = common::TestServer::start().await;
+    let c = client();
+    let auth = server.auth_header(&c).await;
+    let base = &server.base_url;
+
+    // CREATE
+    let res = c
+        .post(format!("{}/api/v1/blocklist", base))
+        .header("Authorization", &auth)
+        .json(&json!({
+            "domain": "evil.local",
+            "enabled": true,
+            "reason": "testing"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: Value = res.json().await.unwrap();
+    let id = body["id"].as_i64().unwrap();
+    assert_eq!(body["domain"].as_str().unwrap(), "evil.local");
+
+    // LIST
+    let res = c
+        .get(format!("{}/api/v1/blocklist", base))
+        .header("Authorization", &auth)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let arr = res.json::<Vec<Value>>().await.unwrap();
+    assert!(arr.iter().any(|e| e["id"] == id));
+
+    // UPDATE
+    let res = c
+        .put(format!("{}/api/v1/blocklist/{}", base, id))
+        .header("Authorization", &auth)
+        .json(&json!({ "enabled": false }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: Value = res.json().await.unwrap();
+    assert!(!body["enabled"].as_bool().unwrap());
+
+    // DELETE
+    let res = c
+        .delete(format!("{}/api/v1/blocklist/{}", base, id))
+        .header("Authorization", &auth)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 204);
+
+    // LIST again
+    let res = c
+        .get(format!("{}/api/v1/blocklist", base))
+        .header("Authorization", &auth)
+        .send()
+        .await
+        .unwrap();
+    let arr = res.json::<Vec<Value>>().await.unwrap();
+    assert!(!arr.iter().any(|e| e["id"] == id));
+}

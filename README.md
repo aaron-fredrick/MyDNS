@@ -8,7 +8,7 @@
 
 </div>
 
-**MyDNS** is a Rust-based DNS server and management service built around authoritative DNS, upstream resolution, persistent caching, and a web dashboard.
+**MyDNS** is a Rust-based DNS server and management service built around Local DNS, domain blocking, upstream resolution, persistent caching, and a web dashboard.
 
 The project is currently being prepared for its first proper production release: **V1.0.0**. The V1 scope is deliberately focused on finishing and hardening the existing product rather than expanding it indefinitely.
 
@@ -19,7 +19,7 @@ The project is currently being prepared for its first proper production release:
 ### DNS server
 
 - UDP and TCP DNS serving.
-- Authoritative records including A, AAAA, CNAME, MX, NS, PTR, and TXT.
+- Local DNS records including A, AAAA, CNAME, MX, NS, PTR, and TXT.
 - Correct handling of NXDOMAIN, NODATA, and SERVFAIL responses.
 - CNAME-chain resolution with loop detection.
 - Configurable upstream resolver behaviour.

@@ -109,14 +109,14 @@ pub async fn add_zone(
     *state.record_index.write().await = new_index;
 
     // Evict any upstream-cached data for names that now fall under this
-    // authoritative zone. Without this, a previously cached answer could
+    // local DNS zone. Without this, a previously cached answer could
     // bypass the zone enforcement on the next query.
     records::delete_cache_for_zone(&state.db, &canonical)
         .await
         .map_err(ApiError::Internal)?;
     state.cache.write().await.clear_zone(&canonical);
 
-    tracing::info!(zone = %canonical, "Authoritative zone added");
+    tracing::info!(zone = %canonical, "Local DNS zone added");
     let _ = state.log_tx.send(format!("[ZONES] ADD zone={}", canonical));
 
     Ok(Json(serde_json::json!({ "zone": zone })))
@@ -150,7 +150,7 @@ pub async fn remove_zone(
 
     state.cache.write().await.clear();
 
-    tracing::info!(zone = %canonical, "Authoritative zone removed");
+    tracing::info!(zone = %canonical, "Local DNS zone removed");
     let _ = state
         .log_tx
         .send(format!("[ZONES] REMOVE zone={}", canonical));

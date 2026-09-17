@@ -111,7 +111,7 @@ export function Records() {
   }
 
   return (
-    <Page title="DNS Records" subtitle="Manage authoritative records across your configured zones.">
+    <Page title="DNS Records" subtitle="Manage local DNS records across your configured zones.">
       <div className="toolbar">
         <input
           id="records-search"
@@ -209,7 +209,7 @@ export function Records() {
         </div>
         {!form.is_dev && editingId === null && zones.length === 0 && (
           <div className="error-banner" style={{ marginTop: '1rem', padding: '0.5rem' }}>
-            No authoritative zones configured. Please <a href="/zones" style={{ color: 'inherit', textDecoration: 'underline' }}>add a zone</a> first, or check the "Dev record" box.
+            No local DNS zones configured. Please <a href="/zones" style={{ color: 'inherit', textDecoration: 'underline' }}>add a zone</a> first, or check the "Dev record" box.
           </div>
         )}
       </div>

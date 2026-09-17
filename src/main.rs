@@ -9,6 +9,7 @@ use mydns::{cache, config, db, dns, privileges, state, web};
 use tracing_samply::SamplyLayer;
 
 use config::AppConfig;
+use dns::blocklist::BlocklistIndex;
 use dns::record_index::RecordIndex;
 use dns::upstream::UpstreamResolver;
 use dns::zone_trie::ZoneTrie;
@@ -121,9 +122,14 @@ async fn main() -> anyhow::Result<()> {
     // Build the live trie from DB so zone changes made via the API persist
     // across restarts without requiring a config file edit.
     let zone_names = db::records::list_zone_names(&pool).await?;
-    tracing::info!(zones = ?zone_names, "Authoritative zones loaded from DB");
+    tracing::info!(zones = ?zone_names, "Local DNS zones loaded from DB");
     let zone_trie = ZoneTrie::from_zones(&zone_names);
     let record_index = RecordIndex::load_from_db(&pool).await?;
+
+    // Load the blocklist into memory for zero-DB-hit blocked-query enforcement.
+    let enabled_domains = db::blocklist::list_enabled_domains(&pool).await?;
+    tracing::info!(count = enabled_domains.len(), "Blocklist loaded from DB");
+    let blocklist_index = BlocklistIndex::from_domains(&enabled_domains);
 
     let cancel = CancellationToken::new();
     let state = state::AppState::new(
@@ -134,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
         cancel.clone(),
         record_index,
         zone_trie,
+        blocklist_index,
     );
 
     // Attach the shared collector after AppState owns the resolver. This keeps

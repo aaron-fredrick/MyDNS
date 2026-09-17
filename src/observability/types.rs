@@ -34,6 +34,7 @@ pub struct MetricsSnapshot {
     pub uptime_secs: u64,
     pub requests_per_minute: u64,
     pub queries_total: u64,
+    pub queries_blocked: u64,
     pub upstream: UpstreamStats,
     pub response_time: LatencyStats,
     pub cache_evictions: u64,

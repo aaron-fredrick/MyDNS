@@ -5,6 +5,7 @@ use sqlx::{
 };
 use std::{str::FromStr, time::Duration};
 
+pub mod blocklist;
 pub mod records;
 
 /// Initialises the SQLite connection pool and runs all DDL migrations.
@@ -137,6 +138,33 @@ async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             .execute(pool)
             .await?;
     }
+
+    // Domain blocklist — locally blocked domains that are never forwarded upstream.
+    // Stored as lowercase canonical domain names (no trailing dot).
+    // `source` is an open enum-ready column: 'manual' | 'imported' | 'remote'.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS blocklist (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain     TEXT    NOT NULL UNIQUE,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            source     TEXT    NOT NULL DEFAULT 'manual',
+            reason     TEXT,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_blocklist_domain  ON blocklist(domain)")
+        .execute(pool)
+        .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_blocklist_enabled ON blocklist(enabled)")
+        .execute(pool)
+        .await?;
 
     Ok(())
 }

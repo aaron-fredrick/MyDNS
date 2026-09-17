@@ -14,7 +14,9 @@ use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
 use crate::state::AppState;
-use crate::web::{auth, cache_api, records_api, settings_api, stats_api, ws, zones_api};
+use crate::web::{
+    auth, blocklist_api, cache_api, records_api, settings_api, stats_api, ws, zones_api,
+};
 
 const MAX_BODY_BYTES: usize = 64 * 1024;
 
@@ -58,6 +60,15 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
             get(zones_api::list_zones).post(zones_api::add_zone),
         )
         .route("/zones/:name", delete(zones_api::remove_zone))
+        .route(
+            "/blocklist",
+            get(blocklist_api::list_blocklist).post(blocklist_api::add_blocklist_entry),
+        )
+        .route(
+            "/blocklist/:id",
+            put(blocklist_api::update_blocklist_entry)
+                .delete(blocklist_api::delete_blocklist_entry),
+        )
         .fallback(|| async { StatusCode::NOT_FOUND });
 
     let security_headers = ServiceBuilder::new()

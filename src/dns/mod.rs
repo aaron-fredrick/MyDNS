@@ -1,3 +1,4 @@
+pub mod blocklist;
 pub mod handler;
 pub mod metrics_handler;
 pub mod record_index;

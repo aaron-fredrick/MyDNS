@@ -16,7 +16,7 @@ use crate::state::AppState;
 
 #[derive(Debug)]
 enum ResolutionResult {
-    Positive(Vec<Record>, bool), // records, is_authoritative
+    Positive(Vec<Record>, bool), // records, is_authoritative (DNS AA bit)
     Nodata(bool),                // is_authoritative
     NxDomain(bool),              // is_authoritative
     ServFail,
@@ -130,52 +130,71 @@ impl DnsHandler {
         src: SocketAddr,
         recursion_desired: bool,
     ) -> ResolutionResult {
-        let authoritative_zone: Option<String> = {
+        // ── 1. Local DNS zone ───────────────────────────────────────────────
+        // If the query falls within a configured local zone, resolve it
+        // entirely from local records. Upstream, cache, and blocklist are
+        // all bypassed — local zones are private namespaces.
+        let local_zone: Option<String> = {
             let trie = self.state.zone_trie.read().await;
             trie.find_zone(name).map(|s| s.to_string())
         };
-        let is_authoritative_zone = authoritative_zone.is_some();
+        let is_local_zone = local_zone.is_some();
 
-        //println!(">>>>>> Processing resolution <<<<<< src: {}, query: {}, rtype: {:?}, is_authoritative_zone: {}", src, name, rtype, is_authoritative_zone);
-        //tracing::info!(">>>>>> Processing resolution <<<<<<", client = %src, query = %name, r#type = %rtype, is_authoritative_zone = is_authoritative_zone);
-
-        // For authoritative zones: consult authoritative sources only.
-        // Upstream caches (memory and persistent) are skipped entirely to
-        // prevent stale upstream data from shadowing authoritative records.
-        if !is_authoritative_zone {
-            if let Some(result) = self.queryMemoryCache(name, rtype, src).await {
+        if is_local_zone {
+            // Local zone path: only consult the local record index.
+            // Cache (memory and persistent) are skipped to prevent stale
+            // upstream data from shadowing locally managed records.
+            if let Some(result) = self
+                .queryRecordIndex(name, rtype, src, local_zone.as_deref())
+                .await
+            {
                 return result;
             }
-        }
 
-        if let Some(result) = self
-            .queryRecordIndex(name, rtype, src, authoritative_zone.as_deref())
-            .await
-        {
-            return result;
-        }
-
-        if !is_authoritative_zone {
-            if let Some(result) = self.queryPersistentCache(name, rtype).await {
-                return result;
+            if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
+                return ResolutionResult::Positive(records, true);
             }
-        }
 
-        if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
-            return ResolutionResult::Positive(records, true);
-        }
-
-        // If the query falls within an authoritative zone and was not found locally:
-        // Return authoritative NXDOMAIN immediately and NEVER forward to upstream.
-        if is_authoritative_zone {
-            tracing::info!(client = %src, query = %name, r#type = %rtype, "Authoritative zone record not found");
+            // Name is inside a local zone but no record exists → local NXDOMAIN.
+            tracing::info!(client = %src, query = %name, r#type = %rtype, "Local zone record not found");
             let _ = self.state.log_tx.send(format!(
-                "[AUTHORITATIVE NXDOMAIN] client={} query={} type={}",
+                "[LOCAL NXDOMAIN] client={} query={} type={}",
                 src, name, rtype
             ));
             return ResolutionResult::NxDomain(true);
         }
 
+        // ── 2. Blocklist ────────────────────────────────────────────────────
+        // Check the blocklist before cache so that newly blocked domains
+        // cannot be served from a stale cache entry.
+        if let Some(result) = self.queryBlocklist(name, rtype, src).await {
+            return result;
+        }
+
+        // ── 3. Memory cache ─────────────────────────────────────────────────
+        if let Some(result) = self.queryMemoryCache(name, rtype, src).await {
+            return result;
+        }
+
+        // ── 4. Local record index (non-local-zone dev records, etc.) ────────
+        if let Some(result) = self
+            .queryRecordIndex(name, rtype, src, local_zone.as_deref())
+            .await
+        {
+            return result;
+        }
+
+        // ── 5. Persistent cache ─────────────────────────────────────────────
+        if let Some(result) = self.queryPersistentCache(name, rtype).await {
+            return result;
+        }
+
+        // ── 6. Special synthetic records ────────────────────────────────────
+        if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
+            return ResolutionResult::Positive(records, true);
+        }
+
+        // ── 7. Upstream ─────────────────────────────────────────────────────
         if !recursion_desired {
             tracing::info!(client = %src, query = %name, r#type = %rtype, "Recursion not desired and record not in local DB or cache");
             return ResolutionResult::NxDomain(false);
@@ -209,6 +228,45 @@ impl DnsHandler {
                 ResolutionResult::ServFail
             }
         }
+    }
+
+    /// Checks whether `name` is on the blocklist.
+    ///
+    /// Returns `Some(NxDomain(false))` when blocked (never upstream, never
+    /// cached). The blocklist is authoritative over the cache so that
+    /// toggling a domain on/off takes effect immediately without a cache flush.
+    #[tracing::instrument(
+        name = "query_blocklist",
+        level = tracing::Level::DEBUG,
+        fields(name = %name, rtype = ?rtype),
+        skip(self)
+    )]
+    async fn queryBlocklist(
+        &self,
+        name: &str,
+        rtype: RecordType,
+        src: SocketAddr,
+    ) -> Option<ResolutionResult> {
+        let blocked = {
+            let idx = self.state.blocklist_index.read().await;
+            idx.is_blocked(name)
+        };
+        if !blocked {
+            return None;
+        }
+        self.state.metrics.record_blocked();
+        tracing::info!(
+            client = %src,
+            domain = %name,
+            r#type = %rtype,
+            reason = "blocklist",
+            "DNS query blocked"
+        );
+        let _ = self.state.log_tx.send(format!(
+            "[BLOCKED] client={} query={} type={} reason=blocklist",
+            src, name, rtype
+        ));
+        Some(ResolutionResult::NxDomain(false))
     }
 
     #[tracing::instrument(

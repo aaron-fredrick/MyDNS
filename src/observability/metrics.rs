@@ -12,6 +12,7 @@ const HISTORY: Duration = Duration::from_secs(24 * 60 * 60);
 pub struct Metrics {
     started: Instant,
     queries: AtomicU64,
+    queries_blocked: AtomicU64,
     upstream_requests: AtomicU64,
     upstream_successes: AtomicU64,
     upstream_failures: AtomicU64,
@@ -31,6 +32,12 @@ impl Metrics {
     pub fn record_query(&self, query_type: &str) {
         self.queries.fetch_add(1, Ordering::Relaxed);
         increment(&self.query_types, query_type);
+    }
+
+    /// Increments the blocked-query counter. Called from the DNS handler when
+    /// a query is intercepted by the blocklist before reaching upstream.
+    pub fn record_blocked(&self) {
+        self.queries_blocked.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn record_outcome(&self, outcome: &str) {
@@ -82,6 +89,7 @@ impl Metrics {
             uptime_secs: self.started.elapsed().as_secs(),
             requests_per_minute,
             queries_total: self.queries.load(Ordering::Relaxed),
+            queries_blocked: self.queries_blocked.load(Ordering::Relaxed),
             upstream: UpstreamStats {
                 requests: upstream_requests,
                 successes: upstream_successes,
@@ -182,6 +190,7 @@ impl Default for Metrics {
         Self {
             started: Instant::now(),
             queries: AtomicU64::new(0),
+            queries_blocked: AtomicU64::new(0),
             upstream_requests: AtomicU64::new(0),
             upstream_successes: AtomicU64::new(0),
             upstream_failures: AtomicU64::new(0),

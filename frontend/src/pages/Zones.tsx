@@ -43,7 +43,7 @@ export function Zones() {
   };
 
   const handleRemoveZone = async (name: string) => {
-    if (!window.confirm(`Are you sure you want to remove the zone '${name}'? DNS queries for this zone will no longer be handled authoritatively.`)) {
+    if (!window.confirm(`Are you sure you want to remove the zone '${name}'? DNS queries for this zone will no longer be handled locally.`)) {
       return;
     }
 
@@ -62,16 +62,16 @@ export function Zones() {
   return (
     <div className="card">
       <div className="card-header">
-        <h2>Authoritative Zones</h2>
+        <h2>Local DNS Zones</h2>
       </div>
 
       <div className="card-body">
         {error && <div className="error-banner">{error}</div>}
 
         <div className="info-banner" style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: 'var(--bg-card)', borderRadius: '4px', borderLeft: '4px solid var(--primary)' }}>
-          <p style={{ margin: '0 0 0.5rem 0' }}><strong>About Authoritative Zones</strong></p>
+          <p style={{ margin: '0 0 0.5rem 0' }}><strong>About Local DNS Zones</strong></p>
           <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--fg-muted)' }}>
-            These are the domains your MyDNS server is authoritative for. Any query for a name within these zones will be resolved locally using your DNS Records, and will <em>never</em> be forwarded upstream.
+            These are the local domains your MyDNS server handles. Any query for a name within these zones will be resolved locally using your DNS Records, and will <em>never</em> be forwarded upstream.
           </p>
         </div>
 
@@ -95,7 +95,7 @@ export function Zones() {
         {loading ? (
           <div className="loading">Loading zones...</div>
         ) : zones.length === 0 ? (
-          <div className="empty-state">No authoritative zones configured.</div>
+          <div className="empty-state">No local DNS zones configured.</div>
         ) : (
           <table className="table">
             <thead>

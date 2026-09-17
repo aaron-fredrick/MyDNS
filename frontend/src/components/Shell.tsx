@@ -5,8 +5,9 @@ import { auth } from '../api';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', glyph: '▦' },
-  { to: '/zones', label: 'Zones', glyph: '◉' },
-  { to: '/records', label: 'DNS Records', glyph: '≡' },
+  { to: '/zones', label: 'Local Zones', glyph: '◉' },
+  { to: '/records', label: 'Local Records', glyph: '≡' },
+  { to: '/blocklist', label: 'Blocklist', glyph: '⊘' },
   { to: '/cache', label: 'DNS Cache', glyph: '◫' },
   { to: '/logs', label: 'Live Logs', glyph: '⌁' },
   { to: '/settings', label: 'Settings', glyph: '⚙' },

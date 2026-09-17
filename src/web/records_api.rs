@@ -50,8 +50,8 @@ pub async fn list_records(
 
 /// `POST /api/v1/records`
 ///
-/// When `is_dev = false` (default), the record name must belong to an
-/// authoritative zone in the DB. When `is_dev = true`, zone validation is
+/// When `is_dev = false` (default), the record name must belong to a
+/// local DNS zone in the DB. When `is_dev = true`, zone validation is
 /// skipped and the record is marked ephemeral — it will be purged on the next
 /// server restart.
 pub async fn create_record(
@@ -65,7 +65,7 @@ pub async fn create_record(
         // Dev records bypass zone ownership — they exist solely for ephemeral
         // local testing and resolve via the record index during this session.
     } else {
-        // For authoritative records, validate against the live DB zones so
+        // For local DNS records, validate against the live DB zones so
         // that zone changes made via the API are reflected immediately.
         let zone_names = records::list_zone_names(&state.db)
             .await

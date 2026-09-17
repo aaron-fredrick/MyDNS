@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod blocklist_api;
 pub mod cache_api;
 pub mod records_api;
 pub mod server;

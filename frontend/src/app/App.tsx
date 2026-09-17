@@ -10,6 +10,7 @@ const Records = lazy(() => import('../pages/Records').then(m => ({ default: m.Re
 const Cache = lazy(() => import('../pages/Cache').then(m => ({ default: m.Cache })));
 const Logs = lazy(() => import('../pages/Logs').then(m => ({ default: m.Logs })));
 const Settings = lazy(() => import('../pages/Settings').then(m => ({ default: m.Settings })));
+const Blocklist = lazy(() => import('../pages/Blocklist').then(m => ({ default: m.Blocklist })));
 
 function RouteLoading() {
   return <div className="route-loading" role="status" aria-live="polite">Loading…</div>;
@@ -26,6 +27,7 @@ export function App() {
         <Route path="/cache" element={<ProtectedRoute><Cache /></ProtectedRoute>} />
         <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/blocklist" element={<ProtectedRoute><Blocklist /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
