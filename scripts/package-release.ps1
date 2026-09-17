@@ -31,12 +31,12 @@ Write-Host "Portable package: $archive" -ForegroundColor Green
 
 if ($Installer) {
     if ($Target -notin @("win-x64", "win-arm64")) {
-        throw "Inno Setup installers are only supported for Windows targets."
+        throw "The -Installer switch currently supports Windows targets only. Linux and macOS use platform-native packaging paths."
     }
 
-    $iss = Join-Path $root "scripts\installer\mydns-$Target.iss"
+    $iss = Join-Path $root "scripts\packaging\windows\mydns-$Target.iss"
     if (-not (Test-Path $iss)) {
-        throw "Installer definition not found: $iss"
+        throw "Windows installer definition not found: $iss"
     }
 
     $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
@@ -56,5 +56,5 @@ if ($Installer) {
         throw "Inno Setup failed for $Target."
     }
 
-    Write-Host "Installer generated under $out\installers" -ForegroundColor Green
+    Write-Host "Windows installer generated under $out\installers" -ForegroundColor Green
 }
