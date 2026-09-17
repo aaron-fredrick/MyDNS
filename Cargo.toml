@@ -10,6 +10,34 @@ default-run = "mydns"
 name = "mydns"
 path = "src/main.rs"
 
+# Integration tests are deliberately grouped under tests/integration/.
+# Explicit targets keep Cargo discovery stable while allowing the repository
+# to organize tests by purpose instead of leaving all entry points at tests/.
+[[test]]
+name = "auth_coverage"
+path = "tests/integration/auth_coverage.rs"
+[[test]]
+name = "blocklist_integration"
+path = "tests/integration/blocklist_integration.rs"
+[[test]]
+name = "cache_persistence"
+path = "tests/integration/cache_persistence.rs"
+[[test]]
+name = "dns_integration"
+path = "tests/integration/dns_integration.rs"
+[[test]]
+name = "api_integration"
+path = "tests/integration/integration.rs"
+[[test]]
+name = "local_dns_integration"
+path = "tests/integration/local_dns_integration.rs"
+[[test]]
+name = "upstream_integration"
+path = "tests/integration/upstream_integration.rs"
+[[test]]
+name = "validation_api"
+path = "tests/integration/validation_api.rs"
+
 [dependencies]
 tokio        = { version = "1",    features = ["full"] }
 tokio-util   = { version = "0.7",  features = ["rt"] }

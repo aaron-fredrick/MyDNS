@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, production-readiness ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, production-readiness ]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   frontend:
-    name: Frontend Quality & Build
+    name: Frontend Quality, Unit Tests & Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,13 +28,26 @@ jobs:
       - name: TypeScript Typecheck
         run: npm run typecheck
 
+      - name: Frontend Unit Tests with Coverage
+        run: |
+          npx --yes c8@10.1.3 \
+            --reporter=lcov \
+            --reporter=text \
+            --reports-dir=coverage/frontend \
+            node --experimental-strip-types --test tests/unit/frontend/*.test.ts
+
+      - name: Upload Frontend Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          files: coverage/frontend/lcov.info
+          fail_ci_if_error: false
+          flags: frontend
+          name: frontend-coverage
+
       - name: Build Dashboard
         run: npm run build
-
-      # NOTE: Frontend coverage is not yet configured.
-      # The frontend (React + Vite) currently has no test framework installed.
-      # When frontend tests are added (e.g., Vitest), add a coverage step here
-      # and upload to Codecov with: flags: frontend
 
   lint-and-format:
     name: Rust Format & Clippy
@@ -98,19 +111,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run Tests with Coverage
-        # --all-targets includes all integration test crates in tests/
-        # --all-features ensures conditional-compilation paths are covered
-        # --lcov produces a Codecov-compatible LCOV report
+        # --all-targets includes all explicitly registered integration test crates.
+        # --all-features ensures conditional-compilation paths are covered.
+        # --lcov produces a Codecov-compatible LCOV report.
         run: cargo llvm-cov --all-targets --all-features --lcov --output-path lcov.info
 
       - name: Upload Backend Coverage to Codecov
-        # Only upload from ubuntu-latest to avoid double-counting the same
-        # coverage data from the windows-latest matrix leg.
         if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           flags: backend
           name: backend-coverage
@@ -144,4 +156,3 @@ jobs:
 
       - name: Build Release Binary
         run: cargo build --release --verbose
-
