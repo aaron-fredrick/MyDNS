@@ -12,6 +12,27 @@ $targets = @(
 
 Write-Host "Building MyDNS release targets..." -ForegroundColor Cyan
 
+# Release output is generated state. Remove it first so stale binaries/assets
+# cannot accidentally be packaged as part of a later release.
+if (Test-Path $out) {
+    Remove-Item -Recurse -Force $out
+}
+
+# The frontend is a build-time dependency only; Node.js is not required at runtime.
+Push-Location $root
+try {
+    if (Test-Path (Join-Path $root "package-lock.json")) {
+        npm ci
+    } else {
+        npm install
+    }
+
+    npm run typecheck
+    npm run build
+} finally {
+    Pop-Location
+}
+
 foreach ($target in $targets) {
     Write-Host "`n==> $($target.Name) [$($target.Triple)]" -ForegroundColor Yellow
 
@@ -22,8 +43,10 @@ foreach ($target in $targets) {
 
     $targetOut = Join-Path $out $target.Name
     $binOut = Join-Path $targetOut "bin"
+    $webOut = Join-Path $targetOut "web"
+    $configOut = Join-Path $targetOut "config"
 
-    New-Item -ItemType Directory -Force -Path $binOut | Out-Null
+    New-Item -ItemType Directory -Force -Path $binOut, $webOut, $configOut | Out-Null
 
     $binarySource = Join-Path $root "target\$($target.Triple)\release\$($target.Binary)"
     $binaryDestination = Join-Path $binOut $target.Binary
@@ -33,8 +56,10 @@ foreach ($target in $targets) {
     }
 
     Copy-Item -Force $binarySource $binaryDestination
+    Copy-Item -Recurse -Force (Join-Path $out "web\*") $webOut
+    Copy-Item -Force (Join-Path $root "config.toml.example") (Join-Path $configOut "mydns.toml.example")
 }
 
 Write-Host "`nRelease builds completed." -ForegroundColor Green
 Write-Host "Artifacts: $out"
-Write-Host "Frontend: $out\web"
+Write-Host "Each target contains bin/, web/, and config/ runtime assets."
