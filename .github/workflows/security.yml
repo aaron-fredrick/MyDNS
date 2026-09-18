@@ -2,11 +2,15 @@ name: Security Audit
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
   pull_request:
     branches: [ main ]
   schedule:
     - cron: '0 0 * * 0' # Weekly scan every Sunday
+
+permissions:
+  contents: read
+  checks: write
 
 jobs:
   rust-audit:
@@ -14,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve current dependency graph
+        run: cargo generate-lockfile
+
       - name: Rust Security Audit
         uses: rustsec/audit-check@v2.0.0
         with:
@@ -28,5 +35,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install frontend dependencies
+        run: npm ci
+
       - name: Run npm audit
         run: npm audit --audit-level=high
