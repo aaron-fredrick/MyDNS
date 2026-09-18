@@ -5,9 +5,7 @@ use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 
-use super::types::{
-    HistorySample, LatencyStats, MetricsHistory, MetricsSnapshot, UpstreamStats,
-};
+use super::types::{HistorySample, LatencyStats, MetricsHistory, MetricsSnapshot, UpstreamStats};
 
 const MAX_SAMPLES: usize = 20_000;
 const HISTORY: Duration = Duration::from_secs(24 * 60 * 60);
