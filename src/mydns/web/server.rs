@@ -22,9 +22,6 @@ use crate::web::{auth, ws};
 
 const MAX_BODY_BYTES: usize = 64 * 1024;
 
-/// Production frontend assets are embedded into the MyDNS binary after the
-/// Vite build. `allow_missing` keeps ordinary Rust-only development builds
-/// possible; release builds must produce `out/web` before packaging.
 #[derive(Embed)]
 #[folder = "out/web/"]
 #[allow_missing = true]
@@ -35,8 +32,6 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
     let port = config.http_port;
     let cors = build_cors_layer(&config)?;
 
-    // Keep the existing API surface isolated from the SPA fallback. Unknown
-    // API routes must remain 404 instead of receiving index.html.
     let api_routes = Router::new()
         .route("/auth/login", post(auth::login))
         .route(
@@ -48,6 +43,7 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
             put(records_api::update_record).delete(records_api::delete_record),
         )
         .route("/stats", get(stats_api::get_stats))
+        .route("/stats/history", get(stats_api::get_stats_history))
         .route(
             "/settings",
             get(settings_api::get_settings).put(settings_api::update_settings),
@@ -125,8 +121,6 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
     Ok(())
 }
 
-/// Serve a concrete Vite asset when it exists, otherwise fall back to the SPA
-/// entry point so client-side routes such as `/records` work on refresh.
 async fn serve_frontend(
     axum::extract::Path(path): axum::extract::Path<String>,
 ) -> axum::response::Response {
