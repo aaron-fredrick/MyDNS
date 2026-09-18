@@ -12,7 +12,7 @@
 
 The project is currently being prepared for its first proper production release: **V1.0.0**. The V1 scope is deliberately focused on finishing and hardening the existing product rather than expanding it indefinitely.
 
-> **Status:** V1 production-readiness work in progress. The `production-readiness` branch is the active release-hardening branch.
+> **Status:** V1 production-readiness work in progress. The `dev` branch is the active release-hardening branch.
 
 ## What MyDNS Provides
 
@@ -38,7 +38,7 @@ The project is currently being prepared for its first proper production release:
 - JWT-based authentication with Argon2 password hashing.
 - Runtime statistics and cache visibility.
 - WebSocket support for live dashboard updates.
-- Current UI is embedded with the Rust service; the frontend is being structured for a dedicated React + TypeScript implementation as part of the V1 architecture.
+- The UI is implemented as a React + TypeScript + Vite application under `src/frontend/`; Vite builds static assets into `out/web/`, which Rust embeds and serves at runtime.
 
 ### Security and reliability
 
