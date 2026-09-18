@@ -1,16 +1,36 @@
 use std::sync::Arc;
 
-use axum::{extract::State, Json};
+use axum::{extract::{Query, State}, Json};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::error::ApiError;
 use crate::state::AppState;
 
+const DEFAULT_HISTORY_RANGE: Duration = Duration::hours(1);
+const MAX_HISTORY_RANGE: Duration = Duration::hours(24);
+
+#[derive(Debug, Deserialize)]
+pub struct HistoryQuery {
+    /// Inclusive UTC start timestamp in RFC3339 format.
+    pub from: Option<String>,
+    /// Inclusive UTC end timestamp in RFC3339 format.
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct HistoryResponse {
+    server_time: DateTime<Utc>,
+    from: DateTime<Utc>,
+    to: DateTime<Utc>,
+    resolution_seconds: u32,
+    oldest_available: Option<DateTime<Utc>>,
+    latest_available: Option<DateTime<Utc>>,
+    samples: Vec<crate::observability::HistorySample>,
+}
+
 /// `GET /api/v1/stats`
-///
-/// Returns low-cost in-process resolver observability data. The frontend is
-/// responsible only for presentation; authoritative operational metrics are
-/// collected by the Rust DNS path and exposed here as an API contract.
 pub async fn get_stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
@@ -46,4 +66,60 @@ pub async fn get_stats(
     }
 
     Ok(Json(value))
+}
+
+/// `GET /api/v1/stats/history?from=<rfc3339>&to=<rfc3339>`
+///
+/// History is collected continuously by the backend, independently of whether
+/// a dashboard client is connected. Clients can request only the range they
+/// are missing and merge it into their local cache.
+pub async fn get_stats_history(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<HistoryQuery>,
+) -> Result<Json<HistoryResponse>, ApiError> {
+    let server_time = Utc::now();
+    let mut to = parse_timestamp(query.to.as_deref(), "to")?.unwrap_or(server_time);
+    if to > server_time {
+        to = server_time;
+    }
+
+    let requested_from = parse_timestamp(query.from.as_deref(), "from")?;
+    let mut from = requested_from.unwrap_or(to - DEFAULT_HISTORY_RANGE);
+
+    if from > to {
+        return Err(ApiError::BadRequest(
+            "history 'from' must not be after 'to'".to_string(),
+        ));
+    }
+
+    if to - from > MAX_HISTORY_RANGE {
+        from = to - MAX_HISTORY_RANGE;
+    }
+
+    let history = state.metrics.history(from, to);
+
+    Ok(Json(HistoryResponse {
+        server_time,
+        from,
+        to,
+        resolution_seconds: history.resolution_seconds,
+        oldest_available: history.oldest_available,
+        latest_available: history.latest_available,
+        samples: history.samples,
+    }))
+}
+
+fn parse_timestamp(value: Option<&str>, field: &str) -> Result<Option<DateTime<Utc>>, ApiError> {
+    value
+        .map(|value| {
+            DateTime::parse_from_rfc3339(value)
+                .map(|timestamp| timestamp.with_timezone(&Utc))
+                .map_err(|error| {
+                    ApiError::BadRequest(format!(
+                        "invalid '{}' timestamp '{}': {}",
+                        field, value, error
+                    ))
+                })
+        })
+        .transpose()
 }
