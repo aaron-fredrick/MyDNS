@@ -192,7 +192,7 @@ fn record_history_sample(history: &Mutex<History>, value: f64) {
     if history
         .buckets
         .back()
-        .map_or(true, |bucket| bucket.start != bucket_start)
+        .is_none_or(|bucket| bucket.start != bucket_start)
     {
         history.buckets.push_back(HistoryBucket {
             start: bucket_start,
