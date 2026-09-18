@@ -49,7 +49,7 @@ axum       = { version = "0.7", features = ["ws", "macros"] }
 axum-extra = { version = "0.9", features = ["typed-header"] }
 tower      = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "set-header"] }
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
 argon2       = "0.5"
 jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 tracing             = "0.1"
