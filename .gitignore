@@ -4,8 +4,8 @@
 
 # Node / frontend
 node_modules/
-frontend/dist/
-frontend/.vite/
+src/frontend/dist/
+src/frontend/.vite/
 
 # Compiled binaries
 /mydns
