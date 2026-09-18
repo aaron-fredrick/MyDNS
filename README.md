@@ -2,7 +2,7 @@
 
 # ⬡ MyDNS
 
-[![CI status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/test.yml/badge.svg)](https://github.com/aaron-fredrick/MyDNS/actions/workflows/test.yml)
+[![CI status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/ci.yml/badge.svg)](https://github.com/aaron-fredrick/MyDNS/actions/workflows/ci.yml)
 [![CodeQL status](https://github.com/aaron-fredrick/MyDNS/actions/workflows/codeql.yml/badge.svg)](https://github.com/aaron-fredrick/MyDNS/actions/workflows/codeql.yml)
 ![Version](https://img.shields.io/badge/version-v0.1.1--dev-blue?style=flat-square)
 
