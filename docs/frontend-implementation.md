@@ -2,85 +2,150 @@
 
 ## Architecture
 
-MyDNS uses React + Vite + TypeScript for the management UI and Rust/Axum for the runtime server.
+MyDNS uses React + TypeScript + Vite for the management UI and Rust/Axum for the runtime server.
 
+- Frontend source: `src/frontend/`
 - Node.js is a build-time dependency only.
-- React is compiled by Vite into the production `web/` directory for packaging.
-- Rust serves the generated `web/` static assets at runtime.
-- Rust continues to own DNS, authentication, APIs, cache, upstream resolution, metrics, and WebSocket logs.
+- Vite builds the frontend into `out/web/`.
+- Rust embeds `out/web/` with `rust-embed` and serves it at runtime.
 - There is no Node/Express server in production.
+- Rust remains authoritative for DNS, authentication, REST APIs, cache state, metrics, and WebSocket events.
 
 ## Repository layout
 
 ```text
-MyDNS/
-├── frontend/
-│   ├── src/
-│   │   ├── api.ts
-│   │   ├── main.tsx
-│   │   └── styles.css
-│   ├── index.html
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── tsconfig.app.json
-│   ├── tsconfig.node.json
-│   └── vite.config.ts
-├── web/                 # generated production frontend; not source code
-├── src/web/server.rs
-├── Cargo.toml
-└── package.json
+src/frontend/
+├── package.json
+├── package-lock.json
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+├── tsconfig.app.json
+├── tsconfig.node.json
+└── src/
+    ├── main.tsx
+    ├── api.ts
+    ├── app/
+    ├── components/
+    ├── hooks/
+    ├── pages/
+    ├── styles/
+    ├── assets/
+    └── utils/
 ```
 
-## Root developer commands
+The root `package.json` exposes the frontend commands through the npm workspace:
 
-Run all frontend commands from the repository root:
-
-```powershell
-npm install
+```text
+npm run dev
 npm run typecheck
 npm run build
 ```
 
-Development server:
+The workspace is `src/frontend`, not a root-level `frontend/` directory.
+
+## Development
+
+Start the Rust backend separately, then run:
 
 ```powershell
 npm run dev
 ```
 
-Vite proxies `/api` and `/ws` to the local Rust HTTP server during development.
+Vite listens on port 5173 and proxies:
+
+- `/api` → `http://127.0.0.1:8080`
+- `/ws` → `ws://127.0.0.1:8080`
 
 ## Production build
 
-The release sequence is:
+The release boundary is:
 
 ```text
-npm install
-    ↓
-npm run typecheck
-    ↓
-npm run build
-    ↓
-web/
-    ↓
-cargo build --release
-    ↓
-MyDNS distribution
+src/frontend/
+    │
+    │ npm run build
+    ▼
+out/web/
+    │
+    │ rust-embed
+    ▼
+MyDNS executable
 ```
 
-`web/` and `node_modules` are ignored by Git. A generated `package-lock.json` should be committed after the first local `npm install` so future builds can use reproducible `npm ci` installs.
+The production runtime therefore does not require Node.js.
+
+Generated `out/web/` content and `src/frontend/dist/` output must not be committed.
 
 ## Rust serving model
 
-API routes remain under `/api/v1` and the WebSocket remains at `/ws`. Unknown API paths return `404` rather than the SPA entry point.
+Rust owns:
 
-Non-API browser paths are handled by the generated Vite assets. If a client-side route does not map to a concrete asset, Rust serves `index.html`, allowing React Router to handle the route.
+- `/api/v1/*` REST endpoints
+- `/ws` WebSocket
+- static frontend serving
+- SPA fallback for client-side routes
+- security headers
+- production CORS policy
 
-## Security boundary
+Unknown API paths remain HTTP 404 and are never rewritten to the SPA entry point.
 
-The existing Rust authentication implementation remains authoritative. HTTP API requests use the Bearer JWT. Browser WebSocket authentication uses the `mydns-auth.<token>` WebSocket subprotocol because browser WebSocket clients cannot set an arbitrary `Authorization` header.
+## Frontend responsibilities
 
-Security headers and release CORS handling remain in the Rust server.
+The React application owns presentation and interaction:
 
-## Distribution relationship
+- authentication screens
+- dashboard rendering
+- DNS record CRUD
+- zones
+- cache inspection and controls
+- blocklist management
+- settings
+- logs
+- loading/empty/error states
+- WebSocket connection state
 
-The production frontend is packaged separately from the Rust executable as `web/`. V1 distribution and installation layout is documented in `docs/v1-distribution.md`. The portable package and installer must ship the matching Rust binary and frontend build together while keeping configuration, database data, and logs persistent across upgrades.
+The frontend may perform display-only calculations such as countdown rendering and formatting. It must not become the authoritative source for cache expiration, latency percentiles, availability, error rate, or other operational metrics.
+
+## Backend contract
+
+The frontend communicates with typed functions in `src/frontend/src/api.ts`.
+
+Current REST areas include:
+
+- authentication
+- statistics
+- records
+- zones
+- cache
+- blocklist
+- settings
+
+The backend API and WebSocket contracts should remain documented and tested independently of the UI.
+
+## Authentication
+
+The Rust authentication implementation is authoritative.
+
+REST requests use:
+
+```text
+Authorization: Bearer <JWT>
+```
+
+The browser WebSocket uses the `mydns-auth.<token>` subprotocol because browser WebSocket clients cannot set arbitrary Authorization headers.
+
+Session expiry must clear the browser token and return the user to the login screen.
+
+## V1 completion criteria
+
+The frontend is production-ready when:
+
+1. `npm run typecheck` passes.
+2. `npm run build` produces `out/web/`.
+3. Rust embeds and serves the generated assets.
+4. All V1 workflows use the real backend API.
+5. Loading, empty, error, unauthorized, expired-session, reconnecting and disconnected states are explicit.
+6. Cache TTL display remains presentation-only and reconciles with authoritative backend state.
+7. WebSocket connections are cleaned up during navigation/logout.
+8. Browser/E2E tests cover the critical workflows.
