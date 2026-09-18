@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use axum::{extract::{Query, State}, Json};
+use axum::{
+    extract::{Query, State},
+    Json,
+};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -69,10 +72,6 @@ pub async fn get_stats(
 }
 
 /// `GET /api/v1/stats/history?from=<rfc3339>&to=<rfc3339>`
-///
-/// History is collected continuously by the backend, independently of whether
-/// a dashboard client is connected. Clients can request only the range they
-/// are missing and merge it into their local cache.
 pub async fn get_stats_history(
     State(state): State<Arc<AppState>>,
     Query(query): Query<HistoryQuery>,
