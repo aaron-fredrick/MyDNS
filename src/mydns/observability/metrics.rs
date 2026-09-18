@@ -3,10 +3,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::types::{LatencyStats, MetricsSnapshot, UpstreamStats};
+use chrono::{DateTime, Utc};
+
+use super::types::{
+    HistorySample, LatencyStats, MetricsHistory, MetricsSnapshot, UpstreamStats,
+};
 
 const MAX_SAMPLES: usize = 20_000;
 const HISTORY: Duration = Duration::from_secs(24 * 60 * 60);
+const BUCKET_SECONDS: i64 = 60;
 
 /// Backend-owned operational metrics. Storage is bounded by count and age.
 pub struct Metrics {
@@ -22,6 +27,17 @@ pub struct Metrics {
     outcomes: Mutex<HashMap<String, u64>>,
     response_samples: Mutex<VecDeque<(Instant, f64)>>,
     upstream_samples: Mutex<VecDeque<(Instant, f64)>>,
+    history: Mutex<History>,
+}
+
+struct History {
+    buckets: VecDeque<HistoryBucket>,
+    sample_count: usize,
+}
+
+struct HistoryBucket {
+    start: DateTime<Utc>,
+    samples: Vec<f64>,
 }
 
 impl Metrics {
@@ -34,8 +50,6 @@ impl Metrics {
         increment(&self.query_types, query_type);
     }
 
-    /// Increments the blocked-query counter. Called from the DNS handler when
-    /// a query is intercepted by the blocklist before reaching upstream.
     pub fn record_blocked(&self) {
         self.queries_blocked.fetch_add(1, Ordering::Relaxed);
     }
@@ -69,6 +83,7 @@ impl Metrics {
 
     pub fn record_latency(&self, response_ms: f64) {
         record_sample(&self.response_samples, response_ms);
+        record_history_sample(&self.history, response_ms);
     }
 
     pub fn snapshot(&self) -> MetricsSnapshot {
@@ -112,6 +127,26 @@ impl Metrics {
                 .clone(),
         }
     }
+
+    /// Returns bounded one-minute history for the requested UTC range.
+    pub fn history(&self, from: DateTime<Utc>, to: DateTime<Utc>) -> MetricsHistory {
+        let mut history = self.history.lock().expect("metrics history lock poisoned");
+        trim_history(&mut history, Utc::now());
+
+        let samples = history
+            .buckets
+            .iter()
+            .filter(|bucket| bucket.start >= from && bucket.start <= to)
+            .map(|bucket| history_bucket_to_sample(bucket, to))
+            .collect();
+
+        MetricsHistory {
+            resolution_seconds: BUCKET_SECONDS as u32,
+            oldest_available: history.buckets.front().map(|bucket| bucket.start),
+            latest_available: history.buckets.back().map(|bucket| bucket.start),
+            samples,
+        }
+    }
 }
 
 fn record_sample(samples: &Mutex<VecDeque<(Instant, f64)>>, value: f64) {
@@ -147,6 +182,74 @@ fn trim(samples: &mut VecDeque<(Instant, f64)>) {
     }
 }
 
+fn record_history_sample(history: &Mutex<History>, value: f64) {
+    if !value.is_finite() || value < 0.0 {
+        return;
+    }
+
+    let now = Utc::now();
+    let bucket_start = minute_start(now);
+    let mut history = history.lock().expect("metrics history lock poisoned");
+
+    if history
+        .buckets
+        .back()
+        .is_none_or(|bucket| bucket.start != bucket_start)
+    {
+        history.buckets.push_back(HistoryBucket {
+            start: bucket_start,
+            samples: Vec::new(),
+        });
+    }
+
+    if let Some(bucket) = history.buckets.back_mut() {
+        bucket.samples.push(value);
+        history.sample_count += 1;
+    }
+
+    trim_history(&mut history, now);
+}
+
+fn trim_history(history: &mut History, now: DateTime<Utc>) {
+    let cutoff = now.timestamp() - HISTORY.as_secs() as i64;
+    while history
+        .buckets
+        .front()
+        .is_some_and(|bucket| bucket.start.timestamp() < cutoff)
+        || history.sample_count > MAX_SAMPLES
+    {
+        let Some(bucket) = history.buckets.pop_front() else {
+            break;
+        };
+        history.sample_count = history.sample_count.saturating_sub(bucket.samples.len());
+    }
+}
+
+fn minute_start(timestamp: DateTime<Utc>) -> DateTime<Utc> {
+    let seconds = timestamp.timestamp();
+    let start = seconds - seconds.rem_euclid(BUCKET_SECONDS);
+    DateTime::<Utc>::from_timestamp(start, 0).expect("valid minute timestamp")
+}
+
+fn history_bucket_to_sample(bucket: &HistoryBucket, range_end: DateTime<Utc>) -> HistorySample {
+    let elapsed_seconds = if bucket.start + chrono::Duration::seconds(BUCKET_SECONDS) > range_end {
+        (range_end - bucket.start)
+            .num_seconds()
+            .clamp(1, BUCKET_SECONDS)
+    } else {
+        BUCKET_SECONDS
+    };
+
+    let stats = percentile_stats(&bucket.samples);
+    let requests_per_minute = bucket.samples.len() as f64 / elapsed_seconds as f64 * 60.0;
+
+    HistorySample {
+        timestamp: bucket.start,
+        requests_per_minute: round(requests_per_minute),
+        response_time: stats,
+    }
+}
+
 fn increment(map: &Mutex<HashMap<String, u64>>, key: &str) {
     let mut map = map.lock().expect("metrics counter lock poisoned");
     *map.entry(key.to_string()).or_insert(0) += 1;
@@ -166,9 +269,6 @@ fn percentile_stats(values: &[f64]) -> LatencyStats {
     }
 }
 
-/// Uses linear interpolation between adjacent ordered observations.
-/// This is deterministic, monotonic, and avoids the off-by-one behaviour of
-/// rounding an index for small samples.
 fn percentile(sorted: &[f64], p: f64) -> f64 {
     debug_assert!(!sorted.is_empty());
     let position = (sorted.len() - 1) as f64 * p;
@@ -200,6 +300,10 @@ impl Default for Metrics {
             outcomes: Mutex::new(HashMap::new()),
             response_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)),
             upstream_samples: Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)),
+            history: Mutex::new(History {
+                buckets: VecDeque::new(),
+                sample_count: 0,
+            }),
         }
     }
 }
@@ -207,6 +311,7 @@ impl Default for Metrics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Duration as ChronoDuration;
 
     #[test]
     fn snapshot_starts_empty_and_healthy() {
@@ -278,5 +383,20 @@ mod tests {
         metrics.record_latency(f64::NAN);
         metrics.record_latency(12.0);
         assert_eq!(metrics.snapshot().response_time.avg_ms, 12.0);
+    }
+
+    #[test]
+    fn history_aggregates_samples_into_one_minute_buckets() {
+        let metrics = Metrics::default();
+        for value in [1.0, 2.0, 3.0, 4.0] {
+            metrics.record_latency(value);
+        }
+
+        let now = Utc::now();
+        let history = metrics.history(now - ChronoDuration::minutes(1), now);
+        assert_eq!(history.resolution_seconds, 60);
+        assert_eq!(history.samples.len(), 1);
+        assert_eq!(history.samples[0].requests_per_minute, 4.0);
+        assert_eq!(history.samples[0].response_time.avg_ms, 2.5);
     }
 }
