@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the repository structure for MyDNS V1.0.0. The repository should be understandable from the tree alone, with clear boundaries between the Rust DNS/backend application, the future Node/React frontend, verification, operations, and durable documentation.
+This document defines the repository structure for MyDNS V1.0.0. The repository should be understandable from the tree alone, with clear boundaries between the Rust DNS/backend application, the React/TypeScript/Vite frontend, verification, operations, and durable documentation.
 
 The structure intentionally avoids unnecessary enterprise-style layers. A module or directory exists because it owns a real responsibility.
 
@@ -13,102 +13,43 @@ MyDNS/
 ├── .cargo/
 │   └── config.toml
 ├── .github/
-│   ├── ISSUE_TEMPLATE/
 │   └── workflows/
-│       ├── codeql.yml
-│       ├── test.yml
-│       └── release.yml
 ├── docs/
 │   ├── production-readiness-v1.0.0.md
 │   ├── project-structure.md
-│   ├── architecture.md
-│   ├── configuration.md
-│   ├── security.md
-│   ├── deployment.md
+│   ├── frontend-implementation.md
 │   ├── https-deployment.md
-│   ├── operations.md
-│   ├── troubleshooting.md
+│   ├── v1-distribution.md
 │   └── ui/
-│       ├── README.md
-│       ├── architecture.md
-│       ├── screens/
-│       └── states/
-├── frontend/                    # React + TypeScript + Vite V1 frontend
-│   ├── package.json
-│   ├── package-lock.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
-│   ├── index.html
-│   ├── public/
-│   └── src/
-│       ├── main.tsx
-│       ├── app/
-│       ├── components/
-│       ├── features/
-│       │   ├── auth/
-│       │   ├── dashboard/
-│       │   ├── records/
-│       │   ├── cache/
-│       │   ├── logs/
-│       │   └── settings/
-│       ├── hooks/
-│       ├── lib/
-│       ├── services/
-│       ├── state/
-│       ├── types/
-│       └── styles/
 ├── scripts/
-│   └── repeatable development/release/deployment helpers
 ├── src/
+│   ├── src/frontend/             # React + TypeScript + Vite application
+│   │   ├── src/
+│   │   ├── index.html
+│   │   ├── package.json
+│   │   ├── package-lock.json
+│   │   ├── tsconfig*.json
+│   │   └── vite.config.ts
 │   ├── lib.rs
 │   ├── main.rs
-│   ├── config.rs
-│   ├── state.rs
-│   ├── privileges.rs
-│   ├── cache/
-│   │   ├── mod.rs
-│   │   └── tests.rs
-│   ├── db/
-│   │   ├── mod.rs
-│   │   └── records.rs
-│   ├── dns/
-│   │   ├── mod.rs
-│   │   ├── handler.rs
-│   │   ├── server.rs
-│   │   ├── tests.rs
-│   │   └── upstream.rs
-│   └── web/
-│       ├── mod.rs
-│       ├── server.rs
-│       ├── auth.rs
-│       ├── validation.rs
-│       ├── error.rs
-│       ├── records_api.rs
-│       ├── cache_api.rs
-│       ├── stats_api.rs
-│       ├── settings_api.rs
-│       ├── dashboard.rs
-│       └── ws.rs
-├── stress-tests/
-│   ├── README.md
-│   ├── dns/
-│   ├── api/
-│   └── websocket/
+│   └── mydns/
+│       ├── api/
+│       ├── cache/
+│       ├── config/
+│       ├── db/
+│       ├── dns/
+│       ├── error/
+│       ├── observability/
+│       ├── privileges/
+│       ├── state/
+│       └── web/
 ├── tests/
-│   ├── auth_coverage.rs
-│   ├── cache_persistence.rs
-│   ├── dns_integration.rs
-│   ├── integration.rs
-│   ├── upstream_integration.rs
-│   └── validation_api.rs
-├── .gitignore
 ├── Cargo.toml
 ├── Cargo.lock
+├── package.json
+├── package-lock.json
 ├── README.md
-├── LICENSE
-├── SECURITY.md
-├── CONTRIBUTING.md
-└── config.ini.example
+└── LICENSE
 ```
 
 Do not create placeholder directories simply to match this diagram. The tree may grow when a genuine responsibility requires it.
@@ -158,22 +99,19 @@ Do not introduce `controllers/`, `services/`, `repositories/`, `models/`, or sim
 
 ## Frontend
 
-The production UI is a separate Node project under `frontend/` using React, TypeScript and Vite. Node is a build-time dependency; the production MyDNS runtime should not require Node merely to run the DNS server.
+The production UI is a React + TypeScript + Vite application under `src/frontend/`.
 
-Use feature-oriented organization rather than a monolithic `App.tsx` or a directory mirroring every backend endpoint:
+- `src/frontend/src/app/` — application shell, routing and protected-route handling.
+- `src/frontend/src/pages/` — user-facing screens.
+- `src/frontend/src/components/` — reusable UI components.
+- `src/frontend/src/hooks/` — reusable React hooks.
+- `src/frontend/src/styles/` — global/component/page styling.
+- `src/frontend/src/api.ts` — typed REST client and authentication token handling.
+- `src/frontend/vite.config.ts` — development proxy and production output configuration.
 
-- `components/` — reusable UI primitives.
-- `features/` — user-facing areas such as records, cache, logs, settings and authentication.
-- `services/` — REST and WebSocket clients.
-- `state/` — genuinely cross-feature application state.
-- `hooks/` — reusable React hooks.
-- `types/` — API/domain-facing TypeScript types.
-- `lib/` — generic utilities.
-- `styles/` — global styling and design tokens.
+Vite writes production assets to `out/web/`. Rust embeds `out/web/` with `rust-embed`; Node is not required at runtime.
 
-The backend remains authoritative for cache expiration. The cache feature may display a live TTL/countdown, while live DNS logs should consume structured backend events rather than parse terminal output.
-
-The frontend must explicitly model loading, empty, error, unauthorized, expired-session, reconnecting and disconnected states.
+The frontend is therefore intentionally colocated under `src/` but remains a separate Node build project. It is not a Rust module and must not be confused with `src/mydns/web/`, which owns the Rust HTTP/WebSocket server.
 
 ## Tests
 
@@ -216,8 +154,8 @@ These must not be committed:
 
 ```text
 target/
-frontend/node_modules/
-frontend/dist/
+src/frontend/node_modules/
+src/frontend/dist/
 *.db
 *.db-shm
 *.db-wal
@@ -232,20 +170,23 @@ IDE/editor state
 
 `.gitignore` is the executable policy; this section documents the intent. Tests should use temporary database locations where practical so failed tests do not leave project files behind.
 
-## Legacy frontend transition
+## Frontend build boundary
 
-The current branch contains a hand-written dashboard under `src/assets/` (`dashboard.html`, `app.js`, `style.css`). This is transitional code, not a second permanent frontend architecture.
+The old standalone `frontend/` layout described by earlier documentation is obsolete. The authoritative source location is `src/frontend/`.
 
-The V1 migration path is:
+The build boundary is:
 
-1. Build the React/TypeScript/Vite frontend under `frontend/`.
-2. Reproduce and improve the required V1 workflows and UI states.
-3. Build the frontend with Vite.
-4. Serve the generated assets through Rust/Axum.
-5. Verify browser behavior against the real backend APIs and WebSocket events.
-6. Remove `src/assets/` and its transitional integration once React fully replaces it.
+```text
+src/frontend/
+    │ Vite
+    ▼
+out/web/
+    │ rust-embed
+    ▼
+MyDNS binary
+```
 
-Do not maintain duplicate application logic between the legacy dashboard and React frontend in the final V1 state.
+Generated frontend output is not source and must not be committed.
 
 ## Root-level policy
 
