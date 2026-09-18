@@ -24,6 +24,7 @@ use crate::state::AppState;
 const MAX_LOGIN_ATTEMPTS: u32 = 5;
 const LOGIN_WINDOW_SECONDS: u64 = 300;
 const WS_AUTH_PROTOCOL_PREFIX: &str = "mydns-auth.";
+const MAX_TRACKED_LOGIN_IPS: usize = 10_000;
 
 #[derive(Clone)]
 struct LoginAttemptTracker {
@@ -45,6 +46,17 @@ impl LoginRateLimiter {
     pub async fn check_rate_limit(&self, ip: IpAddr) -> Result<(), ApiError> {
         let now = epoch_now();
         let mut trackers = self.trackers.write().await;
+
+        // Bound memory use under distributed/rotating-source login traffic. Prune
+        // expired windows opportunistically instead of retaining one entry per IP
+        // forever. Normal login traffic does not pay the scan cost until the map
+        // reaches the configured safety bound.
+        if trackers.len() >= MAX_TRACKED_LOGIN_IPS {
+            trackers.retain(|_, tracker| {
+                now.saturating_sub(tracker.window_start) <= LOGIN_WINDOW_SECONDS
+            });
+        }
+
         let tracker = trackers.entry(ip).or_insert(LoginAttemptTracker {
             attempts: 0,
             window_start: now,
