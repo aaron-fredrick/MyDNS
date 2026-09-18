@@ -51,14 +51,14 @@ Use this section to record implementation progress against the requirements belo
 | V1-004 | Stress | Verify concurrency, cache pressure, upstream failures, shutdown, and restart behavior. | TODO | |
 | V1-005 | Observability | Add structured terminal DNS request/response tracing. | TODO | |
 | V1-006 | Observability | Include client IP/port, FQDN, type, transport, cache/resolution path, result, TTL, and latency. | TODO | |
-| V1-007 | Observability | Add backend metrics/telemetry required by the management dashboard, including counters, latency distributions, cache metrics, upstream health, and DNS outcome/query-type metrics. | TODO | |
-| V1-008 | Observability | Expose aggregated dashboard metrics through a stable backend API contract; frontend renders metrics and does not own authoritative calculations. | TODO | |
-| V1-009 | Observability | Provide time-series/time-bucketed metric data for dashboard charts and support P50/P95/P99 latency percentiles without requiring raw-log aggregation per dashboard request. | TODO | |
+| V1-007 | Observability | Add backend metrics/telemetry required by the management dashboard, including counters, latency distributions, cache metrics, upstream health, and DNS outcome/query-type metrics. | IN PROGRESS | Backend metrics now maintain bounded one-minute history independently of dashboard clients. |
+| V1-008 | Observability | Expose aggregated dashboard metrics through a stable backend API contract; frontend renders metrics and does not own authoritative calculations. | IN PROGRESS | Added `GET /api/v1/stats/history` with typed aggregated samples and explicit retention metadata. |
+| V1-009 | Observability | Provide time-series/time-bucketed metric data for dashboard charts and support P50/P95/P99 latency percentiles without requiring raw-log aggregation per dashboard request. | IN PROGRESS | One-minute buckets are retained for up to 24 hours/20,000 samples; dashboard requests retrieve only the missing range. |
 | V1-010 | WebSocket | Stream useful DNS operational events to the dashboard. | TODO | |
 | V1-011 | WebSocket | Verify reconnect, disconnect, backpressure, bounded history, and resource cleanup. | TODO | |
 | V1-012 | Cache UI | Implement live TTL countdown without page reload. | TODO | |
 | V1-013 | Cache UI | Reconcile countdown with authoritative backend refresh without stale responses moving state backwards. | TODO | |
-| V1-014 | Dashboard | Keep uptime, cache, record, WebSocket, and log state synchronized. | TODO | |
+| V1-014 | Dashboard | Keep uptime, cache, record, WebSocket, and log state synchronized. | IN PROGRESS | Dashboard history now hydrates from IndexedDB and incrementally reconciles against backend history. |
 | V1-015 | Dashboard | Replace silent frontend failures with explicit loading/error/disconnected handling. | TODO | |
 | V1-016 | DNS | Complete allowed-zone ownership enforcement and normalization tests. | TODO | |
 | V1-017 | API/Auth | Complete REST/WebSocket authentication, authorization, input, and error handling verification. | TODO | |
