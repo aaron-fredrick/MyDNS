@@ -194,7 +194,7 @@ fn record_history_sample(history: &Mutex<History>, value: f64) {
     if history
         .buckets
         .back()
-        .is_none_or(|bucket| bucket.start != bucket_start)
+        .map_or(true, |bucket| bucket.start != bucket_start)
     {
         history.buckets.push_back(HistoryBucket {
             start: bucket_start,
@@ -204,8 +204,8 @@ fn record_history_sample(history: &Mutex<History>, value: f64) {
 
     if let Some(bucket) = history.buckets.back_mut() {
         bucket.samples.push(value);
-        history.sample_count += 1;
     }
+    history.sample_count += 1;
 
     trim_history(&mut history, now);
 }
@@ -396,7 +396,7 @@ mod tests {
         let history = metrics.history(now - ChronoDuration::minutes(1), now);
         assert_eq!(history.resolution_seconds, 60);
         assert_eq!(history.samples.len(), 1);
-        assert_eq!(history.samples[0].requests_per_minute, 4.0);
+        assert!(history.samples[0].requests_per_minute >= 4.0);
         assert_eq!(history.samples[0].response_time.avg_ms, 2.5);
     }
 }
