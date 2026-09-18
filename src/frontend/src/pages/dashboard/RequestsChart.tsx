@@ -9,7 +9,7 @@ interface RequestsChartProps {
 
 export function RequestsChart({ data }: RequestsChartProps) {
   return (
-    <ChartCard title="Requests over time" note="Live samples since dashboard load">
+    <ChartCard title="Requests over time" note="Last hour from server history; updates every 15 seconds">
       <ResponsiveContainer width="100%" height={250}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
