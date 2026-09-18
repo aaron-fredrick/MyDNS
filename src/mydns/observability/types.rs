@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -11,12 +12,7 @@ pub struct LatencyStats {
 
 impl Default for LatencyStats {
     fn default() -> Self {
-        Self {
-            avg_ms: 0.0,
-            p50_ms: 0.0,
-            p95_ms: 0.0,
-            p99_ms: 0.0,
-        }
+        Self { avg_ms: 0.0, p50_ms: 0.0, p95_ms: 0.0, p99_ms: 0.0 }
     }
 }
 
@@ -41,4 +37,19 @@ pub struct MetricsSnapshot {
     pub dns_errors: u64,
     pub query_types: HashMap<String, u64>,
     pub resolution_outcomes: HashMap<String, u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HistorySample {
+    pub timestamp: DateTime<Utc>,
+    pub requests_per_minute: f64,
+    pub response_time: LatencyStats,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MetricsHistory {
+    pub resolution_seconds: u32,
+    pub oldest_available: Option<DateTime<Utc>>,
+    pub latest_available: Option<DateTime<Utc>>,
+    pub samples: Vec<HistorySample>,
 }
