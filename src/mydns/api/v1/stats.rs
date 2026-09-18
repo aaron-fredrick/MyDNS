@@ -23,7 +23,7 @@ pub struct HistoryQuery {
 }
 
 #[derive(Debug, Serialize)]
-struct HistoryResponse {
+pub struct HistoryResponse {
     server_time: DateTime<Utc>,
     from: DateTime<Utc>,
     to: DateTime<Utc>,
