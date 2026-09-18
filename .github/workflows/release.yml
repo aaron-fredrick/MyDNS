@@ -5,44 +5,62 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Windows
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: i686-pc-windows-msvc
+            package: win-x64
             os: windows-latest
           - target: aarch64-pc-windows-msvc
+            package: win-arm64
             os: windows-latest
-          
-          # Linux
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: i686-unknown-linux-gnu
+            package: linux-x64
             os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
+            package: linux-arm64
             os: ubuntu-latest
 
     runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck frontend
+        run: npm run typecheck
+
+      - name: Build frontend
+        run: npm run build
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
-      - name: Install zig (for cross-compilation on Linux)
+      - name: Install zig
         if: runner.os == 'Linux'
         uses: mlugg/setup-zig@v1
 
       - name: Install cargo-zigbuild
         if: runner.os == 'Linux'
-        run: cargo install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
@@ -52,9 +70,70 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo zigbuild --release --target ${{ matrix.target }}
 
-      - name: Upload Binary
-        uses: taiki-e/upload-rust-binary-action@v1
+      - name: Assemble Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          $targetDir = Join-Path $PWD "out\${{ matrix.package }}"
+          New-Item -ItemType Directory -Force -Path "$targetDir\bin", "$targetDir\web", "$targetDir\config" | Out-Null
+          Copy-Item "target\${{ matrix.target }}\release\mydns.exe" "$targetDir\bin\mydns.exe"
+          Copy-Item -Recurse "out\web\*" "$targetDir\web"
+          Copy-Item "config.toml.example" "$targetDir\config\mydns.toml.example"
+          .\scripts\package-release.ps1 -Target "${{ matrix.package }}" -Version $version -Installer
+          $zip = "out\packages\MyDNS-v$version-${{ matrix.package }}.zip"
+          (Get-FileHash $zip -Algorithm SHA256).Hash | Out-File -Encoding ascii "$zip.sha256"
+
+      - name: Assemble Linux package
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          target_dir="out/${{ matrix.package }}"
+          mkdir -p "$target_dir/bin" "$target_dir/web" "$target_dir/config" out/packages
+          cp "target/${{ matrix.target }}/release/mydns" "$target_dir/bin/mydns"
+          cp -R out/web/. "$target_dir/web/"
+          cp config.toml.example "$target_dir/config/mydns.toml.example"
+          archive="out/packages/MyDNS-v${version}-${{ matrix.package }}.tar.gz"
+          tar -C "$target_dir" -czf "$archive" .
+          sha256sum "$archive" > "${archive}.sha256"
+
+      - name: Upload Windows packages
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
         with:
-          bin: mydns
-          target: ${{ matrix.target }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: MyDNS-${{ matrix.package }}
+          path: |
+            out/packages/*.zip
+            out/packages/*.zip.sha256
+            out/installers/*.exe
+          if-no-files-found: error
+
+      - name: Upload Linux packages
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyDNS-${{ matrix.package }}
+          path: |
+            out/packages/*.tar.gz
+            out/packages/*.tar.gz.sha256
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packaged assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: MyDNS-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**
+          generate_release_notes: true

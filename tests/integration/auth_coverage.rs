@@ -10,18 +10,22 @@ use reqwest::Client;
 
 type RequestBuilder = fn(&Client, String) -> reqwest::RequestBuilder;
 
+/// Asserts that every authenticated endpoint returns 401 without a token,
+/// and the unauthenticated /stats endpoint returns 200.
 #[tokio::test]
 async fn test_all_protected_routes_require_auth() {
     let server = common::TestServer::start().await;
     let c = Client::new();
     let api = format!("{}/api/v1", server.base_url);
 
+    // -- Unauthenticated routes (must pass) --
     assert_eq!(
         c.get(format!("{api}/stats")).send().await.unwrap().status(),
         200,
         "/stats should not require auth"
     );
 
+    // -- Authenticated routes (must return 401 without token) --
     let protected: &[(&str, RequestBuilder)] = &[
         ("GET /records", |c, u| c.get(u)),
         ("POST /records", |c, u| c.post(u)),

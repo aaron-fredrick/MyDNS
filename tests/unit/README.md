@@ -1,7 +1,16 @@
 # Unit Tests
 
-Reserved for small isolated tests that are useful outside the production module files.
+Unit tests should be deterministic and isolated from the running MyDNS process.
 
-For Rust, prefer colocated `#[cfg(test)]` modules for genuine unit tests because they can access private implementation details. Keep this directory for future black-box/unit-like helpers that do not belong in production modules.
+For Rust, prefer colocated `#[cfg(test)]` modules for true unit tests because they can exercise private implementation details. Do not put network, process, database-integration, or end-to-end tests here.
 
-Do not place integration, network, process, or end-to-end tests here.
+Frontend unit tests live under `tests/unit/frontend/` and use Node's built-in test runner against the TypeScript source. They cover pure frontend utilities and API-client behavior without requiring a browser or a running server.
+
+Current frontend coverage includes:
+
+- uptime formatting
+- API request headers and bearer-token handling
+- JSON mutation bodies
+- authentication expiry/redirect behavior
+
+Add component tests here when UI components gain behavior that cannot be adequately covered by pure utility/API tests.

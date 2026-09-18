@@ -1,0 +1,271 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use hickory_proto::rr::{Record, RecordType};
+
+/// Key into the DNS cache: normalised lowercase domain name + record type.
+pub type CacheKey = (String, RecordType);
+
+/// The result represented by a cache entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheResult {
+    /// A successful DNS response containing records.
+    Positive,
+    /// A negative DNS response (NXDOMAIN/NODATA) with no answer records.
+    Negative,
+}
+
+/// A single cached DNS response.
+pub struct CacheEntry {
+    /// The answer records to return. Empty when `result` is `Negative`.
+    pub records: Vec<Record>,
+    /// Whether this entry represents a negative DNS result.
+    pub result: CacheResult,
+    /// Whether the origin of this entry was an authoritative record-index lookup.
+    /// Preserved so that repeated cache hits can set `AA=1` correctly.
+    pub is_authoritative: bool,
+    /// Absolute point-in-time after which this entry is considered stale.
+    pub expires_at: Instant,
+}
+
+impl CacheEntry {
+    pub fn is_expired(&self) -> bool {
+        Instant::now() >= self.expires_at
+    }
+}
+
+/// Thread-safe TTL-aware in-memory DNS cache.
+///
+/// Wrapped in `Arc<tokio::sync::RwLock<DnsCache>>` inside [`AppState`].
+pub struct DnsCache {
+    inner: HashMap<CacheKey, CacheEntry>,
+}
+
+impl DnsCache {
+    pub fn new() -> Self {
+        Self {
+            inner: HashMap::new(),
+        }
+    }
+
+    /// Returns the cached result for the key if present and not expired.
+    ///
+    /// The returned tuple carries `(result, is_authoritative, records)` so callers
+    /// can reconstruct the correct `AA` flag without re-querying the record index.
+    pub fn get(&self, name: &str, rtype: RecordType) -> Option<(CacheResult, bool, &Vec<Record>)> {
+        let key = (name.to_lowercase(), rtype);
+        self.inner
+            .get(&key)
+            .filter(|e| !e.is_expired())
+            .map(|e| (e.result, e.is_authoritative, &e.records))
+    }
+
+    /// Inserts a positive cache entry with the given TTL.
+    ///
+    /// `is_authoritative` should be `true` when the records came from the local
+    /// authoritative record index so that subsequent cache hits preserve `AA=1`.
+    pub fn insert(
+        &mut self,
+        name: &str,
+        rtype: RecordType,
+        records: Vec<Record>,
+        ttl: Duration,
+        is_authoritative: bool,
+    ) {
+        self.insert_result(
+            name,
+            rtype,
+            CacheResult::Positive,
+            records,
+            ttl,
+            is_authoritative,
+        );
+    }
+
+    /// Inserts a negative cache entry with the given TTL.
+    pub fn insert_negative(&mut self, name: &str, rtype: RecordType, ttl: Duration) {
+        self.insert_result(name, rtype, CacheResult::Negative, Vec::new(), ttl, false);
+    }
+
+    fn insert_result(
+        &mut self,
+        name: &str,
+        rtype: RecordType,
+        result: CacheResult,
+        records: Vec<Record>,
+        ttl: Duration,
+        is_authoritative: bool,
+    ) {
+        let key = (name.to_lowercase(), rtype);
+
+        // Simple cap to prevent memory bloat since we have DB persistence now
+        if self.inner.len() >= 5000 {
+            // Remove an arbitrary entry (HashMap doesn't have order, but this is fine)
+            if let Some(k) = self.inner.keys().next().cloned() {
+                self.inner.remove(&k);
+            }
+        }
+
+        self.inner.insert(
+            key,
+            CacheEntry {
+                records,
+                result,
+                is_authoritative,
+                expires_at: Instant::now() + ttl,
+            },
+        );
+    }
+
+    /// Removes a specific entry (used when an admin modifies a record).
+    pub fn remove(&mut self, name: &str, rtype: RecordType) {
+        let key = (name.to_lowercase(), rtype);
+        self.inner.remove(&key);
+    }
+
+    /// Removes all entries for a DNS name.
+    pub fn remove_name(&mut self, name: &str) {
+        let name = name.to_lowercase();
+        self.inner
+            .retain(|(cached_name, _), _| cached_name != &name);
+    }
+
+    /// Removes all entries that have passed their expiry time.
+    pub fn prune(&mut self) -> usize {
+        let before = self.inner.len();
+        self.inner.retain(|_, entry| !entry.is_expired());
+        before - self.inner.len()
+    }
+
+    /// Total number of entries currently in the cache.
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Returns true if the cache contains no entries.
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// Clears the entire cache.
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
+
+    /// Removes all entries for a zone apex and every subdomain beneath it.
+    ///
+    /// Used when a new authoritative zone is registered to evict any upstream
+    /// data that was cached before the zone existed.
+    pub fn clear_zone(&mut self, zone: &str) {
+        let zone_lower = zone.trim_end_matches('.').to_lowercase();
+        let suffix = format!(".{}", zone_lower);
+        self.inner
+            .retain(|(name, _), _| name != &zone_lower && !name.ends_with(&suffix));
+    }
+
+    /// Returns a list of all non-expired cache entries for the UI.
+    ///
+    /// Returns: Vec<(Name, RecordType, TTL_Remaining_Secs, Values)>
+    pub fn list_all(&self) -> Vec<(String, RecordType, u32, Vec<String>)> {
+        let now = Instant::now();
+        self.inner
+            .iter()
+            .filter(|(_, entry)| !entry.is_expired())
+            .map(|(key, entry)| {
+                let ttl_remaining = entry
+                    .expires_at
+                    .checked_duration_since(now)
+                    .unwrap_or_default()
+                    .as_secs() as u32;
+
+                let values = entry.records.iter().map(|r| r.data.to_string()).collect();
+
+                (key.0.clone(), key.1, ttl_remaining, values)
+            })
+            .collect()
+    }
+}
+
+impl Default for DnsCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Atomically tracked cache statistics.
+pub struct CacheStats {
+    pub hits: AtomicU64,
+    pub misses: AtomicU64,
+}
+
+impl CacheStats {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
+        })
+    }
+
+    pub fn record_hit(&self) {
+        self.hits.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_miss(&self) {
+        self.misses.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn snapshot(&self) -> (u64, u64) {
+        (
+            self.hits.load(Ordering::Relaxed),
+            self.misses.load(Ordering::Relaxed),
+        )
+    }
+}
+
+impl Default for CacheStats {
+    fn default() -> Self {
+        Self {
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
+        }
+    }
+}
+
+/// Spawns a background task that prunes expired cache entries every 60 seconds.
+pub fn spawn_pruner(
+    cache: Arc<tokio::sync::RwLock<DnsCache>>,
+    db: sqlx::SqlitePool,
+    cancel: tokio_util::sync::CancellationToken,
+) {
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(60)) => {
+                    let pruned_mem = cache.write().await.prune();
+
+                    let pruned_db = match crate::db::records::prune_cache(&db).await {
+                        Ok(n) => n,
+                        Err(e) => {
+                            tracing::error!(error = %e, "Failed to prune DB cache");
+                            0
+                        }
+                    };
+
+                    if pruned_mem > 0 || pruned_db > 0 {
+                        tracing::debug!(
+                            mem = pruned_mem,
+                            db = pruned_db,
+                            "Pruned expired cache entries"
+                        );
+                    }
+                }
+                _ = cancel.cancelled() => break,
+            }
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests;

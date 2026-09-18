@@ -1,0 +1,189 @@
+use anyhow::Context;
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    SqlitePool,
+};
+use std::{str::FromStr, time::Duration};
+
+pub mod blocklist;
+pub mod records;
+
+/// Initialises the SQLite connection pool and runs all DDL migrations.
+pub async fn init(db_path: &str) -> anyhow::Result<SqlitePool> {
+    let options = SqliteConnectOptions::from_str(&format!("sqlite://{}?mode=rwc", db_path))
+        .with_context(|| format!("Failed to parse SQLite database URL for '{}'", db_path))?
+        .journal_mode(SqliteJournalMode::Wal)
+        .busy_timeout(Duration::from_secs(5));
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .with_context(|| format!("Failed to open SQLite database at '{}'", db_path))?;
+
+    run_migrations(&pool).await?;
+    Ok(pool)
+}
+
+async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS dns_records (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            record_type TEXT    NOT NULL,
+            value       TEXT    NOT NULL,
+            ttl         INTEGER NOT NULL DEFAULT 300,
+            priority    INTEGER,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT    NOT NULL UNIQUE,
+            password_hash TEXT    NOT NULL,
+            created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS dns_cache (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            record_type TEXT    NOT NULL,
+            value       TEXT    NOT NULL,
+            ttl         INTEGER NOT NULL,
+            expires_at  INTEGER NOT NULL,
+            priority    INTEGER
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Cache rows are one row per returned record, so identity includes the
+    // value and MX priority rather than only name/type. Remove legacy
+    // duplicates before enforcing that identity for future writes.
+    sqlx::query(
+        r#"
+        DELETE FROM dns_cache
+        WHERE id NOT IN (
+            SELECT MAX(id)
+            FROM dns_cache
+            GROUP BY lower(name), upper(record_type), value, COALESCE(priority, -1)
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_cache_identity ON dns_cache(lower(name), upper(record_type), value, COALESCE(priority, -1))",
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_cache_name_type ON dns_cache(name, record_type)")
+        .execute(pool)
+        .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Authoritative zones — source of truth at runtime; seeded from config on
+    // first boot and then managed exclusively via the Zones API / UI.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS zones (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL UNIQUE,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Ephemeral dev records are purged on every startup before the record index
+    // is loaded. SQLite lacks ADD COLUMN IF NOT EXISTS, so we probe first.
+    let has_is_dev: bool = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM pragma_table_info('dns_records') WHERE name = 'is_dev'",
+    )
+    .fetch_one(pool)
+    .await
+    .map(|n| n > 0)
+    .unwrap_or(false);
+
+    if !has_is_dev {
+        sqlx::query("ALTER TABLE dns_records ADD COLUMN is_dev INTEGER NOT NULL DEFAULT 0")
+            .execute(pool)
+            .await?;
+    }
+
+    // Domain blocklist — locally blocked domains that are never forwarded upstream.
+    // Stored as lowercase canonical domain names (no trailing dot).
+    // `source` is an open enum-ready column: 'manual' | 'imported' | 'remote'.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS blocklist (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain     TEXT    NOT NULL UNIQUE,
+            enabled    INTEGER NOT NULL DEFAULT 1,
+            source     TEXT    NOT NULL DEFAULT 'manual',
+            reason     TEXT,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_blocklist_domain  ON blocklist(domain)")
+        .execute(pool)
+        .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_blocklist_enabled ON blocklist(enabled)")
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
+
+/// Looks up a setting value. Returns `None` when the key is absent.
+pub async fn get_setting(pool: &SqlitePool, key: &str) -> anyhow::Result<Option<String>> {
+    let row = sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = ?")
+        .bind(key)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row)
+}
+
+/// Inserts or replaces a setting value.
+pub async fn set_setting(pool: &SqlitePool, key: &str, value: &str) -> anyhow::Result<()> {
+    sqlx::query("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .bind(key)
+        .bind(value)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

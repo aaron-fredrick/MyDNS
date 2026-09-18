@@ -6,15 +6,19 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use mydns::{cache, config, db, dns, privileges, state, web};
 
+use tracing_samply::SamplyLayer;
+
 use config::AppConfig;
+use dns::blocklist::BlocklistIndex;
+use dns::record_index::RecordIndex;
 use dns::upstream::UpstreamResolver;
+use dns::zone_trie::ZoneTrie;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load environment variables from .env if present
+    #[cfg(debug_assertions)]
     dotenvy::dotenv().ok();
 
-    // ── 2. Logging setup ──────────────────────────────────────────────────────
     let log_filename = {
         let now = chrono::Local::now();
         format!("mydns_{}.log", now.format("%Y-%m-%d_%H-%M-%S"))
@@ -22,89 +26,139 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all("logs")?;
     let file_appender = tracing_appender::rolling::never("logs", &log_filename);
     let (non_blocking_file, _file_guard) = tracing_appender::non_blocking(file_appender);
-
-    // Broadcast channel used to stream log events specifically for the dashboard.
     let (log_tx, _) = broadcast::channel::<String>(1024);
 
-    tracing_subscriber::registry()
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
+    let subscriber = tracing_subscriber::registry()
+        .with(env_filter)
         .with(
             tracing_subscriber::fmt::layer()
                 .with_writer(non_blocking_file)
                 .with_ansi(false),
         )
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
-        .with(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stdout)
+                .with_ansi(true),
+        );
+
+    let samply_layer = match SamplyLayer::new() {
+        Ok(layer) => {
+            println!("SamplyLayer initialized successfully");
+            Some(layer)
+        }
+        Err(e) => {
+            println!("SamplyLayer initialization failed: {e}");
+            None
+        }
+    };
+
+    let subscriber = subscriber.with(samply_layer);
+    subscriber.init();
 
     tracing::info!(log_file = %log_filename, "MyDNS starting");
 
-    // ── 3. Configuration ──────────────────────────────────────────────────────
-    let mut cfg = AppConfig::fromEnv();
+    let mut cfg = AppConfig::from_config_file()?;
+    tracing::info!(bind_host = %cfg.bind_host, dns_port = cfg.dns_port, http_host = %cfg.http_host, http_port = cfg.http_port, "Configuration loaded");
 
-    // ── 4. Database ───────────────────────────────────────────────────────────
     let pool = db::init(&cfg.db_path).await?;
 
-    // Load persisted settings (resolver priority, upstream IPs, etc.) and apply.
-    if let Some(prio) = db::getSetting(&pool, "resolver_priority").await? {
-        if let Ok(p) = prio.parse() {
+    if let Some(prio) = db::get_setting(&pool, "resolver_priority").await? {
+        if let Ok(p) = prio.parse::<config::ResolverPriority>() {
             cfg.resolver_priority = p;
         }
     }
-    if let Some(cf) = db::getSetting(&pool, "cloudflare_dns").await? {
-        if let Ok(a) = cf.parse() {
+    if let Some(cf) = db::get_setting(&pool, "cloudflare_dns").await? {
+        if let Ok(a) = cf.parse::<std::net::SocketAddr>() {
             cfg.cloudflare_dns = a;
         }
     }
-    if let Some(rt) = db::getSetting(&pool, "router_dns").await? {
-        cfg.router_dns = rt.parse().ok();
+    if let Some(rt) = db::get_setting(&pool, "router_dns").await? {
+        cfg.router_dns = rt.parse::<std::net::SocketAddr>().ok();
     }
 
-    // ── 5. JWT secret persistence ─────────────────────────────────────────────
-    // If NOT set via environment, try to load from DB to maintain sessions
-    // across restarts. If not in DB either, generate and save.
-    if std::env::var("JWT_SECRET").is_err() {
-        if let Some(saved_secret) = db::getSetting(&pool, "jwt_secret").await? {
+    if cfg.jwt_secret.is_empty() {
+        if let Some(saved_secret) = db::get_setting(&pool, "jwt_secret").await? {
             cfg.jwt_secret = saved_secret;
         } else {
-            db::setSetting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
+            cfg.jwt_secret = config::generate_secret(64);
+            db::set_setting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
             tracing::info!("Generated and persisted new JWT secret");
         }
     }
 
-    // ── 6. Privilege check (post-config) ──────────────────────────────────────
-    privileges::checkAndExitIfInsufficient(cfg.dns_port, cfg.http_port);
+    privileges::check_and_exit_if_insufficient(cfg.dns_port, cfg.http_port);
 
-    // ── 6. Seed admin user ────────────────────────────────────────────────────
-    if db::records::findUserHash(&pool, &cfg.admin_username)
+    if db::records::find_user_hash(&pool, &cfg.admin_username)
         .await?
         .is_none()
     {
-        let hash = web::auth::hashPassword(&cfg.admin_password)?;
-        db::records::seedAdmin(&pool, &cfg.admin_username, &hash).await?;
+        let hash = web::auth::hash_password(&cfg.admin_password)?;
+        db::records::seed_admin(&pool, &cfg.admin_username, &hash).await?;
         tracing::info!(username = %cfg.admin_username, "Admin user seeded");
     }
+    cfg.admin_password.clear();
 
-    // ── 6. Build upstream resolver ────────────────────────────────────────────
-    let upstream = UpstreamResolver::fromConfig(
+    let upstream = UpstreamResolver::from_config(
+        cfg.resolver_mode.clone(),
         cfg.resolver_priority.clone(),
         cfg.cloudflare_dns,
         cfg.router_dns,
+        cfg.root_hints.clone(),
     )?;
 
-    // ── 7. Shared state ───────────────────────────────────────────────────────
+    // Purge ephemeral dev records before building the index so they never
+    // survive a restart. This must happen before RecordIndex::load_from_db.
+    let purged = db::records::delete_dev_records(&pool).await?;
+    if purged > 0 {
+        tracing::info!(count = purged, "Purged ephemeral dev records on startup");
+    }
+
+    // Seed DB zones from config (idempotent — skips duplicates).
+    db::records::seed_zones(&pool, &cfg.allowed_zones).await?;
+
+    // Build the live trie from DB so zone changes made via the API persist
+    // across restarts without requiring a config file edit.
+    let zone_names = db::records::list_zone_names(&pool).await?;
+    tracing::info!(zones = ?zone_names, "Local DNS zones loaded from DB");
+    let zone_trie = ZoneTrie::from_zones(&zone_names);
+    let record_index = RecordIndex::load_from_db(&pool).await?;
+
+    // Load the blocklist into memory for zero-DB-hit blocked-query enforcement.
+    let enabled_domains = db::blocklist::list_enabled_domains(&pool).await?;
+    tracing::info!(count = enabled_domains.len(), "Blocklist loaded from DB");
+    let blocklist_index = BlocklistIndex::from_domains(&enabled_domains);
+
     let cancel = CancellationToken::new();
-    let state = state::AppState::new(pool.clone(), cfg, upstream, log_tx, cancel.clone());
+    let state = state::AppState::new(
+        pool.clone(),
+        cfg,
+        upstream,
+        log_tx,
+        cancel.clone(),
+        record_index,
+        zone_trie,
+        blocklist_index,
+    );
 
-    // ── 8. Background cache pruner ────────────────────────────────────────────
-    cache::spawnPruner(Arc::clone(&state.cache), pool.clone(), cancel.clone());
+    // Attach the shared collector after AppState owns the resolver. This keeps
+    // upstream telemetry in the resolver implementation without coupling it to HTTP.
+    {
+        let metrics = Arc::clone(&state.metrics);
+        state.upstream.write().await.attach_metrics(metrics);
+    }
 
-    // ── 9. Spawn DNS and HTTP servers with fate-sharing ───────────────────────
-    // On Unix, drop privileges now that socket binding will happen inside the
-    // DNS server task. We drop here (before spawn) so the spawned tasks already
-    // run with reduced permissions.
-    #[cfg(unix)]
-    if let Err(e) = privileges::dropPrivileges() {
-        tracing::warn!(error = %e, "Privilege drop failed — continuing as root");
+    cache::spawn_pruner(Arc::clone(&state.cache), pool.clone(), cancel.clone());
+
+    {
+        let signal_cancel = cancel.clone();
+        tokio::spawn(async move {
+            await_shutdown_signal().await;
+            tracing::info!("Shutdown signal received — stopping MyDNS");
+            signal_cancel.cancel();
+        });
     }
 
     let dns_state = Arc::clone(&state);
@@ -119,16 +173,31 @@ async fn main() -> anyhow::Result<()> {
 
     let http_cancel = cancel.clone();
     let http_handle = tokio::spawn(async move {
-        if let Err(e) = web::server::run(Arc::clone(&state), http_cancel).await {
+        if let Err(e) = web::server::run(Arc::clone(&state), http_cancel.clone()).await {
             tracing::error!(error = %e, "HTTP server terminated with error");
         }
+        http_cancel.cancel();
     });
 
-    // Cancel propagates: whichever of DNS/HTTP exits first signals the other.
     let _ = tokio::join!(dns_handle, http_handle);
-
     tracing::info!("MyDNS shutdown complete");
     Ok(())
 }
 
-// ── Database persistence helpers omitted (moved to db/mod.rs) ────────────────
+async fn await_shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut sigint =
+            signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
+        let mut sigterm =
+            signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+        tokio::select! { _ = sigint.recv() => {}, _ = sigterm.recv() => {} }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to register Ctrl+C handler");
+    }
+}

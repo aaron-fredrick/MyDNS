@@ -4,45 +4,61 @@ version = "0.1.1-dev"
 edition = "2021"
 authors = ["MyDNS"]
 description = "High-performance DNS server and management dashboard"
+default-run = "mydns"
 
 [[bin]]
 name = "mydns"
 path = "src/main.rs"
 
+# Integration tests are deliberately grouped under tests/integration/.
+# Explicit targets keep Cargo discovery stable while allowing the repository
+# to organize tests by purpose instead of leaving all entry points at tests/.
+[[test]]
+name = "auth_coverage"
+path = "tests/integration/auth_coverage.rs"
+[[test]]
+name = "blocklist_integration"
+path = "tests/integration/blocklist_integration.rs"
+[[test]]
+name = "cache_persistence"
+path = "tests/integration/cache_persistence.rs"
+[[test]]
+name = "dns_integration"
+path = "tests/integration/dns_integration.rs"
+[[test]]
+name = "api_integration"
+path = "tests/integration/integration.rs"
+[[test]]
+name = "local_dns_integration"
+path = "tests/integration/local_dns_integration.rs"
+[[test]]
+name = "upstream_integration"
+path = "tests/integration/upstream_integration.rs"
+[[test]]
+name = "validation_api"
+path = "tests/integration/validation_api.rs"
+
 [dependencies]
-# Async runtime
 tokio        = { version = "1",    features = ["full"] }
 tokio-util   = { version = "0.7",  features = ["rt"] }
 tokio-stream = "0.1"
-
-# DNS protocol
-hickory-server   = { version = "0.24", features = ["resolver"] }
-hickory-proto    = "0.24"
-hickory-resolver = { version = "0.24", features = ["tokio"] }
-
-# HTTP / WebSocket
+hickory-server   = { version = "0.26.1", features = ["resolver"] }
+hickory-proto    = "0.26.1"
+hickory-resolver = { version = "0.26.1", features = ["tokio"] }
 axum       = { version = "0.7", features = ["ws", "macros"] }
 axum-extra = { version = "0.9", features = ["typed-header"] }
 tower      = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
-
-# Database
+tower-http = { version = "0.5", features = ["cors", "trace", "set-header"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
-
-# Auth
 argon2       = "0.5"
-jsonwebtoken = "10"
-
-# Logging / tracing
+jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
 tracing             = "0.1"
 tracing-subscriber  = { version = "0.3", features = ["env-filter", "fmt"] }
 tracing-appender    = "0.2"
-
-# Serialisation
+tracing-samply      = "0.1"
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# Utilities
+toml       = "0.8"
 chrono      = { version = "0.4", features = ["serde"] }
 futures-util = "0.3"
 anyhow      = "1"
@@ -54,6 +70,9 @@ async-trait = "0.1"
 async-recursion = "1"
 local-ip-address = "0.6"
 dotenvy     = "0.15"
+rust-embed = "8.12.0"
+mime_guess = "2.0.5"
+colored = "3.1.1"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["securitybaseapi", "processthreadsapi", "winnt", "handleapi"] }
@@ -62,5 +81,6 @@ winapi = { version = "0.3", features = ["securitybaseapi", "processthreadsapi", 
 nix = { version = "0.27", features = ["user", "process"] }
 
 [dev-dependencies]
-tokio   = { version = "1", features = ["full", "test-util"] }
-reqwest = { version = "0.11", features = ["json"] }
+tokio    = { version = "1", features = ["full", "test-util"] }
+reqwest  = { version = "0.12", features = ["json"] }
+tempfile = "3"

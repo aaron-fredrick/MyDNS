@@ -1,0 +1,19 @@
+{
+  "host": "127.0.0.1",
+  "port": 5353,
+  "max_rps": 250,
+  "workers": 32,
+  "timeout_seconds": 1.0,
+  "queries": [
+    "router.home.arpa.",
+    "nas.home.arpa.",
+    "example.com.",
+    "missing.home.arpa."
+  ],
+  "phases": [
+    {"name": "warmup", "rps": 10, "duration_seconds": 5},
+    {"name": "sustain", "rps": 25, "duration_seconds": 30},
+    {"name": "burst", "rps": 150, "duration_seconds": 5},
+    {"name": "recovery", "rps": 25, "duration_seconds": 20}
+  ]
+}

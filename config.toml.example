@@ -1,0 +1,60 @@
+# MyDNS Production & Development Configuration (TOML format)
+# Copy this file to config.toml and customize credentials and settings.
+
+[server]
+# DNS listener address. Default is 127.0.0.1 for local testing. Use 0.0.0.0 for LAN/WAN.
+bind_host = "127.0.0.1"
+
+# DNS listener port (UDP + TCP). Port 53 requires administrator / root privileges.
+dns_port = 53
+
+# Management dashboard HTTP listener.
+http_host = "127.0.0.1"
+http_port = 8080
+
+# Target Unix user/group to drop privileges to after binding sockets (Unix only).
+run_as_user = "nobody"
+run_as_group = "nobody"
+
+[database]
+# SQLite database path.
+path = "mydns.db"
+
+[auth]
+# REQUIRED. MyDNS refuses to start if credentials are empty.
+admin_username = "admin"
+admin_password = "CHANGE_ME"
+
+# Optional. If omitted or empty, MyDNS generates and persists a JWT secret automatically.
+# jwt_secret = ""
+
+[resolver]
+# Resolver mode:
+# - "forwarding": Forwards cache misses to upstream DNS (Cloudflare / Router).
+# - "recursive": Performs iterative recursive resolution from root nameservers.
+mode = "forwarding"
+
+# Upstream resolver priority (forwarding mode only):
+# - "cloudflare_first": Tries Cloudflare (1.1.1.1) first, falls back to local router/gateway.
+# - "router_first": Tries local router first, falls back to Cloudflare.
+priority = "cloudflare_first"
+
+# Primary upstream DNS resolver address.
+cloudflare_dns = "1.1.1.1:53"
+
+# Optional router/gateway DNS override (auto-detected if omitted).
+# router_dns = "192.168.1.1:53"
+
+[zones]
+# Authoritative DNS zones managed locally.
+# When a query matches an authoritative zone:
+# 1. Matches return authoritative answers (AA flag set).
+# 2. Non-existent records return NXDOMAIN immediately and are NEVER forwarded to upstream.
+# Leave empty ([]) to allow managing any zone without strict boundary enforcement.
+authoritative = ["mydns.local"]
+
+# The special domain pointing to the MyDNS dashboard web interface.
+dashboard_domain = "mydns.local"
+
+# Allowed CORS origins for the management dashboard API.
+cors_domains = ["mydns.local"]

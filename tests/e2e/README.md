@@ -1,16 +1,16 @@
 # End-to-End Tests
 
-Full-system workflows against a running MyDNS instance.
+Full-system workflows against a real MyDNS process.
 
 Planned coverage:
 
-- startup and readiness
+- startup/readiness and shutdown
 - DNS + management API interaction
 - Local DNS record lifecycle
 - blocklist lifecycle and resolver effect
 - cache and upstream behavior
-- authentication and authorization
+- authentication/authorization workflows
 - frontend-to-API workflows
-- clean install, upgrade, restart, and uninstall flows
+- clean install, upgrade, restart, and uninstall
 
-E2E tests should use isolated temporary configuration, database, ports, and process state so they never depend on a developer's machine state.
+Use isolated ports, temporary configuration, database, and runtime state. E2E tests must not depend on a developer's machine state.

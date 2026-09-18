@@ -1,0 +1,49 @@
+use std::sync::Arc;
+
+use axum::{extract::State, Json};
+use serde_json::json;
+
+use crate::error::ApiError;
+use crate::state::AppState;
+
+/// `GET /api/v1/stats`
+///
+/// Returns low-cost in-process resolver observability data. The frontend is
+/// responsible only for presentation; authoritative operational metrics are
+/// collected by the Rust DNS path and exposed here as an API contract.
+pub async fn get_stats(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let (hits, misses) = state.cache_stats.snapshot();
+    let cache_size = state.cache.read().await.len();
+    let record_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM dns_records")
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+    let blocklist_size: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM blocklist")
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or(0);
+
+    let total_cache = hits + misses;
+    let cache_hit_rate = if total_cache == 0 {
+        0.0
+    } else {
+        hits as f64 / total_cache as f64 * 100.0
+    };
+
+    let stats = state.metrics.snapshot();
+    let mut value = serde_json::to_value(stats)
+        .map_err(|error| ApiError::Internal(anyhow::Error::new(error)))?;
+
+    if let Some(object) = value.as_object_mut() {
+        object.insert("cache_hits".into(), json!(hits));
+        object.insert("cache_misses".into(), json!(misses));
+        object.insert("cache_hit_rate".into(), json!(cache_hit_rate));
+        object.insert("cache_size".into(), json!(cache_size));
+        object.insert("record_count".into(), json!(record_count));
+        object.insert("blocklist_size".into(), json!(blocklist_size));
+    }
+
+    Ok(Json(value))
+}

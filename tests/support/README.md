@@ -1,16 +1,7 @@
 # Test Support
 
-Shared test infrastructure that is not itself a test case.
+Shared test infrastructure, not test cases.
 
-Planned contents:
+`mod.rs` currently provides isolated temporary SQLite databases, in-process HTTP/DNS servers, authentication helpers, ephemeral port allocation, and restart lifecycle support.
 
-- temporary MyDNS process lifecycle
-- isolated config/database/port helpers
-- DNS client helpers
-- HTTP API clients
-- authentication helpers
-- fixture loading
-- readiness polling
-- common assertions and result collection
-
-Keep product logic out of this directory. Support code should make tests clearer without becoming a second implementation of MyDNS.
+Keep MyDNS product logic out of this directory; support code should simplify tests without reimplementing the resolver or API.

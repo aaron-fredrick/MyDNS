@@ -1,37 +1,58 @@
-# Rust-specific
-target/
-node_modules/
+# Rust
+/target/
 **/*.rs.bk
 
-# Compiled Binary
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Compiled binaries
 /mydns
 /mydns.exe
 
-# DB and Logs
-mydns.db
-mydns.db-shm
-mydns.db-wal
-test_integration.db
-test_integration.db-shm
-test_integration.db-wal
-.env
+# Databases and database journals
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Runtime logs
 logs/
-check_err.txt
 *.log
 
-# IDEs
+# Local configuration / secrets
+.env
+config.toml
+
+# Generated / temporary analysis output
+metadata.json
+check_err.txt
+screenshots/temp/
+
+# IDE / editor state
 .vscode/
 .idea/
 *.swp
 *.swo
+*.swn
+*~
 
 # OS-specific
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Agent/AI tools
+# Agent / AI tool state
 .agents/
 .agent/
 .agentic/
 .gemini/
 .antigravity/
+
+
+out/

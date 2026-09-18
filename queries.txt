@@ -1,0 +1,5 @@
+google.com A
+cloudflare.com A
+github.com A
+example.com A
+wikipedia.org A

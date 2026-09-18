@@ -1,14 +1,17 @@
 # Integration Tests
 
-Cross-module tests that exercise MyDNS subsystems together without requiring the complete installed product workflow.
+Cross-module tests that validate subsystem contracts without requiring a fully installed product.
 
-Planned areas:
+Current targets cover:
 
-- DNS resolver and local-DNS behavior
-- blocklist persistence and runtime behavior
-- cache and persistence
-- HTTP API and authentication
-- upstream resolution
-- database/repository contracts
+- DNS UDP/TCP wire behavior
+- authoritative zone semantics and apex SOA/NS
+- Local DNS resolution
+- blocklist enforcement and cache/blocklist precedence
+- persistent cache lifecycle
+- management API CRUD and stats
+- authentication/authorization
+- record validation
+- upstream NXDOMAIN/SERVFAIL/timeout behavior
 
-Existing top-level Rust integration targets should remain where Cargo currently discovers them. This directory is the destination structure for future migration once test targets are explicitly wired.
+The Rust test targets are explicitly registered in `Cargo.toml` so they can remain inside this category directory while still participating in normal Cargo and coverage runs.
