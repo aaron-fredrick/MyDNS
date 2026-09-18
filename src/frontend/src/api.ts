@@ -7,6 +7,20 @@ export type Stats = {
   cache_hits: number; cache_misses: number; cache_hit_rate: number; cache_size: number; record_count: number;
   queries_blocked: number; blocklist_size: number;
 };
+export type HistorySample = {
+  timestamp: string;
+  requests_per_minute: number;
+  response_time: LatencyStats;
+};
+export type StatsHistory = {
+  server_time: string;
+  from: string;
+  to: string;
+  resolution_seconds: number;
+  oldest_available: string | null;
+  latest_available: string | null;
+  samples: HistorySample[];
+};
 export type DnsRecord = { id: number; name: string; record_type: string; value: string; ttl: number; priority?: number | null; is_dev?: boolean };
 export type Zone = { id: number; name: string; created_at: string };
 export type CacheEntry = { name: string; record_type: string; ttl_remaining: number; values: string[] };
@@ -23,6 +37,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const api = {
   login: (username: string, password: string) => request<{ token: string }>('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   stats: () => request<Stats>('/api/v1/stats'),
+  statsHistory: (from: Date, to = new Date()) => {
+    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+    return request<StatsHistory>(`/api/v1/stats/history?${params.toString()}`);
+  },
   records: async () => (await request<{ records: DnsRecord[] }>('/api/v1/records')).records,
   createRecord: async (record: Omit<DnsRecord, 'id'>) => (await request<{ record: DnsRecord }>('/api/v1/records', { method: 'POST', body: JSON.stringify(record) })).record,
   updateRecord: async (id: number, record: Partial<DnsRecord>) => (await request<{ record: DnsRecord }>(`/api/v1/records/${id}`, { method: 'PUT', body: JSON.stringify(record) })).record,
@@ -40,4 +58,3 @@ export const api = {
   updateBlocklist: async (id: number, update: { enabled?: boolean; reason?: string }) => request<BlocklistEntry>(`/api/v1/blocklist/${id}`, { method: 'PUT', body: JSON.stringify(update) }),
   deleteBlocklist: (id: number) => request<void>(`/api/v1/blocklist/${id}`, { method: 'DELETE' }),
 };
-

@@ -9,7 +9,7 @@ interface ResponseTimeChartProps {
 
 export function ResponseTimeChart({ data }: ResponseTimeChartProps) {
   return (
-    <ChartCard title="Response time" note="Backend samples: Average, P95 and P99">
+    <ChartCard title="Response time" note="Last hour from server history; average, P95 and P99">
       <ResponsiveContainer width="100%" height={250}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />

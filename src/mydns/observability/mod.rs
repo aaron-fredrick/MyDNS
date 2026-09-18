@@ -7,4 +7,4 @@ mod metrics;
 mod types;
 
 pub use metrics::Metrics;
-pub use types::{LatencyStats, MetricsSnapshot, UpstreamStats};
+pub use types::{HistorySample, LatencyStats, MetricsHistory, MetricsSnapshot, UpstreamStats};
