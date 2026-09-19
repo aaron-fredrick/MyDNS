@@ -1,9 +1,9 @@
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::{FromRow, Row, SqlitePool};
 
 /// A domain blocklist entry as stored in SQLite.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlocklistEntry {
     pub id: i64,
     pub domain: String,
@@ -14,6 +14,21 @@ pub struct BlocklistEntry {
     pub created_at: String,
     pub updated_at: String,
 }
+
+impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for BlocklistEntry {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            domain: row.try_get("domain")?,
+            enabled: row.try_get("enabled")?,
+            source: row.try_get("source")?,
+            reason: row.try_get("reason")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+        })
+    }
+}
+
 
 /// Payload for creating a new blocklist entry.
 #[derive(Debug, Deserialize)]
@@ -237,3 +252,4 @@ mod tests {
         assert!(normalize_domain("xn--nxasmq6b.com").is_ok());
     }
 }
+
