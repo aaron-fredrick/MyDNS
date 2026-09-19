@@ -92,7 +92,10 @@ pub async fn add_zone(
         .await
         .map_err(|e| {
             let msg = e.to_string();
-            if msg.contains("UNIQUE") || msg.contains("unique") || (msg.contains("constraint failed") && msg.contains("zones.name")) {
+            if msg.contains("UNIQUE")
+                || msg.contains("unique")
+                || (msg.contains("constraint failed") && msg.contains("zones.name"))
+            {
                 ApiError::BadRequest(format!("Zone '{}' already exists", canonical))
             } else {
                 ApiError::Internal(anyhow::anyhow!(msg))
