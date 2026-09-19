@@ -42,7 +42,7 @@ fn response_code(message: &Message) -> ResponseCode {
 
 #[tokio::test]
 async fn test_blocklist_returns_nxdomain() {
-    let server = common::TestDnsServer::start_with_config(vec![]).await;
+    let server = common::TestDnsServer::start_with_zones_only(vec![]).await;
 
     // Create a blocklist entry for ads.example.com
     create_entry(
@@ -138,7 +138,7 @@ async fn test_cache_blocklist_race_behavior() {
 
 #[tokio::test]
 async fn test_blocklist_crud_filters_enabled_domains() {
-    let server = common::TestServer::start_with_config(vec![]).await;
+    let server = common::TestServer::start().await;
 
     let first = create_entry(
         &server.pool,
