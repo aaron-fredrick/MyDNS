@@ -26,3 +26,11 @@ jobs:
       actions: read
       security-events: write
     uses: ./.github/workflows/ci-policy-dev.yml
+  main:
+    name: Main policy (heavy)
+    if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/ci-policy-main.yml
