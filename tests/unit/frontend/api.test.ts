@@ -53,3 +53,26 @@ test('API client clears auth and redirects after 401', async () => {
   assert.equal(auth.token, null);
   assert.deepEqual(redirects, ['/login']);
 });
+
+
+test('API client encodes cache deletion path segments and handles 204 responses', async () => {
+  auth.token = 'test-token';
+  let seenUrl = '';
+  (globalThis as any).fetch = async (input: string) => {
+    seenUrl = input;
+    return new Response(null, { status: 204 });
+  };
+
+  await api.deleteCache('host.example.com.', 'A/AAAA');
+  assert.equal(
+    seenUrl,
+    '/api/v1/cache/host.example.com.%2F/A%2FA',
+  );
+});
+
+test('API client surfaces non-JSON HTTP errors', async () => {
+  auth.token = null;
+  (globalThis as any).fetch = async () => new Response('backend exploded', { status: 500 });
+
+  await assert.rejects(() => api.stats(), /backend exploded/);
+});
