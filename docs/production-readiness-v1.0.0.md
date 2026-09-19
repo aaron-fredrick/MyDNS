@@ -47,7 +47,7 @@ Use this section to record implementation progress against the requirements belo
 |---|---|---|---|---|
 | V1-001 | Repository | Correct test, stress-test, UI, and portfolio/demo directory layout. | DONE | `src/frontend/`, `tests/`, `docs/ui/` and scripts are now separated by responsibility. |
 | V1-002 | Repository | Remove generated/runtime/debug artifacts from the production repository. | IN PROGRESS | Removed committed `src/frontend/dist/` output and aligned `.gitignore`; continue audit for remaining generated artifacts. |
-| V1-003 | Stress | Establish deterministic bounded DNS/API/WebSocket stress smoke tests. | TODO | |
+| V1-003 | Stress | Establish deterministic bounded DNS/API/WebSocket stress smoke tests. | IN PROGRESS | HTTP smoke and black-box API E2E workflows are now implemented; DNS/WebSocket/release smoke coverage remains. |
 | V1-004 | Stress | Verify concurrency, cache pressure, upstream failures, shutdown, and restart behavior. | TODO | |
 | V1-005 | Observability | Add structured terminal DNS request/response tracing. | TODO | |
 | V1-006 | Observability | Include client IP/port, FQDN, type, transport, cache/resolution path, result, TTL, and latency. | TODO | |
@@ -60,13 +60,13 @@ Use this section to record implementation progress against the requirements belo
 | V1-013 | Cache UI | Reconcile countdown with authoritative backend refresh without stale responses moving state backwards. | TODO | |
 | V1-014 | Dashboard | Keep uptime, cache, record, WebSocket, and log state synchronized. | IN PROGRESS | Dashboard history now hydrates from IndexedDB and incrementally reconciles against backend history. |
 | V1-015 | Dashboard | Replace silent frontend failures with explicit loading/error/disconnected handling. | TODO | |
-| V1-016 | DNS | Complete allowed-zone ownership enforcement and normalization tests. | TODO | |
-| V1-017 | API/Auth | Complete REST/WebSocket authentication, authorization, input, and error handling verification. | TODO | |
+| V1-016 | DNS | Complete allowed-zone ownership enforcement and normalization tests. | IN PROGRESS | Zone trie/validation unit tests and DNS integration coverage exist; remaining edge-case/release verification is still required. |
+| V1-017 | API/Auth | Complete REST/WebSocket authentication, authorization, input, and error handling verification. | IN PROGRESS | Auth route coverage, JWT/rate-limit unit tests, validation API integration tests, and API E2E workflow are implemented; WebSocket authorization/error coverage remains. |
 | V1-018 | Lifecycle | Verify configuration validation, startup failure, shutdown, and restart behavior. | TODO | |
 | V1-019 | Security | Resolve or formally disposition all release-blocking dependency/security advisories. | IN PROGRESS | Narrowed SQLx to SQLite-only features, upgraded the Rustls resolution target to the patched line, and made dependency audit run against dev; final audit result must be verified on the PR. |
 | V1-020 | Frontend | Implement the agreed React + TypeScript + Vite production frontend. | IN PROGRESS | React/Vite app exists under `src/frontend/`; root workspace wiring and Rust `out/web/` build boundary are now aligned. |
 | V1-021 | UI | Maintain the repository UI specification/prototype for V1 workflows and states. | IN PROGRESS | `docs/ui/` is the repository-authoritative UI area; remaining work is workflow/state completeness and browser verification. |
-| V1-022 | CI | Reproduce Rust, frontend, stress smoke, security, and cross-platform gates in CI. | IN PROGRESS | CI targets `dev`; frontend workspace/build wiring fixed; security audit now targets `dev` and resolves the current dependency graph before scanning. Stress gates remain to be added. |
+| V1-022 | CI | Reproduce Rust, frontend, stress smoke, security, and cross-platform gates in CI. | IN PROGRESS | Rust/frontend correctness and coverage gates run in CI; integration coverage expanded, HTTP smoke/E2E helpers added, and remaining stress/browser/release smoke gates still need CI wiring. |
 | V1-023 | Release | Produce reproducible release artifacts, deployment procedures, and matching documentation. | TODO | |
 
 Status values should remain simple: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
