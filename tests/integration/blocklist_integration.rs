@@ -42,7 +42,7 @@ fn response_code(message: &Message) -> ResponseCode {
 
 #[tokio::test]
 async fn test_blocklist_returns_nxdomain() {
-    let server = common::TestDnsServer::start_with_zones_only(vec![]).await;
+    let server = common::TestDnsServer::start_with_config(vec![]).await;
 
     // Create a blocklist entry for ads.example.com
     create_entry(
@@ -88,11 +88,11 @@ async fn test_cache_blocklist_race_behavior() {
     // 5. Confirm the response is NXDOMAIN.
     // 6. Confirm the cached positive answer did not win.
 
-    let server = common::TestDnsServer::start_with_zones_only(vec![]).await;
+    let server = common::TestDnsServer::start_with_config(vec![]).await;
     let mut server = server;
 
     // We need the server to actually cache the domain, so we can mock an upstream resolver
-    // or just let it query Cloudflare/Google. `start_with_zones_only` sets up a test server.
+    // or just let it query Cloudflare/Google. `start_with_config` sets up a test server.
     // Let's create an A record in a zone so it resolves, or just use a synthetic record if it's there.
     // But wait, if it's local zone, it doesn't get cached. We need it to be cached from upstream.
     // Let's use a real public domain that exists, like "one.one.one.one." or just "example.com."
@@ -136,10 +136,9 @@ async fn test_cache_blocklist_race_behavior() {
     );
 }
 
-
 #[tokio::test]
 async fn test_blocklist_crud_filters_enabled_domains() {
-    let server = common::TestServer::start_with_zones_only(vec![]).await;
+    let server = common::TestServer::start_with_config(vec![]).await;
 
     let first = create_entry(
         &server.pool,
@@ -205,7 +204,7 @@ async fn test_blocklist_crud_filters_enabled_domains() {
 
 #[tokio::test]
 async fn test_blocklist_rejects_invalid_sources_and_duplicates() {
-    let server = common::TestServer::start_with_zones_only(vec![]).await;
+    let server = common::TestServer::start_with_config(vec![]).await;
 
     let invalid = mydns::db::blocklist::create_entry(
         &server.pool,
