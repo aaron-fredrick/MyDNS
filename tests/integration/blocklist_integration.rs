@@ -88,7 +88,7 @@ async fn test_cache_blocklist_race_behavior() {
     // 5. Confirm the response is NXDOMAIN.
     // 6. Confirm the cached positive answer did not win.
 
-    let server = common::TestDnsServer::start_with_config(vec![]).await;
+    let server = common::TestDnsServer::start_with_zones_only(vec[]).await;
     let mut server = server;
 
     // We need the server to actually cache the domain, so we can mock an upstream resolver
