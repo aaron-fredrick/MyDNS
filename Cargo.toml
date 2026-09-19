@@ -37,6 +37,9 @@ path = "tests/integration/upstream_integration.rs"
 [[test]]
 name = "validation_api"
 path = "tests/integration/validation_api.rs"
+[[test]]
+name = "records_db"
+path = "tests/integration/records_db.rs"
 
 [dependencies]
 tokio        = { version = "1",    features = ["full"] }
