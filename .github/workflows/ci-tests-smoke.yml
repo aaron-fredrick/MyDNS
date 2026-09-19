@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   smoke:
-    name: Test (Linux) — Smoke
+    name: Test (Linux) - Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
