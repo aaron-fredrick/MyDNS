@@ -23,6 +23,7 @@ jobs:
     if: (github.event_name == 'push' && github.ref_name == 'dev') || (github.event_name == 'pull_request' && github.base_ref == 'dev')
     permissions:
       contents: read
+      actions: read
       security-events: write
     uses: ./.github/workflows/ci-policy-dev.yml
   main:
