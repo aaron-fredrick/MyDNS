@@ -9,7 +9,7 @@ import argparse, json, socket, struct, sys, urllib.error, urllib.request
 def dns_query(host, port, name):
     txid = int.from_bytes(__import__("time").time_ns().to_bytes(8, "big")[-2:], "big")
     labels = name.rstrip(".").split(".")
-    qname = b"".join(bytes([len(label)]) + label.encode("ascii") for label in labels) + b"\\x00"
+    qname = b"".join(bytes([len(label)]) + label.encode("ascii") for label in labels) + b"\x00"
     packet = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0) + qname + struct.pack("!HH", 1, 1)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
         sock.settimeout(3)
