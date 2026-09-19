@@ -34,3 +34,11 @@ jobs:
       actions: read
       security-events: write
     uses: ./.github/workflows/ci-policy-main.yml
+  nightly:
+    name: Nightly policy (exhaustive)
+    if: github.event_name == 'schedule'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: ./.github/workflows/ci-policy-nightly.yml
