@@ -1,0 +1,13 @@
+name: CI Capability - Extended Tests
+on:
+  workflow_call:
+jobs:
+  extended:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run complete Rust test matrix
+        run: cargo test --all-targets --all-features --no-fail-fast
