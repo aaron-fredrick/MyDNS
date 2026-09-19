@@ -1,0 +1,34 @@
+name: CI Policy - Main
+on:
+  workflow_call:
+jobs:
+  lint:
+    uses: ./.github/workflows/ci-lint-full.yml
+  static:
+    uses: ./.github/workflows/ci-static-full.yml
+  unit:
+    needs: [lint, static]
+    uses: ./.github/workflows/ci-tests-unit.yml
+  integration:
+    needs: unit
+    uses: ./.github/workflows/ci-tests-integration.yml
+  smoke:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-tests-smoke.yml
+  e2e:
+    needs: [unit, integration, smoke]
+    uses: ./.github/workflows/ci-tests-e2e.yml
+  build:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-build-release.yml
+  security:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-security-audit.yml
+  codeql:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-security-codeql.yml
+  coverage-upload:
+    if: github.event_name == 'push'
+    needs: unit
+    uses: ./.github/workflows/ci-coverage-upload.yml
+    secrets: inherit

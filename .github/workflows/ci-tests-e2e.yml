@@ -1,0 +1,40 @@
+name: CI Capability - E2E
+on:
+  workflow_call:
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - run: cp tests/fixtures/ci-config.toml config.toml
+      - name: Start MyDNS
+        shell: bash
+        run: |
+          ./target/release/mydns > mydns-e2e.log 2>&1 &
+          echo $! > mydns.pid
+      - name: Wait for HTTP readiness
+        run: |
+          python3 - <<'PY'
+          import time, urllib.request
+          url = "http://127.0.0.1:18080/api/v1/stats"
+          deadline = time.time() + 30
+          while time.time() < deadline:
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as response:
+                      if response.status == 200: raise SystemExit(0)
+              except Exception:
+                  time.sleep(0.5)
+          raise SystemExit("MyDNS did not become ready")
+          PY
+      - run: |
+          python3 tests/e2e/api_e2e.py             --base-url http://127.0.0.1:18080             --username admin             --password changeme123             --dns-port 5353
+      - if: failure()
+        run: cat mydns-e2e.log || true
+      - if: always()
+        shell: bash
+        run: |
+          if [ -f mydns.pid ]; then kill "$(cat mydns.pid)" || true; wait "$(cat mydns.pid)" 2>/dev/null || true; fi
+          rm -f mydns.pid mydns-e2e.log ci-mydns.db ci-mydns.db-shm ci-mydns.db-wal config.toml

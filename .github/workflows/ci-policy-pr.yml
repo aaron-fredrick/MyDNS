@@ -1,0 +1,20 @@
+name: CI Policy - Pull Request
+on:
+  workflow_call:
+jobs:
+  lint-light:
+    uses: ./.github/workflows/ci-lint-light.yml
+  static-full:
+    uses: ./.github/workflows/ci-static-full.yml
+  unit:
+    needs: [lint-light, static-full]
+    uses: ./.github/workflows/ci-tests-unit.yml
+  integration:
+    needs: unit
+    uses: ./.github/workflows/ci-tests-integration.yml
+  smoke:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-tests-smoke.yml
+  build-check:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-build-check.yml

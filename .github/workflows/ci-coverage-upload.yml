@@ -1,0 +1,36 @@
+name: CI Capability - Codecov Upload
+on:
+  workflow_call:
+    secrets:
+      CODECOV_TOKEN:
+        required: true
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: coverage-backend
+          path: coverage/backend
+      - uses: actions/download-artifact@v5
+        with:
+          name: coverage-frontend
+          path: coverage/frontend
+      - name: Upload backend coverage
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          files: coverage/backend/lcov.info
+          flags: backend
+          name: backend-coverage
+          fail_ci_if_error: true
+      - name: Upload frontend coverage
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          files: coverage/frontend/lcov.info
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: true

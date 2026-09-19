@@ -1,0 +1,32 @@
+name: CI Policy - Nightly
+on:
+  workflow_call:
+jobs:
+  lint:
+    uses: ./.github/workflows/ci-lint-nightly.yml
+  static:
+    uses: ./.github/workflows/ci-static-full.yml
+  unit:
+    needs: [lint, static]
+    uses: ./.github/workflows/ci-tests-unit.yml
+  integration:
+    needs: unit
+    uses: ./.github/workflows/ci-tests-integration.yml
+  smoke:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-tests-smoke.yml
+  e2e:
+    needs: [unit, integration, smoke]
+    uses: ./.github/workflows/ci-tests-e2e.yml
+  extended:
+    needs: [unit, integration, smoke, e2e]
+    uses: ./.github/workflows/ci-tests-extended.yml
+  build:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-build-release.yml
+  security:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-security-audit.yml
+  codeql:
+    needs: [unit, integration]
+    uses: ./.github/workflows/ci-security-codeql.yml

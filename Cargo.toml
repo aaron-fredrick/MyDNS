@@ -29,6 +29,9 @@ path = "tests/integration/dns_integration.rs"
 name = "api_integration"
 path = "tests/integration/integration.rs"
 [[test]]
+name = "api_edges"
+path = "tests/integration/api_edges.rs"
+[[test]]
 name = "local_dns_integration"
 path = "tests/integration/local_dns_integration.rs"
 [[test]]

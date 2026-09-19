@@ -1,0 +1,14 @@
+{
+  "host": "127.0.0.1",
+  "port": 5353,
+  "max_rps": 50,
+  "workers": 8,
+  "timeout_seconds": 1.0,
+  "queries": ["missing.home.arpa."],
+  "phases": [
+    {"name": "warmup", "rps": 5, "duration_seconds": 3},
+    {"name": "sustain", "rps": 10, "duration_seconds": 5},
+    {"name": "burst", "rps": 25, "duration_seconds": 3},
+    {"name": "recovery", "rps": 10, "duration_seconds": 3}
+  ]
+}

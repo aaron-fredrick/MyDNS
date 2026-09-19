@@ -1,3 +1,5 @@
+# Coverage is intentionally split by runtime surface. Thresholds remain
+# non-blocking until the expanded suite establishes a measured baseline.
 coverage:
   status:
     project:
@@ -6,6 +8,13 @@ coverage:
     patch:
       default:
         informational: true
+
+# These are process entrypoints rather than independently testable business
+# logic. Their behavior is verified by build/startup/E2E smoke jobs instead of
+# inflating line-coverage targets with tracing/bootstrap plumbing.
+ignore:
+  - "src/main.rs"
+  - "src/frontend/src/main.tsx"
 
 flag_management:
   individual_flags:

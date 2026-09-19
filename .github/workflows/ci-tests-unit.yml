@@ -1,0 +1,43 @@
+name: CI Capability - Unit Tests
+on:
+  workflow_call:
+jobs:
+  backend-linux:
+    name: Rust unit tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --lib --all-features
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov --lib --all-features --lcov --output-path coverage/backend/lcov.info
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-backend
+          path: coverage/backend/lcov.info
+          retention-days: 14
+  backend-windows:
+    name: Rust unit tests (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --lib --all-features
+  frontend:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx --yes c8@10.1.3 --reporter=lcov --reporter=text --reports-dir=coverage/frontend node --experimental-strip-types --test tests/unit/frontend/*.test.ts
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-frontend
+          path: coverage/frontend/lcov.info
+          retention-days: 14

@@ -1,0 +1,30 @@
+name: CI Capability - CodeQL
+on:
+  workflow_call:
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: rust
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:rust"
+  javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"
