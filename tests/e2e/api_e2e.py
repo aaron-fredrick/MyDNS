@@ -4,7 +4,23 @@
 Usage:
   python tests/e2e/api_e2e.py --base-url http://127.0.0.1:8080 --username admin --password changeme123
 """
-import argparse, json, sys, urllib.error, urllib.request
+import argparse, json, socket, struct, sys, urllib.error, urllib.request
+
+def dns_query(host, port, name):
+    txid = int.from_bytes(__import__("time").time_ns().to_bytes(8, "big")[-2:], "big")
+    labels = name.rstrip(".").split(".")
+    qname = b"".join(bytes([len(label)]) + label.encode("ascii") for label in labels) + b"\\x00"
+    packet = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0) + qname + struct.pack("!HH", 1, 1)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(3)
+        sock.sendto(packet, (host, port))
+        response, _ = sock.recvfrom(4096)
+    if len(response) < 12:
+        raise AssertionError("DNS response is too short")
+    response_id, flags, _, answers, _, _ = struct.unpack("!HHHHHH", response[:12])
+    if response_id != txid:
+        raise AssertionError("DNS transaction ID mismatch")
+    return flags & 0xF, answers
 
 def request(base_url, path, method="GET", token=None, body=None):
     data = json.dumps(body).encode() if body is not None else None
@@ -30,6 +46,7 @@ def main():
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--username", default="admin")
     parser.add_argument("--password", required=True)
+    parser.add_argument("--dns-port", type=int, default=5353)
     args = parser.parse_args()
 
     status, _ = request(args.base_url, "/api/v1/stats")
@@ -51,6 +68,11 @@ def main():
 
     status, _ = request(args.base_url, f"/api/v1/records/{record_id}", "PUT", token, {"value":"192.0.2.45","ttl":300})
     require(status, 200, "update record")
+
+    rcode, answers = dns_query("127.0.0.1", args.dns_port, "e2e-test.home.arpa.")
+    if rcode != 0 or answers < 1:
+        raise AssertionError(f"DNS E2E query failed: rcode={rcode}, answers={answers}")
+
     status, _ = request(args.base_url, f"/api/v1/records/{record_id}", "DELETE", token)
     require(status, 200, "delete record")
 
