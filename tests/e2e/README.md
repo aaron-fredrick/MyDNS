@@ -2,15 +2,15 @@
 
 Full-system workflows against a real MyDNS process.
 
-Planned coverage:
+Implemented API workflow coverage:
 
-- startup/readiness and shutdown
-- DNS + management API interaction
-- Local DNS record lifecycle
-- blocklist lifecycle and resolver effect
-- cache and upstream behavior
-- authentication/authorization workflows
-- frontend-to-API workflows
-- clean install, upgrade, restart, and uninstall
+- authentication/login
+- records CRUD
+- zone CRUD
+- blocklist CRUD
+- settings access
+- stats and historical metrics contract
+
+Run `python tests/e2e/api_e2e.py --password <test-password>` against an isolated running instance. DNS, frontend-browser, and install/upgrade lifecycle workflows remain additional release-level E2E work.
 
 Use isolated ports, temporary configuration, database, and runtime state. E2E tests must not depend on a developer's machine state.
