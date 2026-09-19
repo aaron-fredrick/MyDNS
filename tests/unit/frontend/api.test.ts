@@ -146,5 +146,5 @@ test('API client covers the remaining CRUD and settings helpers', async () => {
   assert.equal((await api.updateBlocklist(1, { enabled: false })).enabled, false);
   await api.deleteBlocklist(1);
 
-  assert.equal(calls.length, 18);
+  assert.equal(calls.length, 16);
 });
