@@ -1,0 +1,14 @@
+name: CI Policy - Branch
+on:
+  workflow_call:
+jobs:
+  lint-light:
+    uses: ./.github/workflows/ci-lint-light.yml
+  static-light:
+    uses: ./.github/workflows/ci-static-light.yml
+  unit:
+    needs: [lint-light, static-light]
+    uses: ./.github/workflows/ci-tests-unit.yml
+  build-check:
+    needs: [lint-light, static-light]
+    uses: ./.github/workflows/ci-build-check.yml
