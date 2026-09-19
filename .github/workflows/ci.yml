@@ -76,7 +76,7 @@ jobs:
 
       - name: Check production Rust formatting
         shell: bash
-        run: find src -name '*.rs' -print0 | xargs -0 rustfmt --check
+        run: find src -name '*.rs' -print0 | xargs -0 rustfmt --edition 2021 --check
 
       - name: Strict Clippy Lints
         run: cargo clippy --all-targets --all-features -- -D warnings
