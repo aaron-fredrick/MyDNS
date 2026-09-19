@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   integration:
-    name: Test (Linux) — Integration
+    name: Test (Linux) - Integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
