@@ -115,7 +115,7 @@ pub async fn list_all_records(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord
 pub async fn find_by_name(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
-         FROM dns_records WHERE lower(name) = lower(?)",
+         FROM dns_records WHERE lower(trim(name, '.')) = lower(trim(?, '.'))",
     )
     .bind(name)
     .fetch_all(pool)
@@ -419,7 +419,7 @@ pub async fn get_cache(
     let now = Utc::now().timestamp();
     sqlx::query_as::<_, CacheRow>(
         "SELECT id, name, record_type, value, ttl, expires_at, priority \
-         FROM dns_cache WHERE lower(name) = lower(?) AND upper(record_type) = upper(?) \
+         FROM dns_cache WHERE lower(trim(name, '.')) = lower(trim(?, '.')) AND upper(record_type) = upper(?) \
          AND expires_at > ?",
     )
     .bind(name)
