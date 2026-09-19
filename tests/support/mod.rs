@@ -285,12 +285,6 @@ impl TestDnsServer {
         let server_state = Arc::clone(&state);
         let server_cancel = cancel.clone();
 
-        // Bind both transports before spawning the server. The OS keeps these
-        // exact sockets reserved while ownership is moved into the server task,
-        // eliminating the ephemeral-port release/rebind race between parallel
-        // integration test processes.
-        let (udp_socket, tcp_listener, port) = bind_dns_sockets().await;
-
         let handle = tokio::spawn(async move {
             dns::server::run_with_sockets(server_state, server_cancel, udp_socket, tcp_listener).await
         });
