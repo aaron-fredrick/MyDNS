@@ -286,7 +286,8 @@ impl TestDnsServer {
         let server_cancel = cancel.clone();
 
         let handle = tokio::spawn(async move {
-            dns::server::run_with_sockets(server_state, server_cancel, udp_socket, tcp_listener).await
+            dns::server::run_with_sockets(server_state, server_cancel, udp_socket, tcp_listener)
+                .await
         });
 
         // Wait until TCP socket is ready to accept queries
@@ -397,7 +398,8 @@ impl TestDnsServer {
         let server_cancel = cancel.clone();
 
         let handle = tokio::spawn(async move {
-            dns::server::run_with_sockets(server_state, server_cancel, udp_socket, tcp_listener).await
+            dns::server::run_with_sockets(server_state, server_cancel, udp_socket, tcp_listener)
+                .await
         });
 
         // Wait until TCP socket is ready.
