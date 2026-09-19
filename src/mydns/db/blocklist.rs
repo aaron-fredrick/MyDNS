@@ -29,7 +29,6 @@ impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for BlocklistEntry {
     }
 }
 
-
 /// Payload for creating a new blocklist entry.
 #[derive(Debug, Deserialize)]
 pub struct CreateBlocklistEntry {
