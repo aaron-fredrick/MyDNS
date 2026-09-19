@@ -39,16 +39,16 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5353)
-    parser.add_argument("--name", default="smoke.home.arpa.")
+    parser.add_argument("--name", default="home.arpa.")
     args = parser.parse_args()
 
-    rcode, answers = query(args.host, args.port, args.name, 1)
+    rcode, answers = query(args.host, args.port, args.name, 6)
     if rcode != 0:
         raise AssertionError(f"expected NOERROR (0), got rcode={rcode}")
     if answers < 1:
         raise AssertionError("expected at least one DNS answer")
 
-    print(f"MyDNS DNS smoke: PASS ({args.name} answers={answers})")
+    print(f"MyDNS DNS smoke: PASS ({args.name} SOA answers={answers})")
     return 0
 
 
