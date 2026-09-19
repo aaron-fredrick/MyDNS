@@ -44,3 +44,23 @@ Load tests are manual/opt-in performance tests, not normal CI correctness tests.
 - **E2E:** real MyDNS process + DNS/API clients + frontend workflows + lifecycle operations.
 - **Smoke:** minimal release/deployment health checks.
 - **Load:** DNS/API throughput, burst handling, latency percentiles, cache/blocklist scale, upstream degradation, resource saturation, and soak/recovery.
+
+
+## Current coverage suites
+
+The integration layer now includes records_db.rs, covering DNS record CRUD, dev-record cleanup, admin seeding, zone lifecycle/apex records, config-zone normalization, settings persistence, cache identity, and recursive CNAME-dependent cache invalidation.
+
+The blocklist integration suite covers enabled-domain projection, update/delete behavior, invalid sources, duplicate canonical domains, and DNS enforcement.
+
+Black-box helpers are also available:
+
+- tests/e2e/api_e2e.py — authenticated records, zones, blocklist, settings, stats, and history workflow against a running instance.
+- tests/smoke/api-smoke.ps1 — fast HTTP readiness/auth/records/history smoke check.
+
+Run the Rust correctness and coverage suite with cargo test --all-targets --all-features and cargo llvm-cov --all-targets --all-features --lcov --output-path lcov.info.
+
+Run the frontend unit suite with the existing c8 command documented in .github/workflows/README.md.
+
+Run the API E2E workflow against an isolated test instance with: python tests/e2e/api_e2e.py --base-url http://127.0.0.1:8080 --username admin --password "$MYDNS_ADMIN_PASSWORD"
+
+The E2E and smoke layers intentionally remain outside ordinary unit-test coverage: their purpose is black-box contract and deployment verification rather than line coverage.
