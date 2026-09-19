@@ -114,7 +114,7 @@ async fn zones_reject_invalid_names_and_duplicate_zones() {
     assert_eq!(duplicate.status(), 400);
 
     let missing = c
-        .delete(format!("{}/api/v1/zones/missing.example"))
+        .delete(format!("{}/api/v1/zones/missing.example", server.base_url))
         .header("Authorization", &auth)
         .send()
         .await
