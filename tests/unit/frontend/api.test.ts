@@ -66,7 +66,7 @@ test('API client encodes cache deletion path segments and handles 204 responses'
   await api.deleteCache('host.example.com.', 'A/AAAA');
   assert.equal(
     seenUrl,
-    '/api/v1/cache/host.example.com.%2F/A%2FA',
+    '/api/v1/cache/host.example.com./A%2FAAAA',
   );
 });
 
@@ -92,11 +92,11 @@ test('API client covers the remaining CRUD and settings helpers', async () => {
     if (input === '/api/v1/records/7') {
       return new Response(JSON.stringify({ record: { id: 7, ...body } }), { status: 200 });
     }
+    if (input === '/api/v1/zones' && init?.method === 'POST') {
+      return new Response(JSON.stringify({ zone: { id: 2, name: 'new zone', created_at: '2026-01-01T00:00:00Z' } }), { status: 200 });
+    }
     if (input === '/api/v1/zones') {
       return new Response(JSON.stringify({ zones: [{ id: 1, name: 'home.arpa', created_at: '2026-01-01T00:00:00Z' }] }), { status: 200 });
-    }
-    if (input === '/api/v1/zones/new%20zone') {
-      return new Response(JSON.stringify({ zone: { id: 2, name: 'new zone', created_at: '2026-01-01T00:00:00Z' } }), { status: 200 });
     }
     if (input.startsWith('/api/v1/zones/')) {
       return new Response(JSON.stringify({ removed: 'home.arpa' }), { status: 200 });
