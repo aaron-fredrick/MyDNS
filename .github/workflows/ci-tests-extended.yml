@@ -2,7 +2,9 @@ name: CI Capability - Extended Tests
 on:
   workflow_call:
 jobs:
-  extended:\n    name: Test (Linux) — Extended\n    runs-on: ubuntu-latest
+  extended:
+    name: Test (Linux) — Extended
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
