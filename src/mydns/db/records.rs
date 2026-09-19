@@ -60,7 +60,6 @@ impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for CacheRow {
     }
 }
 
-
 /// Payload for creating a new DNS record.
 #[derive(Debug, Deserialize)]
 pub struct CreateRecord {
@@ -244,7 +243,6 @@ impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for Zone {
         })
     }
 }
-
 
 /// Returns all configured authoritative zones ordered by name.
 pub async fn list_zones(pool: &SqlitePool) -> anyhow::Result<Vec<Zone>> {
