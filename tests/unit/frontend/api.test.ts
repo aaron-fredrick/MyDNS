@@ -116,6 +116,9 @@ test('API client covers the remaining CRUD and settings helpers', async () => {
         root_hints: [],
       }), { status: 200 });
     }
+    if (input === '/api/v1/blocklist' && init?.method === 'POST') {
+      return new Response(JSON.stringify({ id: 1, domain: 'blocked.test', enabled: true, source: 'manual', created_at: '', updated_at: '' }), { status: 200 });
+    }
     if (input === '/api/v1/blocklist') {
       return new Response(JSON.stringify([{ id: 1, domain: 'blocked.test', enabled: true, source: 'manual', created_at: '', updated_at: '' }]), { status: 200 });
     }
