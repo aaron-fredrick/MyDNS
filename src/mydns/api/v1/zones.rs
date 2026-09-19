@@ -100,11 +100,11 @@ pub async fn add_zone(
                         || (msg.contains("constraint failed") && msg.contains("zones.name"))
                 }
             };
-            if is_duplicate
-            {
+
+            if is_duplicate {
                 ApiError::BadRequest(format!("Zone '{}' already exists", canonical))
             } else {
-                ApiError::Internal(anyhow::anyhow!(msg))
+                ApiError::Internal(e)
             }
         })?;
 
