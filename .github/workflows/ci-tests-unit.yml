@@ -35,8 +35,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: |
-          npx --yes c8@10.1.3             --reporter=lcov             --reporter=text             --reports-dir=coverage/frontend             node --experimental-strip-types --test tests/unit/frontend/*.test.ts
+      - run: npx --yes c8@10.1.3 --reporter=lcov --reporter=text --reports-dir=coverage/frontend node --experimental-strip-types --test tests/unit/frontend/*.test.ts
       - uses: actions/upload-artifact@v7
         with:
           name: coverage-frontend
