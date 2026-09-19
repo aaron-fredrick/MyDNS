@@ -2,7 +2,9 @@ name: CI Capability - Full Static Checks
 on:
   workflow_call:
 jobs:
-  static:\n    name: Static (Linux) — Full\n    runs-on: ubuntu-latest
+  static:
+    name: Static (Linux) — Full
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
