@@ -2,7 +2,9 @@ name: CI Capability - Light Static Checks
 on:
   workflow_call:
 jobs:
-  static:\n    name: Static (Linux) — Light\n    runs-on: ubuntu-latest
+  static:
+    name: Static (Linux) — Light
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
