@@ -204,7 +204,7 @@ async fn test_blocklist_crud_filters_enabled_domains() {
 
 #[tokio::test]
 async fn test_blocklist_rejects_invalid_sources_and_duplicates() {
-    let server = common::TestServer::start_with_config(vec![]).await;
+    let server = common::TestServer::start().await;
 
     let invalid = mydns::db::blocklist::create_entry(
         &server.pool,
