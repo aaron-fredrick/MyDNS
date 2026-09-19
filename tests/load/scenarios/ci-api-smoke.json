@@ -1,0 +1,12 @@
+{
+  "urls": ["http://127.0.0.1:18080/api/v1/stats"],
+  "max_rps": 40,
+  "workers": 8,
+  "timeout_seconds": 2.0,
+  "phases": [
+    {"name": "warmup", "rps": 5, "duration_seconds": 3},
+    {"name": "sustain", "rps": 10, "duration_seconds": 5},
+    {"name": "burst", "rps": 25, "duration_seconds": 3},
+    {"name": "recovery", "rps": 10, "duration_seconds": 3}
+  ]
+}
