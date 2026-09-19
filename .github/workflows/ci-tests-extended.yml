@@ -9,5 +9,4 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run complete Rust test matrix
-        run: cargo test --all-targets --all-features --no-fail-fast
+      - run: cargo test --all-targets --all-features --no-fail-fast
