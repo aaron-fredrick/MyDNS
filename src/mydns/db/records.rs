@@ -1,10 +1,10 @@
 use anyhow::Context;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::{FromRow, Row, SqlitePool};
 
 /// A DNS record as stored in SQLite.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecord {
     pub id: i64,
     pub name: String,
@@ -19,7 +19,7 @@ pub struct DnsRecord {
     pub is_dev: bool,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CacheRow {
     pub id: i64,
     pub name: String,
@@ -29,6 +29,37 @@ pub struct CacheRow {
     pub expires_at: i64,
     pub priority: Option<i64>,
 }
+
+impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for DnsRecord {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            record_type: row.try_get("record_type")?,
+            value: row.try_get("value")?,
+            ttl: row.try_get("ttl")?,
+            priority: row.try_get("priority")?,
+            created_at: row.try_get("created_at")?,
+            updated_at: row.try_get("updated_at")?,
+            is_dev: row.try_get("is_dev")?,
+        })
+    }
+}
+
+impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for CacheRow {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            record_type: row.try_get("record_type")?,
+            value: row.try_get("value")?,
+            ttl: row.try_get("ttl")?,
+            expires_at: row.try_get("expires_at")?,
+            priority: row.try_get("priority")?,
+        })
+    }
+}
+
 
 /// Payload for creating a new DNS record.
 #[derive(Debug, Deserialize)]
@@ -197,12 +228,23 @@ pub async fn seed_admin(
 // ── Zone Management ──────────────────────────────────────────────────────────
 
 /// A zone entry as stored in SQLite.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Zone {
     pub id: i64,
     pub name: String,
     pub created_at: String,
 }
+
+impl<'r> FromRow<'r, sqlx::sqlite::SqliteRow> for Zone {
+    fn from_row(row: &'r sqlx::sqlite::SqliteRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get("id")?,
+            name: row.try_get("name")?,
+            created_at: row.try_get("created_at")?,
+        })
+    }
+}
+
 
 /// Returns all configured authoritative zones ordered by name.
 pub async fn list_zones(pool: &SqlitePool) -> anyhow::Result<Vec<Zone>> {
