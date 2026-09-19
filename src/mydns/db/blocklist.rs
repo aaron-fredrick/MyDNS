@@ -251,4 +251,3 @@ mod tests {
         assert!(normalize_domain("xn--nxasmq6b.com").is_ok());
     }
 }
-
