@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   e2e:
-    name: Test (Linux) — E2E
+    name: Test (Linux) - E2E
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
