@@ -127,6 +127,84 @@ jobs:
           flags: backend
           name: backend-coverage
 
+
+  black-box-smoke:
+    name: E2E, DNS Smoke & Bounded Load
+    needs: [frontend, lint-and-format, test-and-coverage]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Prepare isolated test configuration
+        run: cp tests/fixtures/ci-config.toml config.toml
+
+      - name: Start MyDNS
+        shell: bash
+        run: |
+          ./target/release/mydns > mydns-ci.log 2>&1 &
+          echo $! > mydns.pid
+
+      - name: Wait for HTTP readiness
+        run: |
+          python3 - <<'PY'
+          import time
+          import urllib.request
+
+          url = "http://127.0.0.1:18080/api/v1/stats"
+          deadline = time.time() + 30
+          while time.time() < deadline:
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as response:
+                      if response.status == 200:
+                          raise SystemExit(0)
+              except Exception:
+                  time.sleep(0.5)
+          raise SystemExit("MyDNS did not become ready within 30 seconds")
+          PY
+
+      - name: Run API and DNS E2E workflow
+        run: |
+          python3 tests/e2e/api_e2e.py             --base-url http://127.0.0.1:18080             --username admin             --password changeme123             --dns-port 5353
+
+      - name: Run DNS smoke
+        run: python3 tests/smoke/dns-smoke.py --port 5353
+
+      - name: Run HTTP smoke
+        env:
+          MYDNS_ADMIN_PASSWORD: changeme123
+        shell: pwsh
+        run: ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
+
+      - name: Run bounded DNS load smoke
+        run: python3 tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
+
+      - name: Run bounded API load smoke
+        run: python3 tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
+
+      - name: Dump MyDNS log on failure
+        if: failure()
+        run: |
+          if [ -f mydns-ci.log ]; then
+            cat mydns-ci.log
+          fi
+
+      - name: Stop MyDNS
+        if: always()
+        shell: bash
+        run: |
+          if [ -f mydns.pid ]; then
+            kill "$(cat mydns.pid)" || true
+            wait "$(cat mydns.pid)" 2>/dev/null || true
+          fi
+          rm -f mydns.pid mydns-ci.log ci-mydns.db ci-mydns.db-shm ci-mydns.db-wal config.toml
+
   build-release:
     name: Release Build (${{ matrix.os }})
     needs: [frontend, lint-and-format, test-and-coverage]
