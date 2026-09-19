@@ -9,6 +9,8 @@ jobs:
   unit:
     needs: [lint, static]
     uses: ./.github/workflows/ci-tests-unit.yml
+    with:
+      include_integration_coverage: true
   integration:
     needs: unit
     uses: ./.github/workflows/ci-tests-integration.yml

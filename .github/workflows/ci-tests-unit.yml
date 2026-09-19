@@ -1,9 +1,14 @@
 name: CI Capability - Unit Tests
 on:
   workflow_call:
+    inputs:
+      include_integration_coverage:
+        required: false
+        type: boolean
+        default: false
 jobs:
   backend-linux:
-    name: Rust unit tests (Linux)
+    name: Rust unit tests and coverage (Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -11,7 +16,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --lib --all-features
       - uses: taiki-e/install-action@cargo-llvm-cov
-      - run: cargo llvm-cov --lib --all-features --lcov --output-path coverage/backend/lcov.info
+      - name: Generate backend coverage
+        if: ${{ !inputs.include_integration_coverage }}
+        run: cargo llvm-cov --lib --all-features --lcov --output-path coverage/backend/lcov.info
+      - name: Generate backend coverage including integration targets
+        if: ${{ inputs.include_integration_coverage }}
+        run: cargo llvm-cov --all-targets --all-features --ignore-filename-regex 'src/main\.rs$' --lcov --output-path coverage/backend/lcov.info
       - uses: actions/upload-artifact@v7
         with:
           name: coverage-backend

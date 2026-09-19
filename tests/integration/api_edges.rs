@@ -84,7 +84,14 @@ async fn zones_reject_invalid_names_and_duplicate_zones() {
     let c = client();
     let auth = server.auth_header(&c).await;
 
-    for name in [".", "", "bad/name", "bad:name", "-bad.example", "bad-.example"] {
+    for name in [
+        ".",
+        "",
+        "bad/name",
+        "bad:name",
+        "-bad.example",
+        "bad-.example",
+    ] {
         let response = c
             .post(format!("{}/api/v1/zones", server.base_url))
             .header("Authorization", &auth)
@@ -147,7 +154,9 @@ async fn cache_api_covers_listing_and_delete_paths() {
         .unwrap();
     assert_eq!(list.status(), 200);
     let entries: Vec<Value> = list.json().await.unwrap();
-    assert!(entries.iter().any(|entry| entry["name"] == "api-cache.home.arpa"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry["name"] == "api-cache.home.arpa"));
 
     let deleted = c
         .delete(format!(

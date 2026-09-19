@@ -4,9 +4,7 @@ mod common;
 
 use common::TestDb;
 use mydns::db;
-use mydns::db::records::{
-    CreateRecord, UpdateRecord,
-};
+use mydns::db::records::{CreateRecord, UpdateRecord};
 
 #[tokio::test]
 async fn test_dns_record_crud_and_case_insensitive_lookup() {
@@ -30,7 +28,9 @@ async fn test_dns_record_crud_and_case_insensitive_lookup() {
     assert_eq!(created.record_type, "A");
     assert_eq!(created.name, "Host.Example.Local");
 
-    let found = db::records::find_by_name(&pool, "host.example.local.").await.unwrap();
+    let found = db::records::find_by_name(&pool, "host.example.local.")
+        .await
+        .unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, created.id);
 
@@ -55,7 +55,10 @@ async fn test_dns_record_crud_and_case_insensitive_lookup() {
 
     assert!(db::records::delete_record(&pool, created.id).await.unwrap());
     assert!(!db::records::delete_record(&pool, created.id).await.unwrap());
-    assert!(db::records::get_record(&pool, created.id).await.unwrap().is_none());
+    assert!(db::records::get_record(&pool, created.id)
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]
@@ -103,14 +106,21 @@ async fn test_admin_seed_is_idempotent_and_lookup_works() {
     let test_db = TestDb::new();
     let pool = test_db.init_pool().await;
 
-    db::records::seed_admin(&pool, "admin", "hash-1").await.unwrap();
-    db::records::seed_admin(&pool, "admin", "hash-2").await.unwrap();
+    db::records::seed_admin(&pool, "admin", "hash-1")
+        .await
+        .unwrap();
+    db::records::seed_admin(&pool, "admin", "hash-2")
+        .await
+        .unwrap();
 
     assert_eq!(
         db::records::find_user_hash(&pool, "admin").await.unwrap(),
         Some("hash-1".into())
     );
-    assert_eq!(db::records::find_user_hash(&pool, "missing").await.unwrap(), None);
+    assert_eq!(
+        db::records::find_user_hash(&pool, "missing").await.unwrap(),
+        None
+    );
 }
 
 #[tokio::test]
@@ -123,7 +133,10 @@ async fn test_zone_lifecycle_creates_and_removes_apex_records() {
 
     let zones = db::records::list_zones(&pool).await.unwrap();
     assert_eq!(zones.len(), 1);
-    assert_eq!(db::records::list_zone_names(&pool).await.unwrap(), vec!["home.arpa"]);
+    assert_eq!(
+        db::records::list_zone_names(&pool).await.unwrap(),
+        vec!["home.arpa"]
+    );
 
     let apex = db::records::find_by_name(&pool, "home.arpa").await.unwrap();
     assert_eq!(apex.len(), 2);
@@ -146,8 +159,14 @@ async fn test_zone_lifecycle_creates_and_removes_apex_records() {
 
     assert!(db::records::remove_zone(&pool, "home.arpa").await.unwrap());
     assert!(db::records::list_zones(&pool).await.unwrap().is_empty());
-    assert!(db::records::find_by_name(&pool, "home.arpa").await.unwrap().is_empty());
-    assert!(db::records::find_by_name(&pool, "host.home.arpa").await.unwrap().is_empty());
+    assert!(db::records::find_by_name(&pool, "home.arpa")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(db::records::find_by_name(&pool, "host.home.arpa")
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -168,7 +187,10 @@ async fn test_seed_zones_is_idempotent_and_normalizes_names() {
     let names = db::records::list_zone_names(&pool).await.unwrap();
     assert_eq!(names, vec!["home.arpa", "lab.local"]);
     assert_eq!(
-        db::records::find_by_name(&pool, "home.arpa").await.unwrap().len(),
+        db::records::find_by_name(&pool, "home.arpa")
+            .await
+            .unwrap()
+            .len(),
         2
     );
 }
@@ -179,13 +201,17 @@ async fn test_settings_are_inserted_and_replaced() {
     let pool = test_db.init_pool().await;
 
     assert_eq!(db::get_setting(&pool, "resolver.mode").await.unwrap(), None);
-    db::set_setting(&pool, "resolver.mode", "forwarding").await.unwrap();
+    db::set_setting(&pool, "resolver.mode", "forwarding")
+        .await
+        .unwrap();
     assert_eq!(
         db::get_setting(&pool, "resolver.mode").await.unwrap(),
         Some("forwarding".into())
     );
 
-    db::set_setting(&pool, "resolver.mode", "recursive").await.unwrap();
+    db::set_setting(&pool, "resolver.mode", "recursive")
+        .await
+        .unwrap();
     assert_eq!(
         db::get_setting(&pool, "resolver.mode").await.unwrap(),
         Some("recursive".into())
@@ -254,7 +280,16 @@ async fn test_cache_delete_by_name_clears_cname_dependents() {
         .await
         .unwrap();
 
-    assert!(db::records::get_cache(&pool, "target.test.local", "A").await.unwrap().is_empty());
-    assert!(db::records::get_cache(&pool, "alias.test.local", "A").await.unwrap().is_empty());
-    assert!(db::records::get_cache(&pool, "deep.test.local", "A").await.unwrap().is_empty());
+    assert!(db::records::get_cache(&pool, "target.test.local", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(db::records::get_cache(&pool, "alias.test.local", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(db::records::get_cache(&pool, "deep.test.local", "A")
+        .await
+        .unwrap()
+        .is_empty());
 }
