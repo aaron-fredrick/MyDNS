@@ -197,7 +197,7 @@ pub struct TestDnsServer {
     pub addr: SocketAddr,
     pub pool: SqlitePool,
     pub cancel: CancellationToken,
-    pub handle: tokio::task::JoinHandle<()>,
+    pub handle: tokio::task::JoinHandle<anyhow::Result<()>>,
 }
 
 impl TestDnsServer {
@@ -324,7 +324,7 @@ impl TestDnsServer {
         self.cancel.cancel();
 
         // Wait for the old server task to exit by swapping out its handle.
-        let dummy_handle = tokio::spawn(async {});
+        let dummy_handle = tokio::spawn(async { Ok::<(), anyhow::Error>(()) });
         let old_handle = std::mem::replace(&mut self.handle, dummy_handle);
         let _ = old_handle.await;
 
