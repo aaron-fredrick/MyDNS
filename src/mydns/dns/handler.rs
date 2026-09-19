@@ -55,7 +55,7 @@ impl RequestHandler for DnsHandler {
         let name = name_fqdn.trim_end_matches('.').to_lowercase();
 
         let recursion_desired = request.metadata.recursion_desired;
-        tracing::info!(client = %src, query = %name_fqdn, rtype = %rtype, recursion_desired, "DNS query received");
+        tracing::debug!(client = %src, query = %name_fqdn, rtype = %rtype, recursion_desired, "DNS query received");
         let result = self
             .processResolution(&name, rtype, src, recursion_desired)
             .await;
@@ -156,7 +156,7 @@ impl DnsHandler {
             }
 
             // Name is inside a local zone but no record exists → local NXDOMAIN.
-            tracing::info!(client = %src, query = %name, r#type = %rtype, "Local zone record not found");
+            tracing::debug!(client = %src, query = %name, r#type = %rtype, "Local zone record not found");
             let _ = self.state.log_tx.send(format!(
                 "[LOCAL NXDOMAIN] client={} query={} type={}",
                 src, name, rtype
@@ -196,7 +196,7 @@ impl DnsHandler {
 
         // ── 7. Upstream ─────────────────────────────────────────────────────
         if !recursion_desired {
-            tracing::info!(client = %src, query = %name, r#type = %rtype, "Recursion not desired and record not in local DB or cache");
+            tracing::debug!(client = %src, query = %name, r#type = %rtype, "Recursion not desired and record not in local DB or cache");
             return ResolutionResult::NxDomain(false);
         }
 
@@ -208,7 +208,7 @@ impl DnsHandler {
                 ResolutionResult::Positive(records, false)
             }
             ResolutionResult::Nodata(_) => {
-                tracing::info!(client = %src, query = %name, r#type = %rtype, "NODATA");
+                tracing::debug!(client = %src, query = %name, r#type = %rtype, "NODATA");
                 let _ = self.state.log_tx.send(format!(
                     "[NODATA] client={} query={} type={}",
                     src, name, rtype
@@ -459,7 +459,7 @@ impl DnsHandler {
                 "[SPECIAL] client={} query={} type={} value=[{}]",
                 src, name, rtype, target_ip
             ));
-            tracing::info!(client = %src, query = %name, r#type = %rtype, value = %target_ip, "Special record hit");
+            tracing::debug!(client = %src, query = %name, r#type = %rtype, value = %target_ip, "Special record hit");
             return Some(vec![record]);
         }
         None
@@ -520,7 +520,7 @@ impl DnsHandler {
     }
 
     async fn handleMissingRecord(&self, name: &str, rtype: RecordType, src: SocketAddr) {
-        tracing::info!(client = %src, query = %name, r#type = %rtype, "NXDOMAIN");
+        tracing::debug!(client = %src, query = %name, r#type = %rtype, "NXDOMAIN");
         let _ = self.state.log_tx.send(format!(
             "[NXDOMAIN] client={} query={} type={}",
             src, name, rtype

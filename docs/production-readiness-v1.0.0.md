@@ -33,7 +33,7 @@ The current local quality baseline is green for:
 - `cargo clippy -- -D warnings`
 - `cargo test`
 
-`cargo audit` still reports `RUSTSEC-2023-0071` for `rsa 0.9.10`; this requires explicit final security disposition before release.
+Security hardening is now tracked in CI: SQLx default features are disabled so MySQL-only dependencies such as rsa are no longer part of the intended dependency graph, Rustls is resolved to the patched 0.23.45 line, the security workflow covers dev, and the audit job resolves the lockfile before scanning.
 
 The remaining work below is the V1 release scope.
 
@@ -63,15 +63,27 @@ Use this section to record implementation progress against the requirements belo
 | V1-016 | DNS | Complete allowed-zone ownership enforcement and normalization tests. | TODO | |
 | V1-017 | API/Auth | Complete REST/WebSocket authentication, authorization, input, and error handling verification. | TODO | |
 | V1-018 | Lifecycle | Verify configuration validation, startup failure, shutdown, and restart behavior. | TODO | |
-| V1-019 | Security | Resolve or formally disposition all release-blocking dependency/security advisories. | TODO | |
+| V1-019 | Security | Resolve or formally disposition all release-blocking dependency/security advisories. | IN PROGRESS | Narrowed SQLx to SQLite-only features, upgraded the Rustls resolution target to the patched line, and made dependency audit run against dev; final audit result must be verified on the PR. |
 | V1-020 | Frontend | Implement the agreed React + TypeScript + Vite production frontend. | IN PROGRESS | React/Vite app exists under `src/frontend/`; root workspace wiring and Rust `out/web/` build boundary are now aligned. |
 | V1-021 | UI | Maintain the repository UI specification/prototype for V1 workflows and states. | IN PROGRESS | `docs/ui/` is the repository-authoritative UI area; remaining work is workflow/state completeness and browser verification. |
-| V1-022 | CI | Reproduce Rust, frontend, stress smoke, security, and cross-platform gates in CI. | IN PROGRESS | CI targets `dev`; frontend workspace/build wiring fixed. Stress/security gates remain to be added. |
+| V1-022 | CI | Reproduce Rust, frontend, stress smoke, security, and cross-platform gates in CI. | IN PROGRESS | CI targets `dev`; frontend workspace/build wiring fixed; security audit now targets `dev` and resolves the current dependency graph before scanning. Stress gates remain to be added. |
 | V1-023 | Release | Produce reproducible release artifacts, deployment procedures, and matching documentation. | TODO | |
 
 Status values should remain simple: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 
 ---
+
+## 1.1 Security and runtime hardening update
+
+The current hardening pass makes the following changes on the release path:
+
+- SQLx uses default-features = false with only Tokio/Rustls + SQLite features, reducing the dependency graph and removing unused MySQL cryptography dependencies from the intended resolution.
+- Security CI runs on both main and dev pull requests/pushes and grants the audit action the minimum contents: read / checks: write permissions required to publish its result.
+- The security audit job regenerates the lockfile from Cargo.toml before scanning so stale dependency resolution cannot hide the current graph.
+- DNS request receipt and routine cache/local miss/NODATA/NXDOMAIN/synthetic-hit messages are DEBUG rather than INFO, keeping normal production DNS traffic out of the default operational log volume while retaining structured traces when debugging is enabled.
+- The login rate limiter opportunistically prunes expired source-IP windows at a bounded map size, preventing unbounded memory growth from rotating source addresses.
+
+The persistent DNS cache uses SQLx's asynchronous SQLite interface; it is not a synchronous filesystem/SQLite call on the Tokio worker. Further cache-path contention/load testing remains part of V1-004 rather than treating an async database query as a blocking call.
 
 ## 2. Detailed V1 requirements
 
