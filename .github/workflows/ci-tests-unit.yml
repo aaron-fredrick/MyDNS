@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   backend-linux:
-    name: Rust unit tests and coverage (Linux)
+    name: Build (Linux) - Rust unit tests and coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,7 +21,7 @@ jobs:
           path: coverage/backend/lcov.info
           retention-days: 14
   backend-windows:
-    name: Rust unit tests (Windows)
+    name: Build (Windows) - Rust unit tests
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -29,7 +29,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --lib --all-features
   frontend:
-    name: Frontend unit tests
+    name: Build (Linux) - Frontend unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
