@@ -2,8 +2,7 @@ name: CI Capability - Smoke Tests
 on:
   workflow_call:
 jobs:
-  smoke:
-    runs-on: ubuntu-latest
+  smoke:\n    name: Test (Linux) — Smoke\n    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
