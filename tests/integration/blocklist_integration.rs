@@ -135,3 +135,111 @@ async fn test_cache_blocklist_race_behavior() {
         "Blocked domain should return NXDOMAIN even if it was cached previously"
     );
 }
+
+
+#[tokio::test]
+async fn test_blocklist_crud_filters_enabled_domains() {
+    let server = common::TestServer::start_with_zones_only(vec![]).await;
+
+    let first = create_entry(
+        &server.pool,
+        &CreateBlocklistEntry {
+            domain: "Ads.Example.COM.".into(),
+            enabled: true,
+            source: "manual".into(),
+            reason: Some("ads".into()),
+        },
+    )
+    .await
+    .unwrap();
+    let second = create_entry(
+        &server.pool,
+        &CreateBlocklistEntry {
+            domain: "tracker.example.org".into(),
+            enabled: false,
+            source: "imported".into(),
+            reason: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(first.domain, "ads.example.com");
+    assert!(!second.enabled);
+
+    let enabled = mydns::db::blocklist::list_enabled_domains(&server.pool)
+        .await
+        .unwrap();
+    assert_eq!(enabled, vec!["ads.example.com"]);
+
+    let updated = mydns::db::blocklist::update_entry(
+        &server.pool,
+        second.id,
+        &mydns::db::blocklist::UpdateBlocklistEntry {
+            enabled: Some(true),
+            reason: Some("tracking".into()),
+        },
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(updated.enabled);
+    assert_eq!(updated.reason.as_deref(), Some("tracking"));
+
+    let enabled = mydns::db::blocklist::list_enabled_domains(&server.pool)
+        .await
+        .unwrap();
+    assert_eq!(enabled, vec!["ads.example.com", "tracker.example.org"]);
+
+    assert!(mydns::db::blocklist::delete_entry(&server.pool, first.id)
+        .await
+        .unwrap());
+    assert!(!mydns::db::blocklist::delete_entry(&server.pool, first.id)
+        .await
+        .unwrap());
+    assert!(mydns::db::blocklist::get_entry(&server.pool, first.id)
+        .await
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test]
+async fn test_blocklist_rejects_invalid_sources_and_duplicates() {
+    let server = common::TestServer::start_with_zones_only(vec![]).await;
+
+    let invalid = mydns::db::blocklist::create_entry(
+        &server.pool,
+        &CreateBlocklistEntry {
+            domain: "bad-source.example".into(),
+            enabled: true,
+            source: "unknown".into(),
+            reason: None,
+        },
+    )
+    .await;
+    assert!(invalid.is_err());
+
+    create_entry(
+        &server.pool,
+        &CreateBlocklistEntry {
+            domain: "duplicate.example".into(),
+            enabled: true,
+            source: "manual".into(),
+            reason: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let duplicate = create_entry(
+        &server.pool,
+        &CreateBlocklistEntry {
+            domain: "DUPLICATE.EXAMPLE.".into(),
+            enabled: true,
+            source: "manual".into(),
+            reason: None,
+        },
+    )
+    .await;
+    assert!(duplicate.is_err());
+}
