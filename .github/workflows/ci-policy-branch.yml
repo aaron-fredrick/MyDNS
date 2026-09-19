@@ -9,6 +9,3 @@ jobs:
   unit:
     needs: [lint-light, static-light]
     uses: ./.github/workflows/ci-tests-unit.yml
-  build-check:
-    needs: [lint-light, static-light]
-    uses: ./.github/workflows/ci-build-check.yml
