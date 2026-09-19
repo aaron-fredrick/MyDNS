@@ -21,7 +21,7 @@ jobs:
         run: cargo llvm-cov --lib --all-features --lcov --output-path coverage/backend/lcov.info
       - name: Generate backend coverage including integration targets
         if: ${{ inputs.include_integration_coverage }}
-        run: cargo llvm-cov --all-targets --all-features --ignore-filename-regex 'src/main\\.rs$' --lcov --output-path coverage/backend/lcov.info
+        run: cargo llvm-cov --all-targets --all-features --ignore-filename-regex 'src/main\.rs$' --lcov --output-path coverage/backend/lcov.info
       - uses: actions/upload-artifact@v7
         with:
           name: coverage-backend
