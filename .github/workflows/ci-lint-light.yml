@@ -2,8 +2,7 @@ name: CI Capability - Light Lint
 on:
   workflow_call:
 jobs:
-  lint:
-    runs-on: ubuntu-latest
+  lint:\n    name: Lint (Linux) — Light\n    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
