@@ -2,12 +2,12 @@
   "name": "mydns",
   "private": true,
   "workspaces": [
-    "src/frontend"
+    "frontend"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @mydns/frontend",
-    "typecheck": "npm run typecheck --workspace @mydns/frontend",
-    "build": "npm run build --workspace @mydns/frontend"
+    "dev": "npm run dev --workspace mydns-dashboard",
+    "typecheck": "npm run typecheck --workspace mydns-dashboard",
+    "build": "npm run build --workspace mydns-dashboard"
   },
   "engines": {
     "node": ">=22.12.0"
