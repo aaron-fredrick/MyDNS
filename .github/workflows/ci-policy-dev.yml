@@ -9,23 +9,29 @@ jobs:
   unit:
     needs: [lint, static]
     uses: ./.github/workflows/ci-tests-unit.yml
-  integration:
+  component:
     needs: unit
+    uses: ./.github/workflows/ci-tests-component.yml
+  contract:
+    needs: component
+    uses: ./.github/workflows/ci-tests-contract.yml
+  integration:
+    needs: contract
     uses: ./.github/workflows/ci-tests-integration.yml
   smoke:
-    needs: [unit, integration]
+    needs: integration
     uses: ./.github/workflows/ci-tests-smoke.yml
   e2e:
-    needs: [unit, integration, smoke]
+    needs: smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
   build:
-    needs: [unit, integration]
+    needs: integration
     uses: ./.github/workflows/ci-build-release.yml
   security:
-    needs: [unit, integration]
+    needs: integration
     uses: ./.github/workflows/ci-security-audit.yml
   codeql:
-    needs: [unit, integration]
+    needs: integration
     uses: ./.github/workflows/ci-security-codeql.yml
   coverage-upload:
     needs: unit
