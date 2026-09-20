@@ -81,8 +81,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # GitHub Actions tracks child processes through RUNNER_TRACKING_ID and
+          # cleans tracked processes when the launching step exits. Clear it for
+          # this CI-only server so it survives into the smoke-test steps.
+          $env:RUNNER_TRACKING_ID = ""
           $process = Start-Process -FilePath ".\target\release\mydns.exe" -RedirectStandardOutput "mydns-ci.log" -RedirectStandardError "mydns-ci-error.log" -PassThru
           $process.Id | Out-File -FilePath mydns.pid -Encoding ascii
+          Write-Host "Started MyDNS PID $($process.Id) without runner process tracking."
       - name: Wait for HTTP readiness (Unix)
         if: runner.os != 'Windows'
         shell: python
