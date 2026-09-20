@@ -24,9 +24,6 @@ jobs:
   extended:
     needs: [unit, integration, smoke, e2e]
     uses: ./.github/workflows/ci-tests-extended.yml
-  build:
-    needs: [unit, integration]
-    uses: ./.github/workflows/ci-build-release.yml
   security:
     needs: [unit, integration]
     uses: ./.github/workflows/ci-security-audit.yml
