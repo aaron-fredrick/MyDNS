@@ -1,5 +1,5 @@
 param(
-    [string]$Host = "127.0.0.1",
+    [string]$DnsHost = "127.0.0.1",
     [int]$Port = 5353,
     [string]$Name = "home.arpa."
 )
@@ -52,8 +52,8 @@ $packet.Add(0x01)
 $client = [System.Net.Sockets.UdpClient]::new()
 try {
     $client.Client.ReceiveTimeout = 2000
-    $endpoint = [System.Net.IPEndPoint]::new([System.Net.IPAddress]::Parse($Host), $Port)
-    [void]$client.Send($packet.ToArray(), $packet.Count, $Host, $Port)
+    $endpoint = [System.Net.IPEndPoint]::new([System.Net.IPAddress]::Parse($DnsHost), $Port)
+    [void]$client.Send($packet.ToArray(), $packet.Count, $DnsHost, $Port)
     $response = $client.Receive([ref]$endpoint)
 
     if ($response.Length -lt 12) {
