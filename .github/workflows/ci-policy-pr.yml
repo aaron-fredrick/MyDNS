@@ -6,8 +6,11 @@ jobs:
     uses: ./.github/workflows/ci-lint-full.yml
   static-full:
     uses: ./.github/workflows/ci-static-full.yml
-  unit:
+  build:
     needs: [lint, static-full]
+    uses: ./.github/workflows/ci-build-release.yml
+  unit:
+    needs: build
     uses: ./.github/workflows/ci-tests-unit.yml
   component:
     needs: unit
