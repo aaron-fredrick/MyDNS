@@ -64,3 +64,17 @@ Run the frontend unit suite with the existing c8 command documented in .github/w
 Run the API E2E workflow against an isolated test instance with: python tests/e2e/api_e2e.py --base-url http://127.0.0.1:8080 --username admin --password "$MYDNS_ADMIN_PASSWORD"
 
 The E2E and smoke layers intentionally remain outside ordinary unit-test coverage: their purpose is black-box contract and deployment verification rather than line coverage.
+## CI test order
+
+The required CI progression is:
+
+1. Unit
+2. Component
+3. Contract (frontend/backend compatibility)
+4. Integration
+5. Smoke
+6. E2E (policy-dependent)
+
+A failure at a stage prevents dependent stages from running. Contract testing is required before integration and smoke for pull requests targeting any branch, and for dev/main policies.
+
+Load and fuzz testing are separate manual-only workflows for now and are not policy gates.
