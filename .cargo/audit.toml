@@ -1,0 +1,10 @@
+# cargo-audit scans the complete Cargo.lock, including optional dependencies.
+# jsonwebtoken 10.4.0 keeps rsa as an optional dependency for its rust_crypto
+# backend. MyDNS explicitly selects the aws_lc_rs backend, so rsa is not part
+# of the active runtime dependency graph. RustSec currently has no patched
+# rsa release for RUSTSEC-2023-0071, so there is no dependency upgrade that
+# removes this lockfile-only finding. The CI audit additionally verifies that
+# rsa is absent from the active normal dependency graph.
+
+[advisories]
+ignore = ["RUSTSEC-2023-0071"]

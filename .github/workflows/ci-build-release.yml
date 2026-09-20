@@ -3,6 +3,7 @@ on:
   workflow_call:
 jobs:
   linux:
+    name: Build (Linux) - Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -16,6 +17,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --verbose
   windows:
+    name: Build (Windows) - Release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6

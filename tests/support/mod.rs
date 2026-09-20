@@ -17,7 +17,7 @@ use reqwest::Client;
 use serde_json::json;
 use sqlx::SqlitePool;
 use tempfile::TempDir;
-use tokio::net::UdpSocket;
+use tokio::net::{TcpListener, UdpSocket};
 use tokio_util::sync::CancellationToken;
 
 /// An isolated temporary database fixture with automatic cleanup on drop.
@@ -197,7 +197,7 @@ pub struct TestDnsServer {
     pub addr: SocketAddr,
     pub pool: SqlitePool,
     pub cancel: CancellationToken,
-    pub handle: tokio::task::JoinHandle<()>,
+    pub handle: tokio::task::JoinHandle<anyhow::Result<()>>,
 }
 
 impl TestDnsServer {
@@ -206,7 +206,7 @@ impl TestDnsServer {
         records: &[(&str, &str, &str)],
     ) -> Self {
         let db = TestDb::new();
-        let port = get_ephemeral_port().await;
+        let (udp_socket, tcp_listener, port) = bind_dns_sockets().await;
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
         let cfg = AppConfig {
@@ -286,7 +286,8 @@ impl TestDnsServer {
         let server_cancel = cancel.clone();
 
         let handle = tokio::spawn(async move {
-            let _ = dns::server::run(server_state, server_cancel).await;
+            dns::server::run_with_sockets(server_state, server_cancel, udp_socket, tcp_listener)
+                .await
         });
 
         // Wait until TCP socket is ready to accept queries
@@ -324,12 +325,12 @@ impl TestDnsServer {
         self.cancel.cancel();
 
         // Wait for the old server task to exit by swapping out its handle.
-        let dummy_handle = tokio::spawn(async {});
+        let dummy_handle = tokio::spawn(async { Ok::<(), anyhow::Error>(()) });
         let old_handle = std::mem::replace(&mut self.handle, dummy_handle);
         let _ = old_handle.await;
 
         let db_path = self.db.path_str();
-        let port = get_ephemeral_port().await;
+        let (udp_socket, tcp_listener, port) = bind_dns_sockets().await;
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
         let cfg = AppConfig {
@@ -397,7 +398,8 @@ impl TestDnsServer {
         let server_cancel = cancel.clone();
 
         let handle = tokio::spawn(async move {
-            let _ = dns::server::run(server_state, server_cancel).await;
+            dns::server::run_with_sockets(server_state, server_cancel, udp_socket, tcp_listener)
+                .await
         });
 
         // Wait until TCP socket is ready.
@@ -421,11 +423,30 @@ impl Drop for TestDnsServer {
     }
 }
 
-/// Finds an available ephemeral port on 127.0.0.1.
+/// Binds both DNS transports to the same OS-selected port and keeps ownership
+/// until the sockets are moved into the DNS server task.
+pub async fn bind_dns_sockets() -> (UdpSocket, TcpListener, u16) {
+    loop {
+        let udp = UdpSocket::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind ephemeral UDP socket");
+        let port = udp.local_addr().unwrap().port();
+
+        match TcpListener::bind(("127.0.0.1", port)).await {
+            Ok(tcp) => return (udp, tcp, port),
+            Err(_) => {
+                drop(udp);
+                tokio::task::yield_now().await;
+            }
+        }
+    }
+}
+
+/// Finds an available ephemeral HTTP port on 127.0.0.1.
 pub async fn get_ephemeral_port() -> u16 {
-    let socket = UdpSocket::bind("127.0.0.1:0")
+    let socket = TcpListener::bind("127.0.0.1:0")
         .await
-        .expect("Failed to bind ephemeral socket");
+        .expect("Failed to bind ephemeral TCP socket");
     let port = socket.local_addr().unwrap().port();
     drop(socket);
     port

@@ -2,12 +2,12 @@ name: CI Policy - Pull Request
 on:
   workflow_call:
 jobs:
-  lint-light:
-    uses: ./.github/workflows/ci-lint-light.yml
+  lint:
+    uses: ./.github/workflows/ci-lint-full.yml
   static-full:
     uses: ./.github/workflows/ci-static-full.yml
   unit:
-    needs: [lint-light, static-full]
+    needs: [lint, static-full]
     uses: ./.github/workflows/ci-tests-unit.yml
   integration:
     needs: unit

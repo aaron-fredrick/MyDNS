@@ -115,7 +115,7 @@ pub async fn list_all_records(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord
 pub async fn find_by_name(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
         "SELECT id, name, record_type, value, ttl, priority, created_at, updated_at, is_dev \
-         FROM dns_records WHERE lower(name) = lower(?)",
+         FROM dns_records WHERE lower(trim(name, '.')) = lower(trim(?, '.'))",
     )
     .bind(name)
     .fetch_all(pool)
@@ -419,7 +419,7 @@ pub async fn get_cache(
     let now = Utc::now().timestamp();
     sqlx::query_as::<_, CacheRow>(
         "SELECT id, name, record_type, value, ttl, expires_at, priority \
-         FROM dns_cache WHERE lower(name) = lower(?) AND upper(record_type) = upper(?) \
+         FROM dns_cache WHERE lower(trim(name, '.')) = lower(trim(?, '.')) AND upper(record_type) = upper(?) \
          AND expires_at > ?",
     )
     .bind(name)
@@ -439,15 +439,16 @@ pub async fn insert_cache(
     priority: Option<i64>,
 ) -> anyhow::Result<()> {
     let expires_at = Utc::now().timestamp() + (ttl as i64);
+    let normalized_name = name.trim_end_matches('.').to_lowercase();
     sqlx::query(
         "INSERT INTO dns_cache (name, record_type, value, ttl, expires_at, priority) \
-         VALUES (lower(?), upper(?), ?, ?, ?, ?) \
+         VALUES (?, upper(?), ?, ?, ?, ?) \
          ON CONFLICT DO UPDATE SET \
             ttl = excluded.ttl, \
             expires_at = excluded.expires_at, \
             priority = excluded.priority",
     )
-    .bind(name)
+    .bind(&normalized_name)
     .bind(record_type)
     .bind(value)
     .bind(ttl as i64)
@@ -472,10 +473,11 @@ pub async fn list_cache_entries(pool: &SqlitePool) -> anyhow::Result<Vec<CacheRo
 }
 
 pub async fn delete_cache_entry(pool: &SqlitePool, name: &str, rtype: &str) -> anyhow::Result<()> {
+    let normalized_name = name.trim_end_matches('.').to_lowercase();
     sqlx::query(
         "DELETE FROM dns_cache WHERE lower(name) = lower(?) AND upper(record_type) = upper(?)",
     )
-    .bind(name)
+    .bind(&normalized_name)
     .bind(rtype)
     .execute(pool)
     .await

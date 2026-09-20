@@ -3,6 +3,7 @@ on:
   workflow_call:
 jobs:
   lint:
+    name: Lint (Linux) - Full
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
