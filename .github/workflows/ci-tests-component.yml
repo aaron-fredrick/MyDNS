@@ -1,0 +1,20 @@
+name: CI Capability - Component Tests
+on:
+  workflow_call:
+jobs:
+  component:
+    name: Test (Linux) - Component
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Backend component test baseline
+        run: cargo test --lib --all-features --no-fail-fast
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Frontend component test baseline
+        working-directory: frontend
+        run: npm ci && npm run typecheck
