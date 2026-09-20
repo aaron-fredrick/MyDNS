@@ -1,0 +1,11 @@
+name: CI Capability - Load Tests
+on:
+  workflow_dispatch:
+jobs:
+  load:
+    name: Load tests (placeholder)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Placeholder
+        run: echo "Load testing is reserved for manual execution. No load suite is enabled yet."
