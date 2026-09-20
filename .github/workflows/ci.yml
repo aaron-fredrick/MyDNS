@@ -10,9 +10,34 @@ on:
 permissions:
   contents: read
 jobs:
+  branch-pr-gate:
+    name: Check for open pull request
+    if: github.event_name == 'push' && github.ref_name != 'dev' && github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      has_open_pr: ${{ steps.check.outputs.has_open_pr }}
+    steps:
+      - name: Check whether this branch has an open PR
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          count=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq 'length')
+          if [ "$count" -gt 0 ]; then
+            echo "has_open_pr=true" >> "$GITHUB_OUTPUT"
+            echo "Open PR found for $GITHUB_REF_NAME; skipping light branch CI."
+          else
+            echo "has_open_pr=false" >> "$GITHUB_OUTPUT"
+            echo "No open PR found for $GITHUB_REF_NAME; running light branch CI."
+          fi
   branch:
     name: Branch push (light)
-    if: github.event_name == 'push' && github.ref_name != 'dev' && github.ref_name != 'main'
+    needs: branch-pr-gate
+    if: github.event_name == 'push' && github.ref_name != 'dev' && github.ref_name != 'main' && needs.branch-pr-gate.outputs.has_open_pr != 'true'
     uses: ./.github/workflows/ci-policy-branch.yml
   pr:
     name: Pull request (deeper)
