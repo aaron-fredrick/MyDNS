@@ -107,7 +107,7 @@ jobs:
           Get-NetUDPEndpoint -LocalPort ([int]$env:MYDNS_DNS_PORT) -ErrorAction SilentlyContinue | Format-List
           Get-NetTCPConnection -LocalPort ([int]$env:MYDNS_DNS_PORT) -ErrorAction SilentlyContinue | Format-List
       - name: API and DNS E2E
-        shell: python
+        shell: bash
         run: python tests/e2e/api_e2e.py --base-url http://127.0.0.1:18080 --username admin --password changeme123 --dns-port "$MYDNS_DNS_PORT"
       - name: Dump MyDNS log (Unix)
         if: failure() && runner.os != 'Windows'
