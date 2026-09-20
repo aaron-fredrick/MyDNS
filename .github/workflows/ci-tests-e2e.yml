@@ -65,7 +65,7 @@ jobs:
           raise SystemExit("MyDNS did not become ready")
       - name: API and DNS E2E
         shell: python
-        run: python tests/e2e/api_e2e.py --base-url http://127.0.0.1:18080 --username admin --password changeme123 --dns-port 5353
+        run: python tests/e2e/api_e2e.py --base-url http://127.0.0.1:18080 --username admin --password changeme123 --dns-port 15353
       - name: Dump MyDNS log (Unix)
         if: failure() && runner.os != 'Windows'
         shell: bash
