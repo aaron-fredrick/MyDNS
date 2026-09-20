@@ -27,9 +27,6 @@ jobs:
   e2e:
     needs: smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
-  build:
-    needs: integration
-    uses: ./.github/workflows/ci-build-release.yml
   security:
     needs: integration
     uses: ./.github/workflows/ci-security-audit.yml
