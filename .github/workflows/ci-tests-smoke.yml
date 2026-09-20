@@ -47,7 +47,8 @@ jobs:
         run: |
           $process = Start-Process -FilePath ".\target\release\mydns.exe" -RedirectStandardOutput "mydns-ci.log" -RedirectStandardError "mydns-ci-error.log" -PassThru
           $process.Id | Out-File -FilePath mydns.pid -Encoding ascii
-      - name: Wait for HTTP readiness
+      - name: Wait for HTTP readiness (Unix)
+        if: runner.os != 'Windows'
         shell: python
         run: |
           import socket
@@ -61,6 +62,22 @@ jobs:
               except OSError:
                   time.sleep(0.5)
           raise SystemExit("MyDNS HTTP listener did not become ready")
+
+      - name: Wait for HTTP readiness (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $deadline = (Get-Date).AddSeconds(30)
+          while ((Get-Date) -lt $deadline) {
+            if (Test-Path mydns-ci.log) {
+              $log = Get-Content mydns-ci.log -Raw
+              if ($log -match 'HTTP server listening.*port.*18080') {
+                exit 0
+              }
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          throw "MyDNS HTTP server did not report readiness"
       - name: DNS smoke
         shell: bash
         run: python tests/smoke/dns-smoke.py --port 15353
