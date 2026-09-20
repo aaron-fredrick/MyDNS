@@ -46,7 +46,7 @@ def main():
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--username", default="admin")
     parser.add_argument("--password", required=True)
-    parser.add_argument("--dns-port", type=int, default=5353)
+    parser.add_argument("--dns-port", type=int, default=15353)
     args = parser.parse_args()
 
     status, _ = request(args.base_url, "/api/v1/stats")
