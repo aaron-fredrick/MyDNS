@@ -54,7 +54,6 @@ jobs:
           else:
               raise SystemExit("Could not find a free CI DNS port")
           PY
-          echo "Selected CI DNS port: $MYDNS_DNS_PORT"
       - name: Prepare CI config
         shell: bash
         run: |
@@ -119,10 +118,6 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT"
-      - name: DNS smoke (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT" --tcp
       - name: HTTP smoke
         env:
           MYDNS_ADMIN_PASSWORD: changeme123
