@@ -336,12 +336,17 @@ CI must cover:
 - `cargo clippy -- -D warnings`
 - Complete `cargo test`
 - Stress smoke profile.
-- Linux build/test.
-- Windows build/test.
+- Native Linux/Windows/macOS x64 and ARM64 build checks.
+- Native Linux/Windows/macOS x64 and ARM64 Rust unit tests.
+- Native Linux/Windows/macOS x64 and ARM64 smoke testing.
+- Native Linux/Windows/macOS x64 and ARM64 E2E testing on dev/main and nightly gates.
+- Linux integration, extended, security, CodeQL, and coverage gates.
 - `cargo audit`.
-- Release-profile build.
+- Native Linux/Windows/macOS x64 and ARM64 release-profile builds.
 - Frontend install/type-check/lint/build.
 - Browser smoke tests.
+
+The platform matrix uses GitHub-hosted native runners where available: Linux ARM64 via `ubuntu-24.04-arm`, Windows ARM64 via `windows-11-arm`, macOS Intel via `macos-15-intel`, and macOS ARM64 via `macos-15`. This verifies runtime behavior on the actual target architecture rather than treating cross-compilation as runtime verification.
 
 Native dependencies must be explicitly installed on runners.
 
