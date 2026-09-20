@@ -2,23 +2,31 @@ name: CI Capability - Release Build
 on:
   workflow_call:
 jobs:
-  linux:
-    name: Build (Linux) - Release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --verbose
-  windows:
-    name: Build (Windows) - Release
-    runs-on: windows-latest
+  release:
+    name: Build (${{ matrix.platform }} ${{ matrix.arch }}) - Release
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            arch: x64
+            runner: ubuntu-latest
+          - platform: Linux
+            arch: ARM64
+            runner: ubuntu-24.04-arm
+          - platform: Windows
+            arch: x64
+            runner: windows-latest
+          - platform: Windows
+            arch: ARM64
+            runner: windows-11-arm
+          - platform: macOS
+            arch: x64
+            runner: macos-15-intel
+          - platform: macOS
+            arch: ARM64
+            runner: macos-15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
