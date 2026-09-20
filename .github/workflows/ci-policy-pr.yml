@@ -9,12 +9,18 @@ jobs:
   unit:
     needs: [lint, static-full]
     uses: ./.github/workflows/ci-tests-unit.yml
-  integration:
+  component:
     needs: unit
+    uses: ./.github/workflows/ci-tests-component.yml
+  contract:
+    needs: component
+    uses: ./.github/workflows/ci-tests-contract.yml
+  integration:
+    needs: contract
     uses: ./.github/workflows/ci-tests-integration.yml
   smoke:
-    needs: [unit, integration]
+    needs: integration
     uses: ./.github/workflows/ci-tests-smoke.yml
   build-check:
-    needs: [unit, integration]
+    needs: integration
     uses: ./.github/workflows/ci-build-check.yml
