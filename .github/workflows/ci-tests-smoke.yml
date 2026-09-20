@@ -65,7 +65,7 @@ jobs:
           raise SystemExit("MyDNS did not become ready")
       - name: DNS smoke
         shell: python
-        run: python tests/smoke/dns-smoke.py --port 5353
+        run: python tests/smoke/dns-smoke.py --port 15353
       - name: HTTP smoke
         env:
           MYDNS_ADMIN_PASSWORD: changeme123
