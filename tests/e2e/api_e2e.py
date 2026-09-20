@@ -89,8 +89,11 @@ def main():
     block_id = block["id"]
     status, _ = request(args.base_url, f"/api/v1/blocklist/{block_id}", "PUT", token, {"enabled":False})
     require(status, 200, "disable blocklist entry")
-    status, _ = request(args.base_url, f"/api/v1/blocklist/{block_id}", "DELETE", token)
-    require(status, 200, "delete blocklist entry")
+    # DELETE /api/v1/blocklist/:id intentionally returns 204 No Content.
+    status, body = request(args.base_url, f"/api/v1/blocklist/{block_id}", "DELETE", token)
+    require(status, 204, "delete blocklist entry")
+    if body is not None:
+        raise AssertionError("delete blocklist entry: expected an empty 204 response body")
 
     status, _ = request(args.base_url, "/api/v1/settings", token=token)
     require(status, 200, "settings")
