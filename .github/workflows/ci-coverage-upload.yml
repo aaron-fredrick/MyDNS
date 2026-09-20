@@ -8,6 +8,11 @@ jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
       - uses: actions/download-artifact@v5
         with:
           name: coverage-backend
@@ -16,6 +21,20 @@ jobs:
         with:
           name: coverage-frontend
           path: coverage/frontend
+
+      - name: Verify coverage reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s coverage/backend/lcov.info
+          test -s coverage/frontend/lcov.info
+          echo "Checked out commit:"
+          git rev-parse HEAD
+          echo "Backend SF paths:"
+          grep '^SF:' coverage/backend/lcov.info | head -50
+          echo "Frontend SF paths:"
+          grep '^SF:' coverage/frontend/lcov.info | head -50
+
       - name: Upload backend coverage
         uses: codecov/codecov-action@v5
         env:
