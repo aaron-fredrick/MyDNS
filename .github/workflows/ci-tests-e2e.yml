@@ -11,27 +11,34 @@ jobs:
         include:
           - platform: Linux
             arch: x64
-            runner: ubuntu-latest
+            runner: ubuntu-latest\n            artifact: mydns-linux-x64
           - platform: Linux
             arch: ARM64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-24.04-arm\n            artifact: mydns-linux-arm64
           - platform: Windows
             arch: x64
-            runner: windows-latest
+            runner: windows-latest\n            artifact: mydns-windows-x64
           - platform: Windows
             arch: ARM64
-            runner: windows-11-arm
+            runner: windows-11-arm\n            artifact: mydns-windows-arm64
           - platform: macOS
             arch: x64
-            runner: macos-15-intel
+            runner: macos-15-intel\n            artifact: mydns-macos-x64
           - platform: macOS
             arch: ARM64
-            runner: macos-15
+            runner: macos-15\n            artifact: mydns-macos-arm64
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release
+      - name: Download release binary
+        uses: actions/download-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/release
+      - name: Make release binary executable
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod +x target/release/mydns
       - name: Choose CI DNS port
         shell: bash
         run: |
