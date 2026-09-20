@@ -1,6 +1,6 @@
 {
   "host": "127.0.0.1",
-  "port": 5353,
+  "port": 15353,
   "max_rps": 50,
   "workers": 8,
   "timeout_seconds": 1.0,
