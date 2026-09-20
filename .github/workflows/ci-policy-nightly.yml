@@ -12,14 +12,23 @@ jobs:
   unit:
     needs: build
     uses: ./.github/workflows/ci-tests-unit.yml
-  integration:
+  backend-component:
     needs: unit
+    uses: ./.github/workflows/ci-tests-backend-component.yml
+  frontend-component:
+    needs: unit
+    uses: ./.github/workflows/ci-tests-frontend-component.yml
+  contract:
+    needs: [backend-component, frontend-component]
+    uses: ./.github/workflows/ci-tests-contract.yml
+  integration:
+    needs: contract
     uses: ./.github/workflows/ci-tests-integration.yml
   smoke:
-    needs: [unit, integration]
+    needs: integration
     uses: ./.github/workflows/ci-tests-smoke.yml
   e2e:
-    needs: [unit, integration, smoke]
+    needs: smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
   extended:
     needs: [unit, integration, smoke, e2e]
