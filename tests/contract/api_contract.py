@@ -10,7 +10,9 @@ frontend = FRONTEND_API.read_text(encoding="utf-8")
 backend = BACKEND_SERVER.read_text(encoding="utf-8")
 
 frontend_paths = sorted(set(re.findall(r'''[`\"'](/api/v1/[^`\"']+)[`\"']''', frontend)))
-backend_routes = sorted(set(re.findall(r'''\.route\("([^"]+)"\s*,\s*''', backend)))
+backend_routes = sorted(
+    set(re.findall(r'''\.route\(\s*"([^"]+)"\s*,\s*''', backend))
+)
 
 missing = []
 for path in frontend_paths:
