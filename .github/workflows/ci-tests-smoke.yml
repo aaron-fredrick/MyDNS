@@ -125,10 +125,19 @@ jobs:
               Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             }
           }
-      - name: DNS smoke (Unix)
+      - name: DNS readiness and smoke (Unix)
         if: runner.os != 'Windows'
         shell: bash
-        run: python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT"
+        run: |
+          deadline=$((SECONDS + 30))
+          while (( SECONDS < deadline )); do
+            if python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT"; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "MyDNS DNS listener did not become ready"
+          exit 1
       - name: HTTP and load smoke (Unix)
         if: runner.os != 'Windows'
         env:
