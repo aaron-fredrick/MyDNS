@@ -21,6 +21,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
+          disable_search: true
           files: coverage/backend/lcov.info
           flags: backend
           name: backend-coverage
@@ -30,6 +31,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
+          disable_search: true
           files: coverage/frontend/lcov.info
           flags: frontend
           name: frontend-coverage
