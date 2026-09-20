@@ -11,22 +11,28 @@ jobs:
         include:
           - platform: Linux
             arch: x64
-            runner: ubuntu-latest\n            artifact: mydns-linux-x64
+            runner: ubuntu-latest
+            artifact: mydns-linux-x64
           - platform: Linux
             arch: ARM64
-            runner: ubuntu-24.04-arm\n            artifact: mydns-linux-arm64
+            runner: ubuntu-24.04-arm
+            artifact: mydns-linux-arm64
           - platform: Windows
             arch: x64
-            runner: windows-latest\n            artifact: mydns-windows-x64
+            runner: windows-latest
+            artifact: mydns-windows-x64
           - platform: Windows
             arch: ARM64
-            runner: windows-11-arm\n            artifact: mydns-windows-arm64
+            runner: windows-11-arm
+            artifact: mydns-windows-arm64
           - platform: macOS
             arch: x64
-            runner: macos-15-intel\n            artifact: mydns-macos-x64
+            runner: macos-15-intel
+            artifact: mydns-macos-x64
           - platform: macOS
             arch: ARM64
-            runner: macos-15\n            artifact: mydns-macos-arm64
+            runner: macos-15
+            artifact: mydns-macos-arm64
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
