@@ -3,45 +3,105 @@ on:
   workflow_call:
 jobs:
   smoke:
-    name: Test (Linux) - Smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Test (${{ matrix.platform }} ${{ matrix.arch }}) - Smoke
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            arch: x64
+            runner: ubuntu-latest
+          - platform: Linux
+            arch: ARM64
+            runner: ubuntu-24.04-arm
+          - platform: Windows
+            arch: x64
+            runner: windows-latest
+          - platform: Windows
+            arch: ARM64
+            runner: windows-11-arm
+          - platform: macOS
+            arch: x64
+            runner: macos-15-intel
+          - platform: macOS
+            arch: ARM64
+            runner: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      - run: cp tests/fixtures/ci-config.toml config.toml
-      - name: Start MyDNS
+      - name: Prepare CI config
+        shell: bash
+        run: cp tests/fixtures/ci-config.toml config.toml
+      - name: Start MyDNS (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           ./target/release/mydns > mydns-ci.log 2>&1 &
           echo $! > mydns.pid
-      - name: Wait for HTTP readiness
+      - name: Start MyDNS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          python3 - <<'PY'
-          import time, urllib.request
+          $process = Start-Process -FilePath ".\target\release\mydns.exe" -RedirectStandardOutput "mydns-ci.log" -RedirectStandardError "mydns-ci-error.log" -PassThru
+          $process.Id | Out-File -FilePath mydns.pid -Encoding ascii
+      - name: Wait for HTTP readiness
+        shell: python
+        run: |
+          import time
+          import urllib.request
+
           url = "http://127.0.0.1:18080/api/v1/stats"
           deadline = time.time() + 30
           while time.time() < deadline:
               try:
                   with urllib.request.urlopen(url, timeout=2) as response:
-                      if response.status == 200: raise SystemExit(0)
+                      if response.status == 200:
+                          raise SystemExit(0)
               except Exception:
                   time.sleep(0.5)
           raise SystemExit("MyDNS did not become ready")
-          PY
-      - run: python3 tests/smoke/dns-smoke.py --port 5353
+      - name: DNS smoke
+        shell: python
+        run: python3 tests/smoke/dns-smoke.py --port 5353
       - name: HTTP smoke
         env:
           MYDNS_ADMIN_PASSWORD: changeme123
         shell: pwsh
         run: ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
-      - run: python3 tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
-      - run: python3 tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
-      - if: failure()
+      - name: DNS load smoke
+        shell: python
+        run: python3 tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
+      - name: API load smoke
+        shell: python
+        run: python3 tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
+      - name: Dump MyDNS log (Unix)
+        if: failure() && runner.os != 'Windows'
+        shell: bash
         run: cat mydns-ci.log || true
-      - if: always()
+      - name: Dump MyDNS log (Windows)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path mydns-ci.log) { Get-Content mydns-ci.log }
+          if (Test-Path mydns-ci-error.log) { Get-Content mydns-ci-error.log }
+      - name: Stop MyDNS (Unix)
+        if: always() && runner.os != 'Windows'
         shell: bash
         run: |
-          if [ -f mydns.pid ]; then kill "$(cat mydns.pid)" || true; wait "$(cat mydns.pid)" 2>/dev/null || true; fi
-          rm -f mydns.pid mydns-ci.log ci-mydns.db ci-mydns.db-shm ci-mydns.db-wal config.toml
+          if [ -f mydns.pid ]; then
+            kill "$(cat mydns.pid)" || true
+            wait "$(cat mydns.pid)" 2>/dev/null || true
+          fi
+          rm -f mydns.pid mydns-ci.log config.toml
+      - name: Stop MyDNS (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path mydns.pid) {
+            $pid = [int](Get-Content mydns.pid)
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+          }
+          Remove-Item -Force -ErrorAction SilentlyContinue mydns.pid, mydns-ci.log, mydns-ci-error.log, config.toml, ci-mydns.db, ci-mydns.db-shm, ci-mydns.db-wal
