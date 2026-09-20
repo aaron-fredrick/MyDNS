@@ -115,20 +115,14 @@ jobs:
             Start-Sleep -Milliseconds 500
           }
           throw "MyDNS HTTP server did not report readiness"
-      - name: Inspect Windows DNS endpoint
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Get-NetUDPEndpoint -LocalPort ([int]$env:MYDNS_DNS_PORT) -ErrorAction SilentlyContinue | Format-List
-          Get-NetTCPConnection -LocalPort ([int]$env:MYDNS_DNS_PORT) -ErrorAction SilentlyContinue | Format-List
       - name: DNS smoke (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT"
       - name: DNS smoke (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./tests/smoke/dns-smoke.ps1 -Port ([int]$env:MYDNS_DNS_PORT)
+        shell: bash
+        run: python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT" --tcp
       - name: HTTP smoke
         env:
           MYDNS_ADMIN_PASSWORD: changeme123
