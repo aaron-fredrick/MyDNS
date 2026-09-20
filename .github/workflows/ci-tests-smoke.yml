@@ -65,7 +65,7 @@ jobs:
           raise SystemExit("MyDNS did not become ready")
       - name: DNS smoke
         shell: python
-        run: python3 tests/smoke/dns-smoke.py --port 5353
+        run: python tests/smoke/dns-smoke.py --port 5353
       - name: HTTP smoke
         env:
           MYDNS_ADMIN_PASSWORD: changeme123
@@ -73,10 +73,10 @@ jobs:
         run: ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
       - name: DNS load smoke
         shell: python
-        run: python3 tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
+        run: python tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
       - name: API load smoke
         shell: python
-        run: python3 tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
+        run: python tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
       - name: Dump MyDNS log (Unix)
         if: failure() && runner.os != 'Windows'
         shell: bash
@@ -101,7 +101,7 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path mydns.pid) {
-            $pid = [int](Get-Content mydns.pid)
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            $processId = [int](Get-Content mydns.pid)
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
           }
           Remove-Item -Force -ErrorAction SilentlyContinue mydns.pid, mydns-ci.log, mydns-ci-error.log, config.toml, ci-mydns.db, ci-mydns.db-shm, ci-mydns.db-wal
