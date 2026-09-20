@@ -16,5 +16,4 @@ jobs:
           node-version: 22
           cache: npm
       - name: Frontend component test baseline
-        working-directory: frontend
-        run: npm ci && npm run typecheck
+        run: npm run typecheck --workspace mydns-dashboard
