@@ -1,3 +1,4 @@
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,7 +29,7 @@ pub async fn run(state: Arc<AppState>, cancel: CancellationToken) -> anyhow::Res
     run_with_sockets(state, cancel, udp, tcp).await
 }
 
-async fn bind_udp_socket(bind_host: &str, port: u16) -> std::io::Result<UdpSocket> {
+async fn bind_udp_socket(bind_host: IpAddr, port: u16) -> std::io::Result<UdpSocket> {
     #[cfg(windows)]
     {
         use std::mem::size_of;
