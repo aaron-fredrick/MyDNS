@@ -28,7 +28,6 @@ jobs:
     needs: [unit, integration]
     uses: ./.github/workflows/ci-security-codeql.yml
   coverage-upload:
-    if: github.event_name == 'push'
     needs: unit
     uses: ./.github/workflows/ci-coverage-upload.yml
     secrets: inherit
