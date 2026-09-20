@@ -12,11 +12,14 @@ jobs:
   unit:
     needs: build
     uses: ./.github/workflows/ci-tests-unit.yml
-  component:
+  backend-component:
     needs: unit
-    uses: ./.github/workflows/ci-tests-component.yml
+    uses: ./.github/workflows/ci-tests-backend-component.yml
+  frontend-component:
+    needs: unit
+    uses: ./.github/workflows/ci-tests-frontend-component.yml
   contract:
-    needs: component
+    needs: [backend-component, frontend-component]
     uses: ./.github/workflows/ci-tests-contract.yml
   integration:
     needs: contract
