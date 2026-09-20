@@ -1698,6 +1698,7 @@ dependencies = [
  "hickory-resolver",
  "hickory-server",
  "jsonwebtoken",
+ "libc",
  "local-ip-address",
  "mime_guess",
  "nix",
