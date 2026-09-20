@@ -77,76 +77,67 @@ jobs:
         run: |
           ./target/release/mydns > mydns-ci.log 2>&1 &
           echo $! > mydns.pid
-      - name: Start MyDNS (Windows)
+      - name: Windows smoke
         if: runner.os == 'Windows'
+        env:
+          MYDNS_ADMIN_PASSWORD: changeme123
         shell: pwsh
         run: |
-          # GitHub Actions tracks child processes through RUNNER_TRACKING_ID and
-          # cleans tracked processes when the launching step exits. Clear it for
-          # this CI-only server so it survives into the smoke-test steps.
-          $env:RUNNER_TRACKING_ID = ""
-          $process = Start-Process -FilePath ".\target\release\mydns.exe" -RedirectStandardOutput "mydns-ci.log" -RedirectStandardError "mydns-ci-error.log" -PassThru
-          $process.Id | Out-File -FilePath mydns.pid -Encoding ascii
-          Write-Host "Started MyDNS PID $($process.Id) without runner process tracking."
-      - name: Wait for HTTP readiness (Unix)
-        if: runner.os != 'Windows'
-        shell: python
-        run: |
-          import socket
-          import time
+          $process = $null
 
-          deadline = time.time() + 30
-          while time.time() < deadline:
-              try:
-                  with socket.create_connection(("127.0.0.1", 18080), timeout=2):
-                      raise SystemExit(0)
-              except OSError:
-                  time.sleep(0.5)
-          raise SystemExit("MyDNS HTTP listener did not become ready")
+          try {
+            $process = Start-Process -FilePath '.\\target\\release\\mydns.exe' -RedirectStandardOutput 'mydns-ci.log' -RedirectStandardError 'mydns-ci-error.log' -PassThru
+            Write-Host "Started MyDNS PID $($process.Id)."
 
-      - name: Wait for HTTP readiness (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $deadline = (Get-Date).AddSeconds(30)
-          $processId = [int](Get-Content mydns.pid)
-
-          while ((Get-Date) -lt $deadline) {
-            $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-            if (-not $process) {
-              Write-Host "MyDNS exited before HTTP became reachable."
-              if (Test-Path mydns-ci.log) { Get-Content mydns-ci.log }
-              if (Test-Path mydns-ci-error.log) { Get-Content mydns-ci-error.log }
-              throw "MyDNS exited before HTTP became reachable"
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Get-Date) -lt $deadline) {
+              if ($process.HasExited) {
+                throw 'MyDNS exited during startup'
+              }
+              if (Test-NetConnection -ComputerName 127.0.0.1 -Port 18080 -InformationLevel Quiet) {
+                Write-Host 'MyDNS HTTP listener is accepting TCP connections on 127.0.0.1:18080.'
+                break
+              }
+              Start-Sleep -Milliseconds 500
             }
 
-            if (Test-NetConnection -ComputerName 127.0.0.1 -Port 18080 -InformationLevel Quiet) {
-              Write-Host "MyDNS HTTP listener is accepting TCP connections on 127.0.0.1:18080."
-              exit 0
+            if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 18080 -InformationLevel Quiet)) {
+              throw 'MyDNS HTTP listener did not become ready'
             }
 
-            Start-Sleep -Milliseconds 500
+            ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
+            if ($LASTEXITCODE -ne 0) { throw "HTTP smoke failed with exit code $LASTEXITCODE" }
+
+            python tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
+            if ($LASTEXITCODE -ne 0) { throw "DNS load smoke failed with exit code $LASTEXITCODE" }
+
+            python tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
+            if ($LASTEXITCODE -ne 0) { throw "API load smoke failed with exit code $LASTEXITCODE" }
           }
-
-          Write-Host "MyDNS is still running, but HTTP port 18080 is not accepting connections."
-          if (Test-Path mydns-ci.log) { Get-Content mydns-ci.log }
-          if (Test-Path mydns-ci-error.log) { Get-Content mydns-ci-error.log }
-          throw "MyDNS HTTP listener did not become reachable"
+          catch {
+            Write-Host "MyDNS smoke failed: $($_.Exception.Message)"
+            if (Test-Path mydns-ci.log) { Get-Content mydns-ci.log }
+            if (Test-Path mydns-ci-error.log) { Get-Content mydns-ci-error.log }
+            throw
+          }
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
       - name: DNS smoke (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT"
-      - name: HTTP smoke
+      - name: HTTP and load smoke (Unix)
+        if: runner.os != 'Windows'
         env:
           MYDNS_ADMIN_PASSWORD: changeme123
-        shell: pwsh
-        run: ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
-      - name: DNS load smoke
         shell: bash
-        run: python tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
-      - name: API load smoke
-        shell: bash
-        run: python tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
+        run: |
+          pwsh -File ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
+          python tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
+          python tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
       - name: Dump MyDNS log (Unix)
         if: failure() && runner.os != 'Windows'
         shell: bash
@@ -166,12 +157,8 @@ jobs:
             wait "$(cat mydns.pid)" 2>/dev/null || true
           fi
           rm -f mydns.pid mydns-ci.log config.toml
-      - name: Stop MyDNS (Windows)
+      - name: Clean up CI files (Windows)
         if: always() && runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (Test-Path mydns.pid) {
-            $processId = [int](Get-Content mydns.pid)
-            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-          }
-          Remove-Item -Force -ErrorAction SilentlyContinue mydns.pid, mydns-ci.log, mydns-ci-error.log, config.toml, ci-mydns.db, ci-mydns.db-shm, ci-mydns.db-wal
+          Remove-Item -Force -ErrorAction SilentlyContinue mydns-ci.log, mydns-ci-error.log, config.toml, ci-mydns.db, ci-mydns.db-shm, ci-mydns.db-wal
