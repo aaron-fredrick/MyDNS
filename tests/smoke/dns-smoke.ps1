@@ -43,8 +43,9 @@ $packet.Add(0x00)
 $packet.Add(0x00)
 $packet.Add(0x00)
 $packet.Add(0x00)
-$packet.AddRange((Encode-DnsName $Name))
-$packet.Add(0x00)
+foreach ($byte in (Encode-DnsName $Name)) {
+    $packet.Add([byte]$byte)
+}
 $packet.Add(0x06)
 $packet.Add(0x00)
 $packet.Add(0x01)
