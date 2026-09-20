@@ -3,8 +3,30 @@ on:
   workflow_call:
 jobs:
   check:
-    name: Build (Linux) - Check
-    runs-on: ubuntu-latest
+    name: Build (${{ matrix.platform }} ${{ matrix.arch }}) - Check
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            arch: x64
+            runner: ubuntu-latest
+          - platform: Linux
+            arch: ARM64
+            runner: ubuntu-24.04-arm
+          - platform: Windows
+            arch: x64
+            runner: windows-latest
+          - platform: Windows
+            arch: ARM64
+            runner: windows-11-arm
+          - platform: macOS
+            arch: x64
+            runner: macos-15-intel
+          - platform: macOS
+            arch: ARM64
+            runner: macos-15
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
