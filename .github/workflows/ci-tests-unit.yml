@@ -13,14 +13,14 @@ jobs:
       - uses: taiki-e/install-action@cargo-llvm-cov
       - name: Prepare backend coverage directory
         shell: bash
-        run: mkdir -p coverage/backend
+        run: mkdir -p coverage/unit/backend
       - name: Generate backend coverage
         shell: bash
-        run: cargo llvm-cov --lib --all-features --lcov --output-path coverage/backend/lcov.info
+        run: cargo llvm-cov --lib --all-features --lcov --output-path coverage/unit/backend/lcov.info
       - uses: actions/upload-artifact@v7
         with:
-          name: coverage-backend
-          path: coverage/backend/lcov.info
+          name: coverage-unit-backend
+          path: coverage/unit/backend/lcov.info
           retention-days: 14
 
   frontend:
@@ -33,9 +33,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx --yes c8@10.1.3 --reporter=lcov --reporter=text --reports-dir=coverage/frontend node --experimental-strip-types --test tests/unit/frontend/*.test.ts
+      - run: npx --yes c8@10.1.3 --reporter=lcov --reporter=text --reports-dir=coverage/unit/frontend node --experimental-strip-types --test tests/unit/frontend/*.test.ts
       - uses: actions/upload-artifact@v7
         with:
-          name: coverage-frontend
-          path: coverage/frontend/lcov.info
+          name: coverage-unit-frontend
+          path: coverage/unit/frontend/lcov.info
           retention-days: 14
