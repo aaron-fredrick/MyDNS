@@ -23,7 +23,7 @@ jobs:
     needs: [backend-integration, frontend-component]
     uses: ./.github/workflows/ci-tests-contract.yml
   smoke:
-    needs: backend-integration
+    needs: contract
     uses: ./.github/workflows/ci-tests-smoke.yml
   e2e:
     needs: smoke
