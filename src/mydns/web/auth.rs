@@ -313,7 +313,10 @@ mod tests {
                 .body(())
                 .unwrap();
             let (parts, _) = request.into_parts();
-            assert!(extract_bearer(&parts).is_err(), "unexpectedly accepted {value:?}");
+            assert!(
+                extract_bearer(&parts).is_err(),
+                "unexpectedly accepted {value:?}"
+            );
         }
     }
 

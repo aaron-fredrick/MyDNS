@@ -271,10 +271,22 @@ mod tests {
 
     #[test]
     fn rejects_invalid_dns_name_shapes() {
-        for name in ["", ".", "@", "*.example.local", "bad..example.local", "-bad.example.local", "bad-.example.local", "bad_name.example.local"] {
+        for name in [
+            "",
+            ".",
+            "@",
+            "*.example.local",
+            "bad..example.local",
+            "-bad.example.local",
+            "bad-.example.local",
+            "bad_name.example.local",
+        ] {
             let mut req = create("A", "192.0.2.1");
             req.name = name.into();
-            assert!(validate_create_record(&req).is_err(), "accepted invalid name {name:?}");
+            assert!(
+                validate_create_record(&req).is_err(),
+                "accepted invalid name {name:?}"
+            );
         }
 
         let oversized_label = format!("{}.example.local", "x".repeat(64));

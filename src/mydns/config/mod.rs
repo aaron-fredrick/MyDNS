@@ -537,9 +537,18 @@ admin_password = "password"
 
     #[test]
     fn resolver_mode_parses_aliases_and_rejects_unknown_values() {
-        assert_eq!("forward".parse::<ResolverMode>().unwrap(), ResolverMode::Forwarding);
-        assert_eq!(" FORWARDING ".parse::<ResolverMode>().unwrap(), ResolverMode::Forwarding);
-        assert_eq!("recurse".parse::<ResolverMode>().unwrap(), ResolverMode::Recursive);
+        assert_eq!(
+            "forward".parse::<ResolverMode>().unwrap(),
+            ResolverMode::Forwarding
+        );
+        assert_eq!(
+            " FORWARDING ".parse::<ResolverMode>().unwrap(),
+            ResolverMode::Forwarding
+        );
+        assert_eq!(
+            "recurse".parse::<ResolverMode>().unwrap(),
+            ResolverMode::Recursive
+        );
         assert!("authoritative".parse::<ResolverMode>().is_err());
     }
 
@@ -560,7 +569,10 @@ admin_password = "password"
     fn resolver_enums_display_as_config_values() {
         assert_eq!(ResolverMode::Forwarding.to_string(), "forwarding");
         assert_eq!(ResolverMode::Recursive.to_string(), "recursive");
-        assert_eq!(ResolverPriority::CloudflareFirst.to_string(), "cloudflare_first");
+        assert_eq!(
+            ResolverPriority::CloudflareFirst.to_string(),
+            "cloudflare_first"
+        );
         assert_eq!(ResolverPriority::RouterFirst.to_string(), "router_first");
     }
 
