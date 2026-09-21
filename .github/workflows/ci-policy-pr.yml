@@ -9,6 +9,7 @@ jobs:
     name: Static
     uses: ./.github/workflows/ci-static-full.yml
   build:
+    name: Build
     needs: [lint, static]
     uses: ./.github/workflows/ci-build-release.yml
   tests-unit:
