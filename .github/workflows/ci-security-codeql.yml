@@ -7,7 +7,7 @@ permissions:
   actions: read
 jobs:
   rust:
-    name: Security (Linux) - CodeQL Rust
+    name: Security (Backend) - CodeQL
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
