@@ -243,7 +243,7 @@ impl AppConfig {
             .or(zones.allowed)
             .unwrap_or_default()
             .into_iter()
-            .map(|z| z.trim_end_matches('.').to_lowercase())
+            .map(|z| z.trim().trim_end_matches('.').to_lowercase())
             .filter(|z| !z.is_empty())
             .collect();
 
