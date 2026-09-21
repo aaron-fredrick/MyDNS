@@ -659,3 +659,73 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+
+    fn record(id: i64, name: &str, rtype: &str, value: &str) -> DnsRecord {
+        DnsRecord {
+            id,
+            name: name.into(),
+            record_type: rtype.into(),
+            value: value.into(),
+            ttl: 300,
+            priority: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+            is_dev: false,
+        }
+    }
+
+    #[test]
+    fn normalization_is_case_insensitive_for_lookup_and_mutation() {
+        let mut index = RecordIndex::default();
+        index.upsert(record(1, "HOST.Example.COM.", "a", "192.0.2.1"));
+        assert!(matches!(
+            index.resolve_authoritative("host.example.com.", "A", None),
+            IndexResolution::Found(_)
+        ));
+        index.remove("HOST.EXAMPLE.COM.", Some("a"));
+        assert!(matches!(
+            index.resolve_authoritative("host.example.com", "A", None),
+            IndexResolution::Miss
+        ));
+    }
+
+    #[test]
+    fn cname_to_missing_target_returns_authoritative_chain() {
+        let mut index = RecordIndex::default();
+        index.upsert(record(1, "alias.example.com", "CNAME", "external.example.net."));
+        match index.resolve_authoritative("alias.example.com", "A", None) {
+            IndexResolution::Found(records) => {
+                assert_eq!(records.len(), 1);
+                assert_eq!(records[0].record_type, "CNAME");
+                assert_eq!(records[0].value, "external.example.net.");
+            }
+            other => panic!("expected authoritative CNAME chain, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn any_query_with_cname_to_empty_target_returns_only_chain() {
+        let mut index = RecordIndex::default();
+        index.upsert(record(1, "alias.example.com", "CNAME", "target.example.com"));
+        match index.resolve_authoritative("alias.example.com", "ANY", None) {
+            IndexResolution::Found(records) => {
+                assert_eq!(records.len(), 1);
+                assert_eq!(records[0].record_type, "CNAME");
+            }
+            other => panic!("expected CNAME-only answer, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn zone_apex_matching_is_case_insensitive_and_dot_insensitive() {
+        let index = RecordIndex::default();
+        assert!(matches!(
+            index.resolve_authoritative("Example.COM.", "A", Some("example.com.")),
+            IndexResolution::Nodata
+        ));
+    }
+}
