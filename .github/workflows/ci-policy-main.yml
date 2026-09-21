@@ -9,34 +9,37 @@ jobs:
   build:
     needs: [lint, static]
     uses: ./.github/workflows/ci-build-release.yml
-  unit:
+  test-unit:
+    name: Tests (Unit)
     needs: build
     uses: ./.github/workflows/ci-tests-unit.yml
-  backend-component:
-    needs: unit
-    uses: ./.github/workflows/ci-tests-backend-component.yml
-  frontend-component:
-    needs: unit
-    uses: ./.github/workflows/ci-tests-frontend-component.yml
-  backend-integration:
-    needs: backend-component
+  test-component:
+    name: Tests (Component)
+    needs: test-unit
+    uses: ./.github/workflows/ci-tests-component.yml
+  test-integration:
+    name: Tests (Integration)
+    needs: test-component
     uses: ./.github/workflows/ci-tests-integration.yml
-  contract:
-    needs: [backend-integration, frontend-component]
+  test-contract:
+    name: Tests (Contract)
+    needs: test-integration
     uses: ./.github/workflows/ci-tests-contract.yml
-  smoke:
-    needs: contract
+  test-smoke:
+    name: Tests (Smoke)
+    needs: test-contract
     uses: ./.github/workflows/ci-tests-smoke.yml
-  e2e:
-    needs: smoke
+  test-e2e:
+    name: Tests (E2E)
+    needs: test-smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
   security:
-    needs: backend-integration
+    needs: test-integration
     uses: ./.github/workflows/ci-security-audit.yml
   codeql:
-    needs: backend-integration
+    needs: test-integration
     uses: ./.github/workflows/ci-security-codeql.yml
   coverage-upload:
-    needs: unit
+    needs: test-unit
     uses: ./.github/workflows/ci-coverage-upload.yml
     secrets: inherit
