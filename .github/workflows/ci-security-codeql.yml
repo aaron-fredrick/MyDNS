@@ -1,4 +1,4 @@
-name: CI Capability - CodeQL
+name: CI Capability - Security CodeQL
 on:
   workflow_call:
 permissions:
