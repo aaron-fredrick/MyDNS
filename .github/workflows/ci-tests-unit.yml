@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   backend-unit:
-    name: Tests (Linux) - Backend unit tests
+    name: Tests (Backend) - Unit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -24,7 +24,7 @@ jobs:
           retention-days: 14
 
   frontend:
-    name: Tests (Linux) - Frontend unit tests
+    name: Tests (Frontend) - Unit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
