@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   smoke:
-    name: Tests (Smoke) - Check [${{ matrix.platform }} ${{ matrix.arch }}]
+    name: Tests - Smoke - Check [${{ matrix.platform }} ${{ matrix.arch }}]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false

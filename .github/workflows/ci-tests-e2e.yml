@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   e2e:
-    name: Tests (E2E) - Check [${{ matrix.platform }} ${{ matrix.arch }}]
+    name: Tests - E2E - Check [${{ matrix.platform }} ${{ matrix.arch }}]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
