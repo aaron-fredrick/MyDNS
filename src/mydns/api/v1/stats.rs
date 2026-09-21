@@ -122,3 +122,40 @@ fn parse_timestamp(value: Option<&str>, field: &str) -> Result<Option<DateTime<U
         })
         .transpose()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse_timestamp;
+    use crate::error::ApiError;
+    use chrono::{Datelike, Timelike};
+
+    #[test]
+    fn parses_rfc3339_and_normalizes_to_utc() {
+        let parsed = parse_timestamp(Some("2026-09-21T12:30:45+05:30"), "from")
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed.year(), 2026);
+        assert_eq!(parsed.month(), 9);
+        assert_eq!(parsed.day(), 21);
+        assert_eq!(parsed.hour(), 7);
+        assert_eq!(parsed.minute(), 0);
+        assert_eq!(parsed.second(), 45);
+    }
+
+    #[test]
+    fn absent_timestamp_is_none() {
+        assert!(parse_timestamp(None, "to").unwrap().is_none());
+    }
+
+    #[test]
+    fn malformed_timestamp_returns_bad_request_with_field_context() {
+        let error = parse_timestamp(Some("not-a-timestamp"), "to").unwrap_err();
+        match error {
+            ApiError::BadRequest(message) => {
+                assert!(message.contains("invalid 'to' timestamp"));
+                assert!(message.contains("not-a-timestamp"));
+            }
+            other => panic!("expected BadRequest, got {other:?}"),
+        }
+    }
+}
