@@ -33,5 +33,6 @@ jobs:
     needs: tests-contract
     uses: ./.github/workflows/ci-tests-smoke.yml
   build-check:
+    name: Build - Check
     needs: tests-contract
     uses: ./.github/workflows/ci-build-check.yml
