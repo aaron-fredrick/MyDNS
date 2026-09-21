@@ -312,6 +312,51 @@ mod tests {
     use chrono::Duration as ChronoDuration;
 
     #[test]
+    fn records_blocked_queries_and_evictions() {
+        let metrics = Metrics::default();
+        metrics.record_blocked();
+        metrics.record_blocked();
+        metrics.record_eviction();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.queries_blocked, 2);
+        assert_eq!(snapshot.cache_evictions, 1);
+    }
+
+    #[test]
+    fn records_upstream_latency_separately_from_response_latency() {
+        let metrics = Metrics::default();
+        metrics.record_upstream_latency(10.0);
+        metrics.record_upstream_latency(30.0);
+        metrics.record_latency(100.0);
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.upstream.latency.avg_ms, 20.0);
+        assert_eq!(snapshot.response_time.avg_ms, 100.0);
+    }
+
+    #[test]
+    fn counts_all_error_outcomes() {
+        let metrics = Metrics::default();
+        for outcome in ["SERVFAIL", "REFUSED", "OTHER"] {
+            metrics.record_outcome(outcome);
+        }
+        metrics.record_outcome("NOERROR");
+
+        assert_eq!(metrics.snapshot().dns_errors, 3);
+    }
+
+    #[test]
+    fn ignores_invalid_upstream_latency_samples() {
+        let metrics = Metrics::default();
+        metrics.record_upstream_latency(-1.0);
+        metrics.record_upstream_latency(f64::NAN);
+        metrics.record_upstream_latency(8.0);
+
+        assert_eq!(metrics.snapshot().upstream.latency.avg_ms, 8.0);
+    }
+
+    #[test]
     fn snapshot_starts_empty_and_healthy() {
         let snapshot = Metrics::default().snapshot();
         assert_eq!(snapshot.queries_total, 0);
