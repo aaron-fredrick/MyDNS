@@ -46,6 +46,6 @@ jobs:
     uses: ./.github/workflows/ci-security-codeql.yml
   coverage-upload:
     name: Coverage
-    needs: tests-unit
+    needs: tests-integration
     uses: ./.github/workflows/ci-coverage-upload.yml
     secrets: inherit
