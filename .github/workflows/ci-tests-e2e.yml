@@ -98,7 +98,8 @@ jobs:
         run: |
           $process = Start-Process -FilePath ".\target\release\mydns.exe" -RedirectStandardOutput "mydns-e2e.log" -RedirectStandardError "mydns-e2e-error.log" -PassThru
           $process.Id | Out-File -FilePath mydns.pid -Encoding ascii
-      - name: Wait for HTTP readiness
+      - name: Wait for HTTP readiness (Unix)
+        if: runner.os != 'Windows'
         shell: python
         run: |
           import socket
@@ -112,6 +113,19 @@ jobs:
               except OSError:
                   time.sleep(0.5)
           raise SystemExit("MyDNS HTTP server did not become ready")
+      - name: Wait for HTTP readiness (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $deadline = (Get-Date).AddSeconds(30)
+          while ((Get-Date) -lt $deadline) {
+            $listener = Get-NetTCPConnection -LocalPort 18080 -State Listen -ErrorAction SilentlyContinue
+            if ($listener) {
+              exit 0
+            }
+            Start-Sleep -Milliseconds 500
+          }
+          throw "MyDNS HTTP server did not become ready"
       - name: Inspect Windows DNS endpoint
         if: runner.os == 'Windows'
         shell: pwsh
