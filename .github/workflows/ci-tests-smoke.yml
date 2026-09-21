@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   smoke:
-    name: Tests - Smoke - Check [${{ matrix.platform }} ${{ matrix.arch }}]
+    name: Tests - Smoke [${{ matrix.platform }} ${{ matrix.arch }}]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -99,7 +99,7 @@ jobs:
           $process = $null
 
           try {
-            $process = Start-Process -FilePath '.\\target\\release\\mydns.exe' -RedirectStandardOutput 'mydns-ci.log' -RedirectStandardError 'mydns-ci-error.log' -PassThru
+            $process = Start-Process -FilePath '.\target\release\mydns.exe' -RedirectStandardOutput 'mydns-ci.log' -RedirectStandardError 'mydns-ci-error.log' -PassThru
             Write-Host "Started MyDNS PID $($process.Id)."
 
             $deadline = (Get-Date).AddSeconds(30)
