@@ -36,3 +36,8 @@ jobs:
     name: Build - Check
     needs: tests-contract
     uses: ./.github/workflows/ci-build-check.yml
+  coverage-upload:
+    name: Coverage
+    needs: tests-integration
+    uses: ./.github/workflows/ci-coverage-upload.yml
+    secrets: inherit
