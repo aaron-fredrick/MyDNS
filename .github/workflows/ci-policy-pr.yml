@@ -25,9 +25,6 @@ jobs:
   smoke:
     needs: contract
     uses: ./.github/workflows/ci-tests-smoke.yml
-  smoke:
-    needs: integration
-    uses: ./.github/workflows/ci-tests-smoke.yml
   build-check:
-    needs: integration
+    needs: contract
     uses: ./.github/workflows/ci-build-check.yml
