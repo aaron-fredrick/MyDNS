@@ -40,6 +40,11 @@ jobs:
     name: Tests - Extended
     needs: [tests-unit, tests-integration, tests-smoke, tests-e2e]
     uses: ./.github/workflows/ci-tests-extended.yml
+  coverage-upload:
+    name: Coverage
+    needs: tests-integration
+    uses: ./.github/workflows/ci-coverage-upload.yml
+    secrets: inherit
   security:
     name: Security
     needs: [tests-unit, tests-integration]
