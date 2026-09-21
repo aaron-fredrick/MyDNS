@@ -42,6 +42,7 @@ jobs:
     uses: ./.github/workflows/ci-tests-extended.yml
   coverage-upload:
     name: Coverage
+    if: ${{ always() }}
     needs: tests-integration
     uses: ./.github/workflows/ci-coverage-upload.yml
     secrets: inherit
