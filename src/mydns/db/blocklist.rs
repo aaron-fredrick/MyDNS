@@ -277,7 +277,10 @@ mod tests {
     #[test]
     fn normalize_rejects_whitespace_and_strips_trailing_dot() {
         assert!(normalize_domain(" ADS.Example.COM. ").is_err());
-        assert_eq!(normalize_domain("ADS.Example.COM.").unwrap(), "ads.example.com");
+        assert_eq!(
+            normalize_domain("ADS.Example.COM.").unwrap(),
+            "ads.example.com"
+        );
     }
 
     #[test]

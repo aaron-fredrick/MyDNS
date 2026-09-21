@@ -696,7 +696,12 @@ mod additional_tests {
     #[test]
     fn cname_to_missing_target_returns_authoritative_chain() {
         let mut index = RecordIndex::default();
-        index.upsert(record(1, "alias.example.com", "CNAME", "external.example.net."));
+        index.upsert(record(
+            1,
+            "alias.example.com",
+            "CNAME",
+            "external.example.net.",
+        ));
         match index.resolve_authoritative("alias.example.com", "A", None) {
             IndexResolution::Found(records) => {
                 assert_eq!(records.len(), 1);
@@ -710,7 +715,12 @@ mod additional_tests {
     #[test]
     fn any_query_with_cname_to_empty_target_returns_only_chain() {
         let mut index = RecordIndex::default();
-        index.upsert(record(1, "alias.example.com", "CNAME", "target.example.com"));
+        index.upsert(record(
+            1,
+            "alias.example.com",
+            "CNAME",
+            "target.example.com",
+        ));
         match index.resolve_authoritative("alias.example.com", "ANY", None) {
             IndexResolution::Found(records) => {
                 assert_eq!(records.len(), 1);
