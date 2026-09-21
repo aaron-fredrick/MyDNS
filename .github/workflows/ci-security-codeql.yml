@@ -6,7 +6,7 @@ permissions:
   security-events: write
   actions: read
 jobs:
-  security-backend:
+  security-backend-codeql:
     name: Security (Backend) - CodeQL
     runs-on: ubuntu-latest
     steps:
@@ -18,7 +18,7 @@ jobs:
       - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:rust"
-  security-frontend:
+  security-frontend-codeql:
     name: Security (Frontend) - CodeQL
     runs-on: ubuntu-latest
     steps:

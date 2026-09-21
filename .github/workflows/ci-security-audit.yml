@@ -2,7 +2,7 @@ name: CI Capability - Security Audit
 on:
   workflow_call:
 jobs:
-  backend-audit:
+  security-backend-audit:
     name: Security (Backend) - Audit
     runs-on: ubuntu-latest
     steps:
@@ -18,7 +18,7 @@ jobs:
           fi
       - run: cargo audit
 
-  frontend-audit:
+  security-frontend-audit:
     name: Security (Frontend) - Audit
     runs-on: ubuntu-latest
     steps:
