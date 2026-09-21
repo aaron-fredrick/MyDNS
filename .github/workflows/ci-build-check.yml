@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   check:
-    name: Build (${{ matrix.platform }} ${{ matrix.arch }}) - Check
+    name: Build - Check [${{ matrix.platform }} ${{ matrix.arch }}]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
