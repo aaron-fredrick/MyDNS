@@ -14,7 +14,7 @@ jobs:
     uses: ./.github/workflows/ci-build-release.yml
   tests-unit:
     name: Tests - Unit
-    needs: build
+    needs: [lint, static]
     uses: ./.github/workflows/ci-tests-unit.yml
   tests-component:
     name: Tests - Component
