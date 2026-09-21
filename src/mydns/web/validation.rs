@@ -26,10 +26,11 @@ pub fn validate_zone(name: &str, allowed_zones: &[String]) -> Result<(), ApiErro
     if allowed_zones.iter().any(|z| z == ".") {
         return Ok(());
     }
-    let normalized = name.trim_end_matches('.').to_lowercase();
-    let matches = allowed_zones
-        .iter()
-        .any(|z| normalized == *z || normalized.ends_with(&format!(".{z}")));
+    let normalized = name.trim().trim_end_matches('.').to_lowercase();
+    let matches = allowed_zones.iter().any(|z| {
+        let zone = z.trim().trim_end_matches('.').to_lowercase();
+        normalized == zone || normalized.ends_with(&format!(".{zone}"))
+    });
     if matches {
         Ok(())
     } else {
@@ -171,7 +172,7 @@ fn validate_value(record_type: &str, value: &str) -> Result<(), ApiError> {
                     "Record target must not be empty".into(),
                 ));
             }
-            format!("{target}.").parse::<Name>().map_err(|_| {
+            validate_name(target).map_err(|_| {
                 ApiError::BadRequest("Record target must be a valid DNS name".into())
             })?;
             Ok(())
