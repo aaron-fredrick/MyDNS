@@ -96,6 +96,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # GitHub Actions tags child processes with RUNNER_TRACKING_ID and
+          # cleans tracked processes when the step exits. MyDNS must survive
+          # this step so the following E2E steps can talk to it.
+          $env:RUNNER_TRACKING_ID = ""
           $process = Start-Process -FilePath ".\target\release\mydns.exe" -RedirectStandardOutput "mydns-e2e.log" -RedirectStandardError "mydns-e2e-error.log" -PassThru
           $process.Id | Out-File -FilePath mydns.pid -Encoding ascii
       - name: Wait for HTTP readiness (Unix)
