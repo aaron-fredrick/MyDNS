@@ -269,6 +269,114 @@ mod tests {
         assert!(validate_create_record(&create("TXT", "")).is_err());
     }
 
+    #[test]
+    fn rejects_invalid_dns_name_shapes() {
+        for name in ["", ".", "@", "*.example.local", "bad..example.local", "-bad.example.local", "bad-.example.local", "bad_name.example.local"] {
+            let mut req = create("A", "192.0.2.1");
+            req.name = name.into();
+            assert!(validate_create_record(&req).is_err(), "accepted invalid name {name:?}");
+        }
+
+        let oversized_label = format!("{}.example.local", "x".repeat(64));
+        let mut req = create("A", "192.0.2.1");
+        req.name = oversized_label;
+        assert!(validate_create_record(&req).is_err());
+
+        let oversized_name = format!("{}.example.local", "x".repeat(240));
+        req.name = oversized_name;
+        assert!(validate_create_record(&req).is_err());
+    }
+
+    #[test]
+    fn accepts_boundary_ttls() {
+        let mut req = create("A", "192.0.2.1");
+        req.ttl = MIN_TTL;
+        assert!(validate_create_record(&req).is_ok());
+        req.ttl = MAX_TTL;
+        assert!(validate_create_record(&req).is_ok());
+    }
+
+    #[test]
+    fn validates_all_supported_value_types() {
+        assert!(validate_create_record(&create("A", "192.0.2.1")).is_ok());
+        assert!(validate_create_record(&create("AAAA", "2001:db8::1")).is_ok());
+        assert!(validate_create_record(&create("CNAME", "target.example.local.")).is_ok());
+        assert!(validate_create_record(&create("PTR", "host.example.local")).is_ok());
+        assert!(validate_create_record(&create("MX", "mail.example.local")).is_ok());
+        assert!(validate_create_record(&create("NS", "ns1.example.local")).is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_values_and_invalid_address_or_target_values() {
+        for record_type in ["A", "AAAA", "CNAME", "PTR", "MX", "NS", "TXT"] {
+            assert!(
+                validate_create_record(&create(record_type, "   ")).is_err(),
+                "empty value accepted for {record_type}"
+            );
+        }
+
+        assert!(validate_create_record(&create("AAAA", "192.0.2.1")).is_err());
+        assert!(validate_create_record(&create("CNAME", ".")).is_err());
+        assert!(validate_create_record(&create("MX", "not a dns name")).is_err());
+        assert!(validate_create_record(&create("NS", "bad_name.example")).is_err());
+        assert!(validate_create_record(&create("PTR", "bad_name.example")).is_err());
+    }
+
+    #[test]
+    fn accepts_txt_at_255_bytes_and_rejects_256_bytes() {
+        assert!(validate_create_record(&create("TXT", &"x".repeat(255))).is_ok());
+        assert!(validate_create_record(&create("TXT", &"x".repeat(256))).is_err());
+    }
+
+    #[test]
+    fn update_validation_checks_only_supplied_fields() {
+        let req = UpdateRecord {
+            name: Some("valid.example.local".into()),
+            record_type: Some("a".into()),
+            value: None,
+            ttl: Some(MIN_TTL),
+            priority: None,
+        };
+        assert!(validate_update_record(&req).is_ok());
+
+        let invalid = UpdateRecord {
+            name: Some("bad..name".into()),
+            record_type: None,
+            value: None,
+            ttl: None,
+            priority: None,
+        };
+        assert!(validate_update_record(&invalid).is_err());
+    }
+
+    #[test]
+    fn update_priority_is_validated_when_record_type_is_supplied() {
+        let valid = UpdateRecord {
+            name: None,
+            record_type: Some("mx".into()),
+            value: None,
+            ttl: None,
+            priority: Some(10),
+        };
+        assert!(validate_update_record(&valid).is_ok());
+
+        let invalid = UpdateRecord {
+            name: None,
+            record_type: Some("A".into()),
+            value: None,
+            ttl: None,
+            priority: Some(10),
+        };
+        assert!(validate_update_record(&invalid).is_err());
+    }
+
+    #[test]
+    fn zone_matching_is_case_insensitive_and_respects_label_boundaries() {
+        let zones = vec!["Example.COM".to_string()];
+        assert!(validate_zone("HOST.example.com.", &zones).is_ok());
+        assert!(validate_zone("notexample.com", &zones).is_err());
+    }
+
     // ── Zone validation ───────────────────────────────────────────────────────
 
     #[test]
