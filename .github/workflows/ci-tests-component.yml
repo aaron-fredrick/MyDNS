@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   backend-component:
-    name: Tests (Component) - Backend
+    name: Tests (Backend) - Component
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -13,7 +13,7 @@ jobs:
         run: cargo test --lib --all-features --no-fail-fast
 
   frontend-component:
-    name: Tests (Component) - Frontend
+    name: Tests (Frontend) - Component
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
