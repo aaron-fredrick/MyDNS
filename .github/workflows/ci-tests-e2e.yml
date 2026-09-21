@@ -101,19 +101,17 @@ jobs:
       - name: Wait for HTTP readiness
         shell: python
         run: |
+          import socket
           import time
-          import urllib.request
 
-          url = "http://127.0.0.1:18080/api/v1/stats"
           deadline = time.time() + 30
           while time.time() < deadline:
               try:
-                  with urllib.request.urlopen(url, timeout=2) as response:
-                      if response.status == 200:
-                          raise SystemExit(0)
-              except Exception:
+                  with socket.create_connection(("127.0.0.1", 18080), timeout=2):
+                      raise SystemExit(0)
+              except OSError:
                   time.sleep(0.5)
-          raise SystemExit("MyDNS did not become ready")
+          raise SystemExit("MyDNS HTTP server did not become ready")
       - name: Inspect Windows DNS endpoint
         if: runner.os == 'Windows'
         shell: pwsh
