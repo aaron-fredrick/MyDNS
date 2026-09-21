@@ -275,8 +275,9 @@ mod tests {
     }
 
     #[test]
-    fn normalize_preserves_internal_labels_and_only_strips_trailing_dots() {
-        assert_eq!(normalize_domain("  ADS.Example.COM.  ").unwrap(), "  ads.example.com.  ");
+    fn normalize_rejects_whitespace_and_strips_trailing_dot() {
+        assert!(normalize_domain(" ADS.Example.COM. ").is_err());
+        assert_eq!(normalize_domain("ADS.Example.COM.").unwrap(), "ads.example.com");
     }
 
     #[test]
