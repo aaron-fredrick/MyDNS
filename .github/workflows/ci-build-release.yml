@@ -1,4 +1,4 @@
-name: CI Capability - Release Build
+name: CI Capability - Build Release
 on:
   workflow_call:
 jobs:
