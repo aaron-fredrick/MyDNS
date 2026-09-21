@@ -1,9 +1,9 @@
-name: CI Capability - Integration Tests
+name: CI Capability - Backend Integration Tests
 on:
   workflow_call:
 jobs:
-  integration:
-    name: Test (Linux) - Integration
+  backend-integration:
+    name: Test (Linux) - Backend integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
