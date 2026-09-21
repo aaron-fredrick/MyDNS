@@ -23,17 +23,17 @@ jobs:
     needs: [backend-integration, frontend-component]
     uses: ./.github/workflows/ci-tests-contract.yml
   smoke:
-    needs: integration
+    needs: backend-integration
     uses: ./.github/workflows/ci-tests-smoke.yml
   e2e:
     needs: smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
   extended:
-    needs: [unit, integration, smoke, e2e]
+    needs: [unit, backend-integration, smoke, e2e]
     uses: ./.github/workflows/ci-tests-extended.yml
   security:
-    needs: [unit, integration]
+    needs: [unit, backend-integration]
     uses: ./.github/workflows/ci-security-audit.yml
   codeql:
-    needs: [unit, integration]
+    needs: [unit, backend-integration]
     uses: ./.github/workflows/ci-security-codeql.yml
