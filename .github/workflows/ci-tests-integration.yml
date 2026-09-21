@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   backend-integration:
-    name: Test (Linux) - Backend integration
+    name: Tests (Backend) - Integration
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
