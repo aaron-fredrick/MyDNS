@@ -33,7 +33,8 @@ jobs:
     name: Tests (E2E)
     needs: test-smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
-  extended:
+  test-extended:
+    name: Tests (Extended)
     needs: [test-unit, test-integration, test-smoke, test-e2e]
     uses: ./.github/workflows/ci-tests-extended.yml
   security:
