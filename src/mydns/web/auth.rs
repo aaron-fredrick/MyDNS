@@ -294,4 +294,71 @@ mod tests {
         let (parts, _) = request.into_parts();
         assert_eq!(extract_bearer(&parts).unwrap(), "test-token");
     }
+
+    #[test]
+    fn authorization_bearer_token_is_extracted() {
+        let request = Request::builder()
+            .header("Authorization", "Bearer test-token")
+            .body(())
+            .unwrap();
+        let (parts, _) = request.into_parts();
+        assert_eq!(extract_bearer(&parts).unwrap(), "test-token");
+    }
+
+    #[test]
+    fn malformed_authorization_is_rejected() {
+        for value in ["Basic test-token", "Bearer", "bearer test-token", ""] {
+            let request = Request::builder()
+                .header("Authorization", value)
+                .body(())
+                .unwrap();
+            let (parts, _) = request.into_parts();
+            assert!(extract_bearer(&parts).is_err(), "unexpectedly accepted {value:?}");
+        }
+    }
+
+    #[test]
+    fn websocket_protocol_without_auth_token_is_rejected() {
+        let request = Request::builder()
+            .header("Sec-WebSocket-Protocol", "chat, superchat")
+            .body(())
+            .unwrap();
+        let (parts, _) = request.into_parts();
+        assert!(extract_bearer(&parts).is_err());
+    }
+
+    #[test]
+    fn malformed_password_hash_is_rejected() {
+        assert!(verify_password("password", "not-a-password-hash").is_err());
+    }
+
+    #[tokio::test]
+    async fn login_rate_limiter_allows_five_attempts_then_blocks() {
+        let limiter = LoginRateLimiter::new();
+        let ip = "192.0.2.10".parse().unwrap();
+
+        for attempt in 1..=5 {
+            assert!(
+                limiter.check_rate_limit(ip).await.is_ok(),
+                "attempt {attempt} should be allowed"
+            );
+        }
+        assert!(matches!(
+            limiter.check_rate_limit(ip).await,
+            Err(ApiError::TooManyRequests(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn login_rate_limiter_tracks_ips_independently() {
+        let limiter = LoginRateLimiter::new();
+        let first = "192.0.2.10".parse().unwrap();
+        let second = "192.0.2.11".parse().unwrap();
+
+        for _ in 0..5 {
+            limiter.check_rate_limit(first).await.unwrap();
+        }
+        assert!(limiter.check_rate_limit(first).await.is_err());
+        assert!(limiter.check_rate_limit(second).await.is_ok());
+    }
 }
