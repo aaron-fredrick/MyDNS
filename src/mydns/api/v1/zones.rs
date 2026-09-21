@@ -166,3 +166,44 @@ pub async fn remove_zone(
 
     Ok(Json(serde_json::json!({ "removed": canonical })))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::validate_zone_name;
+    use crate::error::ApiError;
+
+    #[test]
+    fn normalizes_case_and_trailing_dot() {
+        assert_eq!(validate_zone_name("Example.COM.").unwrap(), "example.com");
+    }
+
+    #[test]
+    fn rejects_root_and_empty_names() {
+        assert!(matches!(validate_zone_name("."), Err(ApiError::BadRequest(_))));
+        assert!(matches!(validate_zone_name(""), Err(ApiError::BadRequest(_))));
+        assert!(matches!(validate_zone_name("..."), Err(ApiError::BadRequest(_))));
+    }
+
+    #[test]
+    fn rejects_url_like_zone_names() {
+        for name in ["https://example.com", "example.com/path", "user@example.com"] {
+            assert!(validate_zone_name(name).is_err(), "accepted invalid zone {name}");
+        }
+    }
+
+    #[test]
+    fn enforces_dns_label_boundaries() {
+        let oversized = format!("{}.example.com", "a".repeat(64));
+        for name in [oversized.as_str(), "-bad.example.com", "bad-.example.com", "bad..example.com"] {
+            assert!(validate_zone_name(name).is_err(), "accepted invalid zone {name}");
+        }
+        assert!(validate_zone_name("good-1.example.com").is_ok());
+    }
+
+    #[test]
+    fn rejects_non_dns_label_characters() {
+        for name in ["bad_name.example.com", "bad!.example.com", "münich.example"] {
+            assert!(validate_zone_name(name).is_err(), "accepted invalid zone {name}");
+        }
+    }
+}
