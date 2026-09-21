@@ -11,6 +11,18 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Backend component tests
         run: cargo test --lib --all-features --no-fail-fast
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Prepare backend coverage directory
+        shell: bash
+        run: mkdir -p coverage/component/backend
+      - name: Generate backend coverage
+        shell: bash
+        run: cargo llvm-cov --lib --all-features --no-fail-fast --lcov --output-path coverage/component/backend/lcov.info
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-component-backend
+          path: coverage/component/backend/lcov.info
+          retention-days: 14
 
   frontend-component:
     name: Tests (Frontend) - Component
@@ -21,6 +33,5 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
       - name: Frontend component gate
-        run: npm run typecheck
+        run: npm ci && npm run typecheck
