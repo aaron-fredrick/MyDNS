@@ -27,6 +27,7 @@ jobs:
           find coverage -type f -name 'lcov.info' -print 2>/dev/null || true
 
       - name: Upload unit backend coverage
+        if: hashFiles('coverage/unit/backend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -38,6 +39,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload unit frontend coverage
+        if: hashFiles('coverage/unit/frontend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -49,6 +51,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload component backend coverage
+        if: hashFiles('coverage/component/backend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -60,6 +63,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload integration backend coverage
+        if: hashFiles('coverage/integration/backend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
