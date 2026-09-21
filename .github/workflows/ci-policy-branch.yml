@@ -6,6 +6,7 @@ jobs:
     name: Lint
     uses: ./.github/workflows/ci-lint-light.yml
   static:
+    name: Static
     uses: ./.github/workflows/ci-static-light.yml
   unit:
     needs: [lint, static]

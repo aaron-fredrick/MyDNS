@@ -6,6 +6,7 @@ jobs:
     name: Lint
     uses: ./.github/workflows/ci-lint-full.yml
   static:
+    name: Static
     uses: ./.github/workflows/ci-static-full.yml
   build:
     needs: [lint, static]
