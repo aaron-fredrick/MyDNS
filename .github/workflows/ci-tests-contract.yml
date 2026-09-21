@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   contract:
-    name: Test (Linux) - Frontend/Backend Contract
+    name: Tests (Contract) - Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
