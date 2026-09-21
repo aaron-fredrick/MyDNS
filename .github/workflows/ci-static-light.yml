@@ -1,4 +1,4 @@
-name: CI Capability - Light Static Checks
+name: CI Capability - Light Static Analysis
 on:
   workflow_call:
 jobs:
