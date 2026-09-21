@@ -19,7 +19,7 @@ jobs:
         with:
           category: "/language:rust"
   javascript:
-    name: Security (Linux) - CodeQL JavaScript/TypeScript
+    name: Security (Frontend) - CodeQL
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
