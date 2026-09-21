@@ -10,18 +10,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --lib --all-features
-      - if: ${{ matrix.coverage }}
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - if: ${{ matrix.coverage }}
-        name: Prepare backend coverage directory
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Prepare backend coverage directory
         shell: bash
         run: mkdir -p coverage/backend
-      - if: ${{ matrix.coverage }}
-        name: Generate backend coverage
+      - name: Generate backend coverage
         shell: bash
         run: cargo llvm-cov --lib --all-features --lcov --output-path coverage/backend/lcov.info
-      - if: ${{ matrix.coverage }}
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-backend
           path: coverage/backend/lcov.info
