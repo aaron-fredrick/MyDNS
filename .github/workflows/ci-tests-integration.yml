@@ -1,4 +1,4 @@
-name: CI Capability - Backend Integration Tests
+name: CI Capability - Integration Tests
 on:
   workflow_call:
 jobs:
@@ -10,3 +10,27 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --tests --all-features --no-fail-fast
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Prepare backend coverage directory
+        shell: bash
+        run: mkdir -p coverage/integration/backend
+      - name: Generate backend coverage
+        shell: bash
+        run: cargo llvm-cov --tests --all-features --no-fail-fast --lcov --output-path coverage/integration/backend/lcov.info
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-integration-backend
+          path: coverage/integration/backend/lcov.info
+          retention-days: 14
+
+  frontend-integration:
+    name: Tests (Frontend) - Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - name: Frontend integration gate
+        run: npm ci && npm run typecheck
