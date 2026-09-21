@@ -9,26 +9,26 @@ jobs:
   build:
     needs: [lint, static]
     uses: ./.github/workflows/ci-build-release.yml
-  test-unit:
+  tests-unit:
     name: Tests (Unit)
     needs: build
     uses: ./.github/workflows/ci-tests-unit.yml
-  test-component:
+  tests-component:
     name: Tests (Component)
-    needs: test-unit
+    needs: tests-unit
     uses: ./.github/workflows/ci-tests-component.yml
-  test-integration:
+  tests-integration:
     name: Tests (Integration)
-    needs: test-component
+    needs: tests-component
     uses: ./.github/workflows/ci-tests-integration.yml
-  test-contract:
+  tests-contract:
     name: Tests (Contract)
-    needs: test-integration
+    needs: tests-integration
     uses: ./.github/workflows/ci-tests-contract.yml
-  test-smoke:
+  tests-smoke:
     name: Tests (Smoke)
-    needs: test-contract
+    needs: tests-contract
     uses: ./.github/workflows/ci-tests-smoke.yml
   build-check:
-    needs: test-contract
+    needs: tests-contract
     uses: ./.github/workflows/ci-build-check.yml

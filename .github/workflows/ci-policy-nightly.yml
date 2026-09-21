@@ -9,37 +9,37 @@ jobs:
   build:
     needs: [lint, static]
     uses: ./.github/workflows/ci-build-release.yml
-  test-unit:
+  tests-unit:
     name: Tests (Unit)
     needs: build
     uses: ./.github/workflows/ci-tests-unit.yml
-  test-component:
+  tests-component:
     name: Tests (Component)
-    needs: test-unit
+    needs: tests-unit
     uses: ./.github/workflows/ci-tests-component.yml
-  test-integration:
+  tests-integration:
     name: Tests (Integration)
-    needs: test-component
+    needs: tests-component
     uses: ./.github/workflows/ci-tests-integration.yml
-  test-contract:
+  tests-contract:
     name: Tests (Contract)
-    needs: test-integration
+    needs: tests-integration
     uses: ./.github/workflows/ci-tests-contract.yml
-  test-smoke:
+  tests-smoke:
     name: Tests (Smoke)
-    needs: test-contract
+    needs: tests-contract
     uses: ./.github/workflows/ci-tests-smoke.yml
-  test-e2e:
+  tests-e2e:
     name: Tests (E2E)
-    needs: test-smoke
+    needs: tests-smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
-  test-extended:
+  tests-extended:
     name: Tests (Extended)
-    needs: [test-unit, test-integration, test-smoke, test-e2e]
+    needs: [tests-unit, tests-integration, tests-smoke, tests-e2e]
     uses: ./.github/workflows/ci-tests-extended.yml
   security:
-    needs: [test-unit, test-integration]
+    needs: [tests-unit, tests-integration]
     uses: ./.github/workflows/ci-security-audit.yml
   codeql:
-    needs: [test-unit, test-integration]
+    needs: [tests-unit, tests-integration]
     uses: ./.github/workflows/ci-security-codeql.yml
