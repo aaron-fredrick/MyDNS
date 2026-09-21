@@ -3,7 +3,7 @@ on:
   workflow_call:
 jobs:
   release:
-    name: Build (${{ matrix.platform }} ${{ matrix.arch }}) - Release
+    name: Build - Release [${{ matrix.platform }} ${{ matrix.arch }}]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
