@@ -3,6 +3,7 @@ on:
   workflow_call:
 jobs:
   lint:
+    name: Lint
     uses: ./.github/workflows/ci-lint-full.yml
   static:
     uses: ./.github/workflows/ci-static-full.yml
