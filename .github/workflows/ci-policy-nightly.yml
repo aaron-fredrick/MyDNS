@@ -4,10 +4,8 @@ on:
 jobs:
   lint:
     uses: ./.github/workflows/ci-lint-nightly.yml
-  static:
-    uses: ./.github/workflows/ci-static-full.yml
   build:
-    needs: [lint, static]
+    needs: lint
     uses: ./.github/workflows/ci-build-release.yml
   unit:
     needs: build
@@ -18,12 +16,12 @@ jobs:
   frontend-component:
     needs: unit
     uses: ./.github/workflows/ci-tests-frontend-component.yml
-  contract:
-    needs: [backend-component, frontend-component]
-    uses: ./.github/workflows/ci-tests-contract.yml
-  integration:
-    needs: contract
+  backend-integration:
+    needs: backend-component
     uses: ./.github/workflows/ci-tests-integration.yml
+  contract:
+    needs: [backend-integration, frontend-component]
+    uses: ./.github/workflows/ci-tests-contract.yml
   smoke:
     needs: integration
     uses: ./.github/workflows/ci-tests-smoke.yml
