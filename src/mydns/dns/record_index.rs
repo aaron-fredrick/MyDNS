@@ -729,3 +729,39 @@ mod additional_tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod recursion_tests {
+    use super::*;
+
+    fn record(id: i64, name: String, value: String) -> DnsRecord {
+        DnsRecord {
+            id,
+            name,
+            record_type: "CNAME".into(),
+            value,
+            ttl: 300,
+            priority: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+            is_dev: false,
+        }
+    }
+
+    #[test]
+    fn excessive_cname_depth_returns_servfail() {
+        let mut index = RecordIndex::default();
+        for i in 0..12 {
+            index.upsert(record(
+                i,
+                format!("node{i}.example.com"),
+                format!("node{}.example.com", i + 1),
+            ));
+        }
+
+        assert!(matches!(
+            index.resolve_authoritative("node0.example.com", "A", None),
+            IndexResolution::ServFail
+        ));
+    }
+}
