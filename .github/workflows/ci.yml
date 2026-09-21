@@ -35,16 +35,16 @@ jobs:
             echo "No open PR found for $GITHUB_REF_NAME; running light branch CI."
           fi
   branch:
-    name: Branch push (light)
+    name: Branch Policy
     needs: branch-pr-gate
     if: github.event_name == 'push' && github.ref_name != 'dev' && github.ref_name != 'main' && needs.branch-pr-gate.outputs.has_open_pr != 'true'
     uses: ./.github/workflows/ci-policy-branch.yml
   pr:
-    name: Pull request (deeper)
+    name: PR Policy
     if: github.event_name == 'pull_request' && github.base_ref != 'dev' && github.base_ref != 'main'
     uses: ./.github/workflows/ci-policy-pr.yml
   dev:
-    name: Dev policy (heavy)
+    name: Dev Policy
     if: (github.event_name == 'push' && github.ref_name == 'dev') || (github.event_name == 'pull_request' && github.base_ref == 'dev')
     permissions:
       contents: read
@@ -53,7 +53,7 @@ jobs:
     uses: ./.github/workflows/ci-policy-dev.yml
     secrets: inherit
   main:
-    name: Main policy (heavy)
+    name: Main Policy
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
     permissions:
       contents: read
@@ -62,7 +62,7 @@ jobs:
     uses: ./.github/workflows/ci-policy-main.yml
     secrets: inherit
   nightly:
-    name: Nightly policy (exhaustive)
+    name: Nightly Policy
     if: github.event_name == 'schedule'
     permissions:
       contents: read
