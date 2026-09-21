@@ -30,7 +30,7 @@ jobs:
     uses: ./.github/workflows/ci-tests-contract.yml
   tests-smoke:
     name: Tests - Smoke
-    needs: tests-contract
+    needs: [tests-contract, build]
     uses: ./.github/workflows/ci-tests-smoke.yml
   tests-e2e:
     name: Tests - E2E
