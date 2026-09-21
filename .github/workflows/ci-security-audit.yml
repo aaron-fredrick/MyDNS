@@ -2,7 +2,7 @@ name: CI Capability - Security Audit
 on:
   workflow_call:
 jobs:
-  security-backend:
+  backend-audit:
     name: Security (Backend) - Audit
     runs-on: ubuntu-latest
     steps:
@@ -12,8 +12,20 @@ jobs:
       - name: Verify RSA advisory dependency is inactive
         shell: bash
         run: |
-          if cargo tree -e normal | grep -Eq '^rsa v0\\.9\\.10( |$)'; then
+          if cargo tree -e normal | grep -Eq '^rsa v0\.9\.10( |$)'; then
             echo "rsa 0.9.10 is active in MyDNS's normal dependency graph."
             exit 1
           fi
       - run: cargo audit
+
+  frontend-audit:
+    name: Security (Frontend) - Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit
