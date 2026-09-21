@@ -251,3 +251,37 @@ mod tests {
         assert!(normalize_domain("xn--nxasmq6b.com").is_ok());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_accepts_maximum_label_length() {
+        let domain = format!("{}.example.com", "a".repeat(63));
+        assert_eq!(normalize_domain(&domain).unwrap(), domain);
+    }
+
+    #[test]
+    fn normalize_rejects_oversized_label() {
+        let domain = format!("{}.example.com", "a".repeat(64));
+        assert!(normalize_domain(&domain).is_err());
+    }
+
+    #[test]
+    fn normalize_rejects_colon_and_at_sign() {
+        assert!(normalize_domain("dns:example.com").is_err());
+        assert!(normalize_domain("user@example.com").is_err());
+    }
+
+    #[test]
+    fn normalize_preserves_internal_labels_and_only_strips_trailing_dots() {
+        assert_eq!(normalize_domain("  ADS.Example.COM.  ").unwrap(), "  ads.example.com.  ");
+    }
+
+    #[test]
+    fn default_create_fields_are_stable() {
+        assert!(default_true());
+        assert_eq!(default_source(), "manual");
+    }
+}
