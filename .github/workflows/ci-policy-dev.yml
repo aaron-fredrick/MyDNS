@@ -37,12 +37,15 @@ jobs:
     needs: tests-smoke
     uses: ./.github/workflows/ci-tests-e2e.yml
   security:
+    name: Security
     needs: tests-integration
     uses: ./.github/workflows/ci-security-audit.yml
   codeql:
+    name: CodeQL
     needs: tests-integration
     uses: ./.github/workflows/ci-security-codeql.yml
   coverage-upload:
+    name: Coverage
     needs: tests-unit
     uses: ./.github/workflows/ci-coverage-upload.yml
     secrets: inherit
