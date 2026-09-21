@@ -1,10 +1,38 @@
-name: CI Capability - Release Build
+name: CI Capability - Build Release
 on:
   workflow_call:
 jobs:
-  linux:
-    name: Build (Linux) - Release
-    runs-on: ubuntu-latest
+  release:
+    name: Build - Release [${{ matrix.platform }} ${{ matrix.arch }}]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            arch: x64
+            runner: ubuntu-latest
+            artifact: mydns-linux-x64
+          - platform: Linux
+            arch: ARM64
+            runner: ubuntu-24.04-arm
+            artifact: mydns-linux-arm64
+          - platform: Windows
+            arch: x64
+            runner: windows-latest
+            artifact: mydns-windows-x64
+          - platform: Windows
+            arch: ARM64
+            runner: windows-11-arm
+            artifact: mydns-windows-arm64
+          - platform: macOS
+            arch: x64
+            runner: macos-15-intel
+            artifact: mydns-macos-x64
+          - platform: macOS
+            arch: ARM64
+            runner: macos-15
+            artifact: mydns-macos-arm64
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -16,17 +44,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --verbose
-  windows:
-    name: Build (Windows) - Release
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - name: Upload release binary
+        uses: actions/upload-artifact@v6
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --verbose
+          name: ${{ matrix.artifact }}
+          path: |
+            target/release/mydns
+            target/release/mydns.exe
+          if-no-files-found: error
+          retention-days: 1

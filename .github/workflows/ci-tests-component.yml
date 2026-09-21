@@ -1,30 +1,31 @@
-name: CI Capability - Integration Tests
+name: CI Capability - Component Tests
 on:
   workflow_call:
 jobs:
-  backend-integration:
-    name: Tests (Backend) - Integration
+  backend-component:
+    name: Tests (Backend) - Component
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --tests --all-features --no-fail-fast
+      - name: Backend component tests
+        run: cargo test --lib --all-features --no-fail-fast
       - uses: taiki-e/install-action@cargo-llvm-cov
       - name: Prepare backend coverage directory
         shell: bash
-        run: mkdir -p coverage/integration/backend
+        run: mkdir -p coverage/component/backend
       - name: Generate backend coverage
         shell: bash
-        run: cargo llvm-cov --tests --all-features --no-fail-fast --lcov --output-path coverage/integration/backend/lcov.info
+        run: cargo llvm-cov --lib --all-features --no-fail-fast --lcov --output-path coverage/component/backend/lcov.info
       - uses: actions/upload-artifact@v7
         with:
-          name: coverage-integration-backend
-          path: coverage/integration/backend/lcov.info
+          name: coverage-component-backend
+          path: coverage/component/backend/lcov.info
           retention-days: 14
 
-  frontend-integration:
-    name: Tests (Frontend) - Integration
+  frontend-component:
+    name: Tests (Frontend) - Component
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -32,5 +33,5 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Frontend integration gate
+      - name: Frontend component gate
         run: npm ci && npm run typecheck

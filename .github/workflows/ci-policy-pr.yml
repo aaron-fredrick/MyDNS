@@ -3,18 +3,41 @@ on:
   workflow_call:
 jobs:
   lint:
+    name: Lint
     uses: ./.github/workflows/ci-lint-full.yml
-  static-full:
+  static:
+    name: Static
     uses: ./.github/workflows/ci-static-full.yml
-  unit:
-    needs: [lint, static-full]
+  build:
+    name: Build
+    needs: [lint, static]
+    uses: ./.github/workflows/ci-build-release.yml
+  tests-unit:
+    name: Tests - Unit
+    needs: build
     uses: ./.github/workflows/ci-tests-unit.yml
-  integration:
-    needs: unit
+  tests-component:
+    name: Tests - Component
+    needs: tests-unit
+    uses: ./.github/workflows/ci-tests-component.yml
+  tests-integration:
+    name: Tests - Integration
+    needs: tests-component
     uses: ./.github/workflows/ci-tests-integration.yml
-  smoke:
-    needs: [unit, integration]
+  tests-contract:
+    name: Tests - Contract
+    needs: tests-integration
+    uses: ./.github/workflows/ci-tests-contract.yml
+  tests-smoke:
+    name: Tests - Smoke
+    needs: tests-contract
     uses: ./.github/workflows/ci-tests-smoke.yml
   build-check:
-    needs: [unit, integration]
+    name: Build - Check
+    needs: tests-contract
     uses: ./.github/workflows/ci-build-check.yml
+  coverage-upload:
+    name: Coverage
+    needs: tests-integration
+    uses: ./.github/workflows/ci-coverage-upload.yml
+    secrets: inherit

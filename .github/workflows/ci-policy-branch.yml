@@ -2,10 +2,13 @@ name: CI Policy - Branch
 on:
   workflow_call:
 jobs:
-  lint-light:
+  lint:
+    name: Lint
     uses: ./.github/workflows/ci-lint-light.yml
-  static-light:
+  static:
+    name: Static
     uses: ./.github/workflows/ci-static-light.yml
   unit:
-    needs: [lint-light, static-light]
+    name: Tests - Unit
+    needs: [lint, static]
     uses: ./.github/workflows/ci-tests-unit.yml

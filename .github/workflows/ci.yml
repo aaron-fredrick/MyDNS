@@ -10,35 +10,63 @@ on:
 permissions:
   contents: read
 jobs:
-  branch:
-    name: Branch push (light)
+  branch-pr-gate:
+    name: Branch PR Gate
     if: github.event_name == 'push' && github.ref_name != 'dev' && github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      has_open_pr: ${{ steps.check.outputs.has_open_pr }}
+    steps:
+      - name: Check whether this branch has an open PR
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          count=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq 'length')
+          if [ "$count" -gt 0 ]; then
+            echo "has_open_pr=true" >> "$GITHUB_OUTPUT"
+            echo "Open PR found for $GITHUB_REF_NAME; skipping light branch CI."
+          else
+            echo "has_open_pr=false" >> "$GITHUB_OUTPUT"
+            echo "No open PR found for $GITHUB_REF_NAME; running light branch CI."
+          fi
+  branch:
+    name: Policy - Branch
+    needs: branch-pr-gate
+    if: github.event_name == 'push' && github.ref_name != 'dev' && github.ref_name != 'main' && needs.branch-pr-gate.outputs.has_open_pr != 'true'
     uses: ./.github/workflows/ci-policy-branch.yml
   pr:
-    name: Pull request (deeper)
+    name: Policy - PR
     if: github.event_name == 'pull_request' && github.base_ref != 'dev' && github.base_ref != 'main'
     uses: ./.github/workflows/ci-policy-pr.yml
   dev:
-    name: Dev policy (heavy)
+    name: Policy - Dev
     if: (github.event_name == 'push' && github.ref_name == 'dev') || (github.event_name == 'pull_request' && github.base_ref == 'dev')
     permissions:
       contents: read
       actions: read
       security-events: write
     uses: ./.github/workflows/ci-policy-dev.yml
+    secrets: inherit
   main:
-    name: Main policy (heavy)
+    name: Policy - Main
     if: (github.event_name == 'push' && github.ref_name == 'main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
     permissions:
       contents: read
       actions: read
       security-events: write
     uses: ./.github/workflows/ci-policy-main.yml
+    secrets: inherit
   nightly:
-    name: Nightly policy (exhaustive)
+    name: Policy - Nightly
     if: github.event_name == 'schedule'
     permissions:
       contents: read
       actions: read
       security-events: write
     uses: ./.github/workflows/ci-policy-nightly.yml
+    secrets: inherit

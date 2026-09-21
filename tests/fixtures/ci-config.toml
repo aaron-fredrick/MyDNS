@@ -1,6 +1,6 @@
 [server]
 bind_host = "127.0.0.1"
-dns_port = 5353
+dns_port = 15353
 http_host = "127.0.0.1"
 http_port = 18080
 run_as_user = "nobody"

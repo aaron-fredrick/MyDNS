@@ -3,45 +3,183 @@ on:
   workflow_call:
 jobs:
   smoke:
-    name: Test (Linux) - Smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Tests - Smoke [${{ matrix.platform }} ${{ matrix.arch }}]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            arch: x64
+            runner: ubuntu-latest
+            artifact: mydns-linux-x64
+          - platform: Linux
+            arch: ARM64
+            runner: ubuntu-24.04-arm
+            artifact: mydns-linux-arm64
+          - platform: Windows
+            arch: x64
+            runner: windows-latest
+            artifact: mydns-windows-x64
+          - platform: Windows
+            arch: ARM64
+            runner: windows-11-arm
+            artifact: mydns-windows-arm64
+          - platform: macOS
+            arch: x64
+            runner: macos-15-intel
+            artifact: mydns-macos-x64
+          - platform: macOS
+            arch: ARM64
+            runner: macos-15
+            artifact: mydns-macos-arm64
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release
-      - run: cp tests/fixtures/ci-config.toml config.toml
-      - name: Start MyDNS
+      - name: Download release binary
+        uses: actions/download-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/release
+      - name: Make release binary executable
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod +x target/release/mydns
+      - name: Choose CI DNS port
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import socket
+
+          for port in range(20000, 40000):
+              udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+              tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              try:
+                  udp.bind(("127.0.0.1", port))
+                  tcp.bind(("127.0.0.1", port))
+                  print(f"MYDNS_DNS_PORT={port}")
+                  break
+              except OSError:
+                  continue
+              finally:
+                  udp.close()
+                  tcp.close()
+          else:
+              raise SystemExit("Could not find a free CI DNS port")
+          PY
+      - name: Prepare CI config
+        shell: bash
+        run: |
+          cp tests/fixtures/ci-config.toml config.toml
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          path = Path("config.toml")
+          text = path.read_text(encoding="utf-8")
+          text, count = re.subn(r"(?m)^dns_port = \d+$", f"dns_port = {os.environ['MYDNS_DNS_PORT']}", text)
+          if count != 1:
+              raise SystemExit("Expected exactly one dns_port setting in CI config")
+          path.write_text(text, encoding="utf-8")
+          print(f"Configured MyDNS DNS port: {os.environ['MYDNS_DNS_PORT']}")
+          PY
+      - name: Start MyDNS (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           ./target/release/mydns > mydns-ci.log 2>&1 &
           echo $! > mydns.pid
-      - name: Wait for HTTP readiness
-        run: |
-          python3 - <<'PY'
-          import time, urllib.request
-          url = "http://127.0.0.1:18080/api/v1/stats"
-          deadline = time.time() + 30
-          while time.time() < deadline:
-              try:
-                  with urllib.request.urlopen(url, timeout=2) as response:
-                      if response.status == 200: raise SystemExit(0)
-              except Exception:
-                  time.sleep(0.5)
-          raise SystemExit("MyDNS did not become ready")
-          PY
-      - run: python3 tests/smoke/dns-smoke.py --port 5353
-      - name: HTTP smoke
+      - name: Windows smoke
+        if: runner.os == 'Windows'
         env:
           MYDNS_ADMIN_PASSWORD: changeme123
         shell: pwsh
-        run: ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
-      - run: python3 tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
-      - run: python3 tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
-      - if: failure()
-        run: cat mydns-ci.log || true
-      - if: always()
+        run: |
+          $process = $null
+
+          try {
+            $process = Start-Process -FilePath '.\target\release\mydns.exe' -RedirectStandardOutput 'mydns-ci.log' -RedirectStandardError 'mydns-ci-error.log' -PassThru
+            Write-Host "Started MyDNS PID $($process.Id)."
+
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Get-Date) -lt $deadline) {
+              if ($process.HasExited) {
+                throw 'MyDNS exited during startup'
+              }
+              if (Test-NetConnection -ComputerName 127.0.0.1 -Port 18080 -InformationLevel Quiet) {
+                Write-Host 'MyDNS HTTP listener is accepting TCP connections on 127.0.0.1:18080.'
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+
+            if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 18080 -InformationLevel Quiet)) {
+              throw 'MyDNS HTTP listener did not become ready'
+            }
+
+            ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
+
+            python tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
+            if ($LASTEXITCODE -ne 0) { throw "DNS load smoke failed with exit code $LASTEXITCODE" }
+
+            python tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
+            if ($LASTEXITCODE -ne 0) { throw "API load smoke failed with exit code $LASTEXITCODE" }
+          }
+          catch {
+            Write-Host "MyDNS smoke failed: $($_.Exception.Message)"
+            if (Test-Path mydns-ci.log) { Get-Content mydns-ci.log }
+            if (Test-Path mydns-ci-error.log) { Get-Content mydns-ci-error.log }
+            throw
+          }
+          finally {
+            if ($process -and -not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+      - name: DNS readiness and smoke (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          if [ -f mydns.pid ]; then kill "$(cat mydns.pid)" || true; wait "$(cat mydns.pid)" 2>/dev/null || true; fi
-          rm -f mydns.pid mydns-ci.log ci-mydns.db ci-mydns.db-shm ci-mydns.db-wal config.toml
+          deadline=$((SECONDS + 30))
+          while (( SECONDS < deadline )); do
+            if python tests/smoke/dns-smoke.py --port "$MYDNS_DNS_PORT"; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "MyDNS DNS listener did not become ready"
+          exit 1
+      - name: HTTP and load smoke (Unix)
+        if: runner.os != 'Windows'
+        env:
+          MYDNS_ADMIN_PASSWORD: changeme123
+        shell: bash
+        run: |
+          pwsh -File ./tests/smoke/api-smoke.ps1 -BaseUrl http://127.0.0.1:18080
+          python tests/load/dns_load.py --scenario tests/load/scenarios/ci-dns-smoke.json
+          python tests/load/api_load.py --scenario tests/load/scenarios/ci-api-smoke.json
+      - name: Dump MyDNS log (Unix)
+        if: failure() && runner.os != 'Windows'
+        shell: bash
+        run: cat mydns-ci.log || true
+      - name: Dump MyDNS log (Windows)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path mydns-ci.log) { Get-Content mydns-ci.log }
+          if (Test-Path mydns-ci-error.log) { Get-Content mydns-ci-error.log }
+      - name: Stop MyDNS (Unix)
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ -f mydns.pid ]; then
+            kill "$(cat mydns.pid)" || true
+            wait "$(cat mydns.pid)" 2>/dev/null || true
+          fi
+          rm -f mydns.pid mydns-ci.log config.toml
+      - name: Clean up CI files (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Remove-Item -Force -ErrorAction SilentlyContinue mydns-ci.log, mydns-ci-error.log, config.toml, ci-mydns.db, ci-mydns.db-shm, ci-mydns.db-wal

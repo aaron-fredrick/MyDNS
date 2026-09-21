@@ -1,4 +1,4 @@
-name: CI Capability - CodeQL
+name: CI Capability - Security CodeQL
 on:
   workflow_call:
 permissions:
@@ -6,8 +6,8 @@ permissions:
   security-events: write
   actions: read
 jobs:
-  rust:
-    name: Security (Linux) - CodeQL Rust
+  security-backend-codeql:
+    name: Security (Backend) - CodeQL
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -18,8 +18,8 @@ jobs:
       - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:rust"
-  javascript:
-    name: Security (Linux) - CodeQL JavaScript/TypeScript
+  security-frontend-codeql:
+    name: Security (Frontend) - CodeQL
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

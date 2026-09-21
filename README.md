@@ -122,6 +122,52 @@ cargo audit
 
 `cargo audit` is part of the V1 security review. At the current dependency state, RustSec reports **RUSTSEC-2023-0071 affecting `rsa 0.9.10` with no fixed upstream version available**. The dependency is not part of MyDNS's active `jsonwebtoken` feature path; the advisory is therefore tracked as a supply-chain/dependency investigation item rather than silently ignored.
 
+## CI Workflows
+
+GitHub Actions is organized into reusable **capability workflows** and **policy workflows**. Policy workflows decide which capabilities run for each type of change; capability workflows contain the actual checks.
+
+### Capability checks
+
+| Capability | Backend | Frontend | Platform |
+|---|---|---|---|
+| Lint (Light) | rustfmt + Clippy, warnings allowed | TypeScript typecheck | Linux |
+| Lint (Full) | rustfmt + Clippy, warnings treated as errors | TypeScript typecheck | Linux |
+| Static (Light) | `cargo check --lib --all-features` | `npm run typecheck` | Linux |
+| Static (Full) | `cargo check --all-targets --all-features` | `npm run typecheck` | Linux |
+| Build (Release) | Rust release build | Vite production build | Linux, Windows, macOS × x64/ARM64 |
+| Build (Check) | Rust check | Frontend production build | Linux, Windows, macOS × x64/ARM64 |
+| Tests (Unit) | Rust unit tests + coverage | Frontend unit tests + coverage | Linux |
+| Tests (Component) | Rust component tests | Frontend component gate | Linux |
+| Tests (Integration) | Rust integration tests | — | Linux |
+| Tests (Contract) | Frontend/backend API contract | Frontend/backend API contract | Linux |
+| Tests (Smoke) | Platform smoke checks | — | Linux, Windows, macOS × x64/ARM64 |
+| Tests (E2E) | End-to-end API/DNS checks | End-to-end API/DNS checks | Linux, Windows, macOS × x64/ARM64 |
+| Tests (Extended) | Extended Rust test suite | — | Linux |
+| Security (Audit) | `cargo audit` | `npm audit` | Linux |
+| Security (CodeQL) | Rust analysis | JavaScript/TypeScript analysis | Linux |
+
+Platform-matrix capabilities reuse the release build artifacts for smoke and E2E validation rather than rebuilding the application.
+
+### CI policies
+
+| Policy | Trigger | Scope |
+|---|---|---|
+| Branch | Push to a non-`dev`/`main` branch with no open PR | Light lint, light static checks, unit tests |
+| Pull Request | PR targeting a non-`dev`/`main` branch | Full lint/static, release build, unit/component/integration/contract/smoke tests, build check |
+| Dev | Push to or PR targeting `dev` | Full lint/static, release build, unit/component/integration/contract/smoke/E2E tests, security, CodeQL, coverage |
+| Main | Push to or PR targeting `main` | Same full release-gate coverage as Dev |
+| Nightly | Scheduled daily run | Full lint/static, release build, all standard tests, extended tests, security and CodeQL |
+
+The canonical workflow entry point is [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Reusable policies live under [`.github/workflows/ci-policy-*.yml`](.github/workflows/), and reusable capabilities live under [`.github/workflows/ci-*.yml`](.github/workflows/).
+
+Capability job names follow:
+
+```text
+<Job> (<Area>) - <Scope/Level> [<OS> <Arch>]
+```
+
+The `[OS Arch]` suffix is used only for jobs running on the platform/architecture matrix.
+
 ## Production Readiness / V1.0.0
 
 The V1 release is being tracked in one canonical document:

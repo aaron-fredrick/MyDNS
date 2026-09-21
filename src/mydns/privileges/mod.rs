@@ -123,7 +123,7 @@ fn elevation_hint() -> &'static str {
 
 // ── privilege dropping ────────────────────────────────────────────────────────
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn drop_privileges_impl(user_name: &str, group_name: &str) -> anyhow::Result<()> {
     use nix::unistd::{setgroups, setresgid, setresuid, Group, User};
 
@@ -135,16 +135,31 @@ fn drop_privileges_impl(user_name: &str, group_name: &str) -> anyhow::Result<()>
         .map_err(|e| anyhow::anyhow!("Error looking up Unix user '{}': {}", user_name, e))?
         .ok_or_else(|| anyhow::anyhow!("Required Unix user '{}' was not found", user_name))?;
 
-    // Drop supplemental groups
     setgroups(&[group.gid])
         .map_err(|e| anyhow::anyhow!("Failed to drop supplemental groups: {}", e))?;
-
-    // Drop GID first (because setuid might strip capability to change GID later)
     setresgid(group.gid, group.gid, group.gid)
         .map_err(|e| anyhow::anyhow!("Failed to drop group privileges to {}: {}", group_name, e))?;
-
-    // Drop UID
     setresuid(user.uid, user.uid, user.uid)
+        .map_err(|e| anyhow::anyhow!("Failed to drop user privileges to {}: {}", user_name, e))?;
+
+    tracing::info!(uid = %user.uid, gid = %group.gid, "Dropped privileges to {}:{}", user_name, group_name);
+    Ok(())
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn drop_privileges_impl(user_name: &str, group_name: &str) -> anyhow::Result<()> {
+    use nix::unistd::{setgid, setuid, Gid, Group, Uid, User};
+
+    let group = Group::from_name(group_name)
+        .map_err(|e| anyhow::anyhow!("Error looking up Unix group '{}': {}", group_name, e))?
+        .ok_or_else(|| anyhow::anyhow!("Required Unix group '{}' was not found", group_name))?;
+    let user = User::from_name(user_name)
+        .map_err(|e| anyhow::anyhow!("Error looking up Unix user '{}': {}", user_name, e))?
+        .ok_or_else(|| anyhow::anyhow!("Required Unix user '{}' was not found", user_name))?;
+
+    setgid(Gid::from_raw(group.gid.as_raw()))
+        .map_err(|e| anyhow::anyhow!("Failed to drop group privileges to {}: {}", group_name, e))?;
+    setuid(Uid::from_raw(user.uid.as_raw()))
         .map_err(|e| anyhow::anyhow!("Failed to drop user privileges to {}: {}", user_name, e))?;
 
     tracing::info!(uid = %user.uid, gid = %group.gid, "Dropped privileges to {}:{}", user_name, group_name);

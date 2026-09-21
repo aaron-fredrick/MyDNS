@@ -6,31 +6,69 @@ on:
         required: true
 jobs:
   upload:
+    name: Coverage - Upload
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v5
+      - name: Checkout source
+        uses: actions/checkout@v6
         with:
-          name: coverage-backend
-          path: coverage/backend
-      - uses: actions/download-artifact@v5
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/download-artifact@v6
         with:
-          name: coverage-frontend
-          path: coverage/frontend
-      - name: Upload backend coverage
+          pattern: coverage-*
+          path: coverage
+          merge-multiple: true
+
+      - name: Verify coverage reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s coverage/unit/backend/lcov.info
+          test -s coverage/unit/frontend/lcov.info
+          test -s coverage/component/backend/lcov.info
+          test -s coverage/integration/backend/lcov.info
+
+      - name: Upload unit backend coverage
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
-          files: coverage/backend/lcov.info
-          flags: backend
-          name: backend-coverage
+          disable_search: true
+          files: coverage/unit/backend/lcov.info
+          flags: unit-backend
+          name: unit-backend
           fail_ci_if_error: true
-      - name: Upload frontend coverage
+
+      - name: Upload unit frontend coverage
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
-          files: coverage/frontend/lcov.info
-          flags: frontend
-          name: frontend-coverage
+          disable_search: true
+          files: coverage/unit/frontend/lcov.info
+          flags: unit-frontend
+          name: unit-frontend
+          fail_ci_if_error: true
+
+      - name: Upload component backend coverage
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          disable_search: true
+          files: coverage/component/backend/lcov.info
+          flags: component-backend
+          name: component-backend
+          fail_ci_if_error: true
+
+      - name: Upload integration backend coverage
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          disable_search: true
+          files: coverage/integration/backend/lcov.info
+          flags: integration-backend
+          name: integration-backend
           fail_ci_if_error: true

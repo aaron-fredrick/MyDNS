@@ -3,39 +3,168 @@ on:
   workflow_call:
 jobs:
   e2e:
-    name: Test (Linux) - E2E
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Tests - E2E [${{ matrix.platform }} ${{ matrix.arch }}]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            arch: x64
+            runner: ubuntu-latest
+            artifact: mydns-linux-x64
+          - platform: Linux
+            arch: ARM64
+            runner: ubuntu-24.04-arm
+            artifact: mydns-linux-arm64
+          - platform: Windows
+            arch: x64
+            runner: windows-latest
+            artifact: mydns-windows-x64
+          - platform: Windows
+            arch: ARM64
+            runner: windows-11-arm
+            artifact: mydns-windows-arm64
+          - platform: macOS
+            arch: x64
+            runner: macos-15-intel
+            artifact: mydns-macos-x64
+          - platform: macOS
+            arch: ARM64
+            runner: macos-15
+            artifact: mydns-macos-arm64
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release
-      - run: cp tests/fixtures/ci-config.toml config.toml
-      - name: Start MyDNS
+      - name: Download release binary
+        uses: actions/download-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/release
+      - name: Make release binary executable
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod +x target/release/mydns
+      - name: Choose CI DNS port
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import socket
+
+          for port in range(20000, 40000):
+              udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+              tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              try:
+                  udp.bind(("127.0.0.1", port))
+                  tcp.bind(("127.0.0.1", port))
+                  print(f"MYDNS_DNS_PORT={port}")
+                  break
+              except OSError:
+                  continue
+              finally:
+                  udp.close()
+                  tcp.close()
+          else:
+              raise SystemExit("Could not find a free CI DNS port")
+          PY
+          echo "Selected CI DNS port: $MYDNS_DNS_PORT"
+      - name: Prepare CI config
+        shell: bash
+        run: |
+          cp tests/fixtures/ci-config.toml config.toml
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          path = Path("config.toml")
+          text = path.read_text(encoding="utf-8")
+          text, count = re.subn(r"(?m)^dns_port = \d+$", f"dns_port = {os.environ['MYDNS_DNS_PORT']}", text)
+          if count != 1:
+              raise SystemExit("Expected exactly one dns_port setting in CI config")
+          path.write_text(text, encoding="utf-8")
+          print(f"Configured MyDNS DNS port: {os.environ['MYDNS_DNS_PORT']}")
+          PY
+      - name: Start MyDNS (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           ./target/release/mydns > mydns-e2e.log 2>&1 &
           echo $! > mydns.pid
-      - name: Wait for HTTP readiness
+      - name: Start MyDNS and wait for HTTP readiness (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          python3 - <<'PY'
-          import time, urllib.request
-          url = "http://127.0.0.1:18080/api/v1/stats"
+          # Keep startup and readiness in one step so we can distinguish
+          # process startup from cross-step process lifetime.
+          $env:RUNNER_TRACKING_ID = ""
+          $process = Start-Process -FilePath ".\target\release\mydns.exe" -RedirectStandardOutput "mydns-e2e.log" -RedirectStandardError "mydns-e2e-error.log" -PassThru
+          $process.Id | Out-File -FilePath mydns.pid -Encoding ascii
+
+          $deadline = (Get-Date).AddSeconds(30)
+          while ((Get-Date) -lt $deadline) {
+              if ($process.HasExited) {
+                  throw "MyDNS exited during startup with exit code $($process.ExitCode)"
+              }
+
+              & curl.exe --fail --silent --show-error http://127.0.0.1:18080/api/v1/stats
+              if ($LASTEXITCODE -eq 0) {
+                  exit 0
+              }
+
+              Start-Sleep -Milliseconds 500
+          }
+
+          throw "MyDNS HTTP server did not become ready"
+      - name: Wait for HTTP readiness (Unix)
+        if: runner.os != 'Windows'
+        shell: python
+        run: |
+          import socket
+          import time
+
           deadline = time.time() + 30
           while time.time() < deadline:
               try:
-                  with urllib.request.urlopen(url, timeout=2) as response:
-                      if response.status == 200: raise SystemExit(0)
-              except Exception:
+                  with socket.create_connection(("127.0.0.1", 18080), timeout=2):
+                      raise SystemExit(0)
+              except OSError:
                   time.sleep(0.5)
-          raise SystemExit("MyDNS did not become ready")
-          PY
-      - run: |
-          python3 tests/e2e/api_e2e.py             --base-url http://127.0.0.1:18080             --username admin             --password changeme123             --dns-port 5353
-      - if: failure()
+          raise SystemExit("MyDNS HTTP server did not become ready")
+      - name: Inspect Windows DNS endpoint
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-NetUDPEndpoint -LocalPort ([int]$env:MYDNS_DNS_PORT) -ErrorAction SilentlyContinue | Format-List
+          Get-NetTCPConnection -LocalPort ([int]$env:MYDNS_DNS_PORT) -ErrorAction SilentlyContinue | Format-List
+      - name: API and DNS E2E
+        shell: bash
+        run: python tests/e2e/api_e2e.py --base-url http://127.0.0.1:18080 --username admin --password changeme123 --dns-port "$MYDNS_DNS_PORT"
+      - name: Dump MyDNS log (Unix)
+        if: failure() && runner.os != 'Windows'
+        shell: bash
         run: cat mydns-e2e.log || true
-      - if: always()
+      - name: Dump MyDNS log (Windows)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path mydns-e2e.log) { Get-Content mydns-e2e.log }
+          if (Test-Path mydns-e2e-error.log) { Get-Content mydns-e2e-error.log }
+      - name: Stop MyDNS (Unix)
+        if: always() && runner.os != 'Windows'
         shell: bash
         run: |
-          if [ -f mydns.pid ]; then kill "$(cat mydns.pid)" || true; wait "$(cat mydns.pid)" 2>/dev/null || true; fi
-          rm -f mydns.pid mydns-e2e.log ci-mydns.db ci-mydns.db-shm ci-mydns.db-wal config.toml
+          if [ -f mydns.pid ]; then
+            kill "$(cat mydns.pid)" || true
+            wait "$(cat mydns.pid)" 2>/dev/null || true
+          fi
+          rm -f mydns.pid mydns-e2e.log config.toml
+      - name: Stop MyDNS (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (Test-Path mydns.pid) {
+            $processId = [int](Get-Content mydns.pid)
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+          }
+          Remove-Item -Force -ErrorAction SilentlyContinue mydns.pid, mydns-e2e.log, mydns-e2e-error.log, config.toml, ci-mydns.db, ci-mydns.db-shm, ci-mydns.db-wal

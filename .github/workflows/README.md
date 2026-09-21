@@ -146,3 +146,6 @@ For DNS, caching, persistence, authentication, WebSocket, or shutdown changes, a
 - `release.yml` — release packaging/build automation.
 
 The workflow definitions are the source of truth if a command in this README changes.
+## Test pipeline
+
+The test capability workflows are ordered by policy as Unit -> Component -> Contract -> Integration -> Smoke -> E2E. E2E is enabled by the dev/main/nightly policies and is not required by the normal pull-request policy. Load and fuzz workflows are manual placeholders only.
