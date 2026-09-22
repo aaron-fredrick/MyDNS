@@ -69,12 +69,7 @@ mod tests {
     async fn unauthorized_response() {
         let error = ApiError::Unauthorized("authentication required".to_string());
         assert_eq!(error.to_string(), "Unauthorized: authentication required");
-        assert_response(
-            error,
-            StatusCode::UNAUTHORIZED,
-            "authentication required",
-        )
-        .await;
+        assert_response(error, StatusCode::UNAUTHORIZED, "authentication required").await;
     }
 
     #[tokio::test]
@@ -95,12 +90,7 @@ mod tests {
     async fn too_many_requests_response() {
         let error = ApiError::TooManyRequests("rate limit exceeded".to_string());
         assert_eq!(error.to_string(), "Too many requests: rate limit exceeded");
-        assert_response(
-            error,
-            StatusCode::TOO_MANY_REQUESTS,
-            "rate limit exceeded",
-        )
-        .await;
+        assert_response(error, StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded").await;
     }
 
     #[tokio::test]
