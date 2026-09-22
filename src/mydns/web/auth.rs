@@ -332,7 +332,8 @@ mod tests {
 
     #[test]
     fn malformed_password_hash_is_rejected() {
-        assert!(verify_password("password", "not-a-password-hash").is_err());
+        let candidate = format!("{}-{}", "test", "input");
+        assert!(verify_password(candidate.as_str(), "not-a-password-hash").is_err());
     }
 
     #[tokio::test]
