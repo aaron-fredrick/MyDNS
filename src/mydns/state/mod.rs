@@ -153,7 +153,7 @@ allowed = ["home.arpa"]
             .zone_trie
             .read()
             .await
-            .is_root_authoritative("home.arpa"));
+            .is_root_authoritative());
         assert!(state
             .blocklist_index
             .read()
