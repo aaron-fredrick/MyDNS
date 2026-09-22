@@ -50,14 +50,12 @@ mod tests {
         let response = error.into_response();
 
         assert_eq!(response.status(), status);
-        assert!(
-            response
-                .headers()
-                .get(axum::http::header::CONTENT_TYPE)
-                .and_then(|value| value.to_str().ok())
-                .unwrap()
-                .starts_with("application/json")
-        );
+        assert!(response
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap()
+            .starts_with("application/json"));
 
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
