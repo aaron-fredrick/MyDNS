@@ -11,7 +11,7 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 | 1 — Database boundaries | DONE | Pending | Unit tests pass | Split persistence ownership |
 | 2 — Configuration boundaries | DONE | Pending | Unit + integration tests pass (209/209) | Separate types from format parsing |
 | 3 — Web server boundaries | DONE | Pending | Unit + integration tests pass (209/209) | Separate lifecycle/routes/frontend serving |
-| 4 — DNS/runtime ownership | TODO | — | — | Verify runtime ownership without unnecessary rewrite |
+| 4 — DNS/runtime ownership | DONE | Pending | Structure validated, no changes needed | Verify runtime ownership without unnecessary rewrite |
 | 5 — API/application boundary | TODO | — | — | Keep API thin |
 | 6 — Final verification | TODO | — | — | Final tree/dependency/naming/documentation check |
 
@@ -41,14 +41,13 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 - Validation: `cargo check` (clean, exit 0); `cargo test` (209/209 tests passed — 150 unit + 59 integration, exit 0)
 - Notes: Extracted embedded frontend asset serving (`FrontendAssets`, `serve_frontend`, `serve_frontend_root`, `serve_asset`) into `web/frontend.rs`. Extracted router construction, middleware, and CORS configuration (`build_app`, `build_cors_layer`, `origin_header`) into `web/routes.rs`. Reduced `web/server.rs` to only handle the HTTP server lifecycle (bind, serve, graceful shutdown). Added new module declarations to `web/mod.rs`. No other files were touched.
 
-
 ### Phase 4
-- Status: TODO
-- Started: —
-- Completed: —
-- Commit: —
-- Validation: —
-- Notes: —
+- Status: DONE
+- Started: 2026-09-22
+- Completed: 2026-09-22
+- Commit: Pending
+- Validation: Reviewed codebase (no code changes needed), structure is sound.
+- Notes: Reviewed `dns/` and `state/` modules for ownership and leakage. Found no presentation leakage, no config parsing in DNS modules, and `AppState` correctly acts as a runtime dependency container without business logic. `db` access in `record_index.rs` (initialization) and `handler/cache.rs` (persistence) are legitimate runtime integrations, not persistence leakage. `DnsHandler::process_resolution` cleanly orchestrates resolution stages using strategy files (`local.rs`, `cache.rs`, `upstream/mod.rs`). No structural changes were necessary.
 
 ### Phase 5
 - Status: TODO
