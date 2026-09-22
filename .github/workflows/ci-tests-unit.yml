@@ -17,11 +17,8 @@ jobs:
       - name: Build frontend assets
         shell: bash
         run: |
-          npm ci
-          npm run build
-          rm -rf out/web
-          mkdir -p out
-          mv src/web/dist out/web
+          npm ci --prefix src/frontend
+          npm run build --prefix src/frontend
       - name: Prepare backend coverage directory
         shell: bash
         run: mkdir -p coverage/unit/backend
@@ -51,7 +48,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --prefix src/frontend
       - name: Generate frontend coverage
         id: frontend-coverage
         continue-on-error: true
