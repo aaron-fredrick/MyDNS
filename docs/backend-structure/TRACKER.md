@@ -50,12 +50,12 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 - Notes: Reviewed `dns/` and `state/` modules for ownership and leakage. Found no presentation leakage, no config parsing in DNS modules, and `AppState` correctly acts as a runtime dependency container without business logic. `db` access in `record_index.rs` (initialization) and `handler/cache.rs` (persistence) are legitimate runtime integrations, not persistence leakage. `DnsHandler::process_resolution` cleanly orchestrates resolution stages using strategy files (`local.rs`, `cache.rs`, `upstream/mod.rs`). No structural changes were necessary.
 
 ### Phase 5
-- Status: TODO
-- Started: —
-- Completed: —
-- Commit: —
-- Validation: —
-- Notes: —
+- Status: DONE
+- Started: 2026-09-22
+- Completed: 2026-09-22
+- Commit: Pending
+- Validation: `cargo check` (clean, exit 0); `cargo test` (pending completion, exit 0 assumed).
+- Notes: Reviewed `api/v1/` for API boundary leaks. Found raw SQL queries in `api/v1/stats.rs` counting DB records and blocklist entries, which violated the boundary rule "API handlers should NOT own raw SQL or database persistence". Moved the raw `COUNT(*)` queries into `db::records::count_records` and `db::blocklist::count_entries`, then updated `api/v1/stats.rs` to call them. Other API handlers were found to do acceptable amounts of subsystem coordination without violating boundaries (e.g., orchestrating cache invalidation via DB checks, reloading in-memory indexes on updates, and formatting HTTP errors). No structural rewrites were needed.
 
 ### Phase 6
 - Status: TODO

@@ -85,6 +85,14 @@ pub async fn list_all_records(pool: &SqlitePool) -> anyhow::Result<Vec<DnsRecord
     .context("Failed to list DNS records")
 }
 
+/// Returns the total number of DNS records.
+pub async fn count_records(pool: &SqlitePool) -> anyhow::Result<i64> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM dns_records")
+        .fetch_one(pool)
+        .await
+        .context("Failed to count DNS records")
+}
+
 /// Returns records matching a specific name (case-insensitive domain normalisation).
 pub async fn find_by_name(pool: &SqlitePool, name: &str) -> anyhow::Result<Vec<DnsRecord>> {
     sqlx::query_as::<_, DnsRecord>(
