@@ -83,7 +83,10 @@ async fn record_crud_covers_case_normalization_and_partial_updates() {
 
     assert!(records::delete_record(&pool, created.id).await.unwrap());
     assert!(!records::delete_record(&pool, created.id).await.unwrap());
-    assert!(records::get_record(&pool, created.id).await.unwrap().is_none());
+    assert!(records::get_record(&pool, created.id)
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]
@@ -142,7 +145,12 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
 
     records::seed_zones(
         &pool,
-        &["Home.ARPA.".into(), ".".into(), "".into(), "Lab.Local.".into()],
+        &[
+            "Home.ARPA.".into(),
+            ".".into(),
+            "".into(),
+            "Lab.Local.".into(),
+        ],
     )
     .await
     .unwrap();
@@ -163,12 +171,26 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
     let root_apex = records::find_by_name(&pool, ".").await.unwrap();
     assert_eq!(root_apex.len(), 2);
 
-    records::create_apex_soa_and_ns(&pool, "HOME.ARPA.").await.unwrap();
-    assert_eq!(records::find_by_name(&pool, "home.arpa").await.unwrap().len(), 2);
+    records::create_apex_soa_and_ns(&pool, "HOME.ARPA.")
+        .await
+        .unwrap();
+    assert_eq!(
+        records::find_by_name(&pool, "home.arpa")
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
 
     let added = records::add_zone(&pool, "example.com").await.unwrap();
     assert_eq!(added.name, "example.com");
-    assert_eq!(records::find_by_name(&pool, "example.com").await.unwrap().len(), 2);
+    assert_eq!(
+        records::find_by_name(&pool, "example.com")
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
     assert!(records::add_zone(&pool, "example.com").await.is_err());
 
     records::create_record(
@@ -187,6 +209,12 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
 
     assert!(records::remove_zone(&pool, "example.com").await.unwrap());
     assert!(!records::remove_zone(&pool, "example.com").await.unwrap());
-    assert!(records::find_by_name(&pool, "example.com").await.unwrap().is_empty());
-    assert!(records::find_by_name(&pool, "host.example.com").await.unwrap().is_empty());
+    assert!(records::find_by_name(&pool, "example.com")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(records::find_by_name(&pool, "host.example.com")
+        .await
+        .unwrap()
+        .is_empty());
 }

@@ -1,7 +1,5 @@
 use super::fixtures::TestDb;
-use crate::mydns::db::blocklist::{
-    self, CreateBlocklistEntry, UpdateBlocklistEntry,
-};
+use crate::mydns::db::blocklist::{self, CreateBlocklistEntry, UpdateBlocklistEntry};
 
 #[tokio::test]
 async fn blocklist_crud_normalizes_filters_updates_and_deletes() {
@@ -46,7 +44,10 @@ async fn blocklist_crud_normalizes_filters_updates_and_deletes() {
         vec!["ads.example.com"]
     );
 
-    let fetched = blocklist::get_entry(&pool, first.id).await.unwrap().unwrap();
+    let fetched = blocklist::get_entry(&pool, first.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(fetched.id, first.id);
 
     let updated = blocklist::update_entry(
@@ -84,7 +85,10 @@ async fn blocklist_crud_normalizes_filters_updates_and_deletes() {
 
     assert!(blocklist::delete_entry(&pool, first.id).await.unwrap());
     assert!(!blocklist::delete_entry(&pool, first.id).await.unwrap());
-    assert!(blocklist::get_entry(&pool, first.id).await.unwrap().is_none());
+    assert!(blocklist::get_entry(&pool, first.id)
+        .await
+        .unwrap()
+        .is_none());
     assert!(blocklist::get_entry(&pool, 9999).await.unwrap().is_none());
 }
 

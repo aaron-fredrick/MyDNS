@@ -16,12 +16,26 @@ async fn cache_insert_get_list_and_identity_rules_work() {
     records::insert_cache(&pool, "multi.test.local", "a", "192.0.2.1", 600, None)
         .await
         .unwrap();
-    records::insert_cache(&pool, "mx.test.local", "MX", "mail.test.local.", 300, Some(10))
-        .await
-        .unwrap();
-    records::insert_cache(&pool, "mx.test.local", "MX", "mail.test.local.", 300, Some(20))
-        .await
-        .unwrap();
+    records::insert_cache(
+        &pool,
+        "mx.test.local",
+        "MX",
+        "mail.test.local.",
+        300,
+        Some(10),
+    )
+    .await
+    .unwrap();
+    records::insert_cache(
+        &pool,
+        "mx.test.local",
+        "MX",
+        "mail.test.local.",
+        300,
+        Some(20),
+    )
+    .await
+    .unwrap();
 
     let rows = records::get_cache(&pool, "MULTI.TEST.LOCAL.", "a")
         .await
@@ -96,15 +110,37 @@ async fn cache_name_and_zone_deletion_respect_dns_boundaries() {
             .unwrap();
     }
 
-    records::delete_cache_for_name(&pool, "www.example.com.").await.unwrap();
-    assert!(records::get_cache(&pool, "www.example.com", "A").await.unwrap().is_empty());
-    assert!(records::get_cache(&pool, "deep.www.example.com", "A").await.unwrap().is_empty());
-    assert!(!records::get_cache(&pool, "example.com", "A").await.unwrap().is_empty());
-    assert!(!records::get_cache(&pool, "notexample.com", "A").await.unwrap().is_empty());
+    records::delete_cache_for_name(&pool, "www.example.com.")
+        .await
+        .unwrap();
+    assert!(records::get_cache(&pool, "www.example.com", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(records::get_cache(&pool, "deep.www.example.com", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(!records::get_cache(&pool, "example.com", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(!records::get_cache(&pool, "notexample.com", "A")
+        .await
+        .unwrap()
+        .is_empty());
 
-    records::delete_cache_for_zone(&pool, "example.com.").await.unwrap();
-    assert!(records::get_cache(&pool, "example.com", "A").await.unwrap().is_empty());
-    assert!(!records::get_cache(&pool, "notexample.com", "A").await.unwrap().is_empty());
+    records::delete_cache_for_zone(&pool, "example.com.")
+        .await
+        .unwrap();
+    assert!(records::get_cache(&pool, "example.com", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(!records::get_cache(&pool, "notexample.com", "A")
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -150,10 +186,21 @@ async fn cname_dependents_are_recursive_and_cycle_safe() {
         .await
         .unwrap();
 
-    records::delete_cache_for_name(&pool, "target.example").await.unwrap();
-    assert!(records::get_cache(&pool, "target.example", "A").await.unwrap().is_empty());
-    assert!(records::get_cache(&pool, "alias.example", "A").await.unwrap().is_empty());
-    assert!(records::get_cache(&pool, "deep.example", "A").await.unwrap().is_empty());
+    records::delete_cache_for_name(&pool, "target.example")
+        .await
+        .unwrap();
+    assert!(records::get_cache(&pool, "target.example", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(records::get_cache(&pool, "alias.example", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(records::get_cache(&pool, "deep.example", "A")
+        .await
+        .unwrap()
+        .is_empty());
 
     let cycle_dependents = records::find_cname_dependents(&pool, "cycle-a.example")
         .await

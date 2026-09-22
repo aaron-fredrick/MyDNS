@@ -7,23 +7,31 @@ async fn init_creates_all_tables_and_indexes() {
     let db = TestDb::new();
     let pool = db.init_pool().await;
 
-    let tables: Vec<String> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let tables: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
 
-    for table in ["blocklist", "dns_cache", "dns_records", "settings", "users", "zones"] {
-        assert!(tables.iter().any(|name| name == table), "missing table {table}");
+    for table in [
+        "blocklist",
+        "dns_cache",
+        "dns_records",
+        "settings",
+        "users",
+        "zones",
+    ] {
+        assert!(
+            tables.iter().any(|name| name == table),
+            "missing table {table}"
+        );
     }
 
-    let indexes: Vec<String> = sqlx::query_scalar(
-        "SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name",
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
+    let indexes: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
 
     for index in [
         "idx_cache_identity",
@@ -31,7 +39,10 @@ async fn init_creates_all_tables_and_indexes() {
         "idx_blocklist_domain",
         "idx_blocklist_enabled",
     ] {
-        assert!(indexes.iter().any(|name| name == index), "missing index {index}");
+        assert!(
+            indexes.iter().any(|name| name == index),
+            "missing index {index}"
+        );
     }
 
     let is_dev_columns: i64 = sqlx::query_scalar(
@@ -102,12 +113,11 @@ async fn init_upgrades_legacy_schema_and_removes_cache_duplicates() {
 
     let pool = db::init(&path).await.unwrap();
 
-    let is_dev_default: i64 =
-        sqlx::query_scalar("SELECT is_dev FROM dns_records WHERE id = 1")
-            .fetch_optional(&pool)
-            .await
-            .unwrap()
-            .unwrap_or(0);
+    let is_dev_default: i64 = sqlx::query_scalar("SELECT is_dev FROM dns_records WHERE id = 1")
+        .fetch_optional(&pool)
+        .await
+        .unwrap()
+        .unwrap_or(0);
     assert_eq!(is_dev_default, 0);
 
     let duplicate_count: i64 =

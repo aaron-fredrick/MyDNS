@@ -199,4 +199,3 @@ pub async fn delete_entry(pool: &SqlitePool, id: i64) -> anyhow::Result<bool> {
         .rows_affected();
     Ok(rows > 0)
 }
-
