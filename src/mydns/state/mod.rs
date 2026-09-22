@@ -149,11 +149,7 @@ allowed = ["home.arpa"]
         assert_eq!(upstream.router_addr.unwrap().port(), 5355);
         drop(upstream);
 
-        assert!(state
-            .zone_trie
-            .read()
-            .await
-            .is_root_authoritative());
+        assert!(state.zone_trie.read().await.is_root_authoritative());
         assert!(state
             .blocklist_index
             .read()
