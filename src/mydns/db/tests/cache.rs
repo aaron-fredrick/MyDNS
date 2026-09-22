@@ -117,7 +117,7 @@ async fn cache_name_and_zone_deletion_respect_dns_boundaries() {
         .await
         .unwrap()
         .is_empty());
-    assert!(records::get_cache(&pool, "deep.www.example.com", "A")
+    assert!(!records::get_cache(&pool, "deep.www.example.com", "A")
         .await
         .unwrap()
         .is_empty());
@@ -134,6 +134,10 @@ async fn cache_name_and_zone_deletion_respect_dns_boundaries() {
         .await
         .unwrap();
     assert!(records::get_cache(&pool, "example.com", "A")
+        .await
+        .unwrap()
+        .is_empty());
+    assert!(records::get_cache(&pool, "deep.www.example.com", "A")
         .await
         .unwrap()
         .is_empty());
