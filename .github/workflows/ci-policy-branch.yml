@@ -4,7 +4,7 @@ on:
 jobs:
   lint:
     name: Lint
-    uses: ./.github/workflows/ci-lint-light.yml
+    uses: ./.github/workflows/ci-lint.yml
   static:
     name: Static
     uses: ./.github/workflows/ci-static-light.yml
