@@ -99,11 +99,11 @@ impl TestServer {
         let pool = db.init_pool().await;
 
         let hash = hash_password(&cfg.admin_password).expect("Failed to hash admin password");
-        db::records::seed_admin(&pool, &cfg.admin_username, &hash)
+        db::users::seed_admin(&pool, &cfg.admin_username, &hash)
             .await
             .expect("Failed to seed admin user");
 
-        mydns::db::records::seed_zones(&pool, &cfg.allowed_zones)
+        mydns::db::zones::seed_zones(&pool, &cfg.allowed_zones)
             .await
             .expect("Failed to seed zones in TestServer");
 
@@ -232,7 +232,7 @@ impl TestDnsServer {
 
         let pool = db.init_pool().await;
 
-        mydns::db::records::seed_zones(&pool, &cfg.allowed_zones)
+        mydns::db::zones::seed_zones(&pool, &cfg.allowed_zones)
             .await
             .expect("Failed to seed zones in TestDnsServer");
 
@@ -372,7 +372,7 @@ impl TestDnsServer {
         let (log_tx, _) = tokio::sync::broadcast::channel(256);
         let cancel = CancellationToken::new();
         let zone_trie = ZoneTrie::from_zones(
-            &mydns::db::records::list_zone_names(&pool)
+            &mydns::db::zones::list_zone_names(&pool)
                 .await
                 .expect("Failed to load zone names on restart"),
         );

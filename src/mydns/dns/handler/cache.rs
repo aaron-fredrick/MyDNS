@@ -57,7 +57,7 @@ impl DnsHandler {
         }
 
         let rows =
-            match crate::db::records::get_cache(&self.state.db, name, &rtype.to_string()).await {
+            match crate::db::cache::get_cache(&self.state.db, name, &rtype.to_string()).await {
                 Ok(r) => r,
                 Err(e) => {
                     tracing::error!(error = %e, name = %name, "Failed to query persistent cache");
@@ -86,7 +86,7 @@ impl DnsHandler {
 
         if rtype != RecordType::CNAME {
             if let Ok(cname_rows) =
-                crate::db::records::get_cache(&self.state.db, name, "CNAME").await
+                crate::db::cache::get_cache(&self.state.db, name, "CNAME").await
             {
                 if !cname_rows.is_empty() {
                     let target = cname_rows[0].value.trim_end_matches('.').to_string();
@@ -163,7 +163,7 @@ impl DnsHandler {
                 RData::MX(mx) => Some(mx.preference as i64),
                 _ => None,
             };
-            let _ = crate::db::records::insert_cache(
+            let _ = crate::db::cache::insert_cache(
                 &self.state.db,
                 &owner,
                 &r.record_type().to_string(),
@@ -209,7 +209,7 @@ impl DnsHandler {
     }
 
     async fn save_negative_cache(&self, name: &str, rtype: RecordType, ttl: u32) {
-        let _ = crate::db::records::insert_cache(
+        let _ = crate::db::cache::insert_cache(
             &self.state.db,
             name,
             &rtype.to_string(),

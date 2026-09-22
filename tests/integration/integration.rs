@@ -114,14 +114,14 @@ async fn test_persistent_cache_upsert_deduplicates_records() {
     let server = common::TestServer::start().await;
     let pool = &server.pool;
 
-    db::records::insert_cache(pool, "cache.test.local", "A", "10.0.0.1", 60, None)
+    db::cache::insert_cache(pool, "cache.test.local", "A", "10.0.0.1", 60, None)
         .await
         .unwrap();
-    db::records::insert_cache(pool, "CACHE.TEST.LOCAL.", "a", "10.0.0.1", 120, None)
+    db::cache::insert_cache(pool, "CACHE.TEST.LOCAL.", "a", "10.0.0.1", 120, None)
         .await
         .unwrap();
 
-    let rows = db::records::get_cache(pool, "cache.test.local.", "A")
+    let rows = db::cache::get_cache(pool, "cache.test.local.", "A")
         .await
         .unwrap();
     assert_eq!(
@@ -171,11 +171,11 @@ async fn test_cname_target_update_invalidates_dependent_cache() {
     assert_eq!(alias.status(), 200);
 
     let pool = &server.pool;
-    db::records::insert_cache(pool, "alias.integration.local", "A", "10.0.0.1", 300, None)
+    db::cache::insert_cache(pool, "alias.integration.local", "A", "10.0.0.1", 300, None)
         .await
         .unwrap();
 
-    let before = db::records::get_cache(pool, "alias.integration.local", "A")
+    let before = db::cache::get_cache(pool, "alias.integration.local", "A")
         .await
         .unwrap();
     assert_eq!(
@@ -193,7 +193,7 @@ async fn test_cname_target_update_invalidates_dependent_cache() {
         .unwrap();
     assert_eq!(res.status(), 200);
 
-    let after = db::records::get_cache(pool, "alias.integration.local", "A")
+    let after = db::cache::get_cache(pool, "alias.integration.local", "A")
         .await
         .unwrap();
     assert!(

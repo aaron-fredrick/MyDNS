@@ -1,5 +1,6 @@
 use super::fixtures::TestDb;
-use crate::mydns::db::records::{self, CreateRecord, UpdateRecord};
+use crate::mydns::db::{records, users, zones};
+use crate::mydns::db::records::{CreateRecord, UpdateRecord};
 
 #[tokio::test]
 async fn record_crud_covers_case_normalization_and_partial_updates() {
@@ -125,15 +126,15 @@ async fn users_can_be_seeded_idempotently_and_missing_users_return_none() {
     let db = TestDb::new();
     let pool = db.init_pool().await;
 
-    records::seed_admin(&pool, "admin", "hash-1").await.unwrap();
-    records::seed_admin(&pool, "admin", "hash-2").await.unwrap();
+    users::seed_admin(&pool, "admin", "hash-1").await.unwrap();
+    users::seed_admin(&pool, "admin", "hash-2").await.unwrap();
 
     assert_eq!(
-        records::find_user_hash(&pool, "admin").await.unwrap(),
+        users::find_user_hash(&pool, "admin").await.unwrap(),
         Some("hash-1".into())
     );
     assert_eq!(
-        records::find_user_hash(&pool, "missing").await.unwrap(),
+        users::find_user_hash(&pool, "missing").await.unwrap(),
         None
     );
 }
@@ -143,7 +144,7 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
     let db = TestDb::new();
     let pool = db.init_pool().await;
 
-    records::seed_zones(
+    zones::seed_zones(
         &pool,
         &[
             "Home.ARPA.".into(),
@@ -154,12 +155,12 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
     )
     .await
     .unwrap();
-    records::seed_zones(&pool, &["home.arpa".into(), "lab.local".into()])
+    zones::seed_zones(&pool, &["home.arpa".into(), "lab.local".into()])
         .await
         .unwrap();
 
     assert_eq!(
-        records::list_zone_names(&pool).await.unwrap(),
+        zones::list_zone_names(&pool).await.unwrap(),
         vec![".", "home.arpa", "lab.local"]
     );
 
@@ -171,7 +172,7 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
     let root_apex = records::find_by_name(&pool, ".").await.unwrap();
     assert_eq!(root_apex.len(), 2);
 
-    records::create_apex_soa_and_ns(&pool, "HOME.ARPA.")
+    zones::create_apex_soa_and_ns(&pool, "HOME.ARPA.")
         .await
         .unwrap();
     assert_eq!(
@@ -182,7 +183,7 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
         2
     );
 
-    let added = records::add_zone(&pool, "example.com").await.unwrap();
+    let added = zones::add_zone(&pool, "example.com").await.unwrap();
     assert_eq!(added.name, "example.com");
     assert_eq!(
         records::find_by_name(&pool, "example.com")
@@ -191,7 +192,7 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
             .len(),
         2
     );
-    assert!(records::add_zone(&pool, "example.com").await.is_err());
+    assert!(zones::add_zone(&pool, "example.com").await.is_err());
 
     records::create_record(
         &pool,
@@ -207,8 +208,8 @@ async fn zone_seed_add_remove_and_apex_creation_are_idempotent() {
     .await
     .unwrap();
 
-    assert!(records::remove_zone(&pool, "example.com").await.unwrap());
-    assert!(!records::remove_zone(&pool, "example.com").await.unwrap());
+    assert!(zones::remove_zone(&pool, "example.com").await.unwrap());
+    assert!(!zones::remove_zone(&pool, "example.com").await.unwrap());
     assert!(records::find_by_name(&pool, "example.com")
         .await
         .unwrap()

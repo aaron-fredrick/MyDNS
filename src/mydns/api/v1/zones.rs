@@ -6,7 +6,8 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::db::records;
+use crate::db::zones;
+use crate::db::cache as db_cache;
 use crate::dns::zone_trie::ZoneTrie;
 use crate::error::ApiError;
 use crate::state::AppState;
@@ -61,7 +62,7 @@ fn validate_zone_name(name: &str) -> Result<String, ApiError> {
 /// into `AppState`. Called after every add/remove so DNS behaviour is
 /// immediately updated without a restart.
 async fn reload_trie(state: &Arc<AppState>) -> Result<(), ApiError> {
-    let zone_names = records::list_zone_names(&state.db)
+    let zone_names = zones::list_zone_names(&state.db)
         .await
         .map_err(ApiError::Internal)?;
     let new_trie = ZoneTrie::from_zones(&zone_names);
@@ -75,8 +76,8 @@ pub async fn list_zones(
     _claims: JwtClaims,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let zones = records::list_zones(&state.db).await?;
-    Ok(Json(serde_json::json!({ "zones": zones })))
+    let zones_list = zones::list_zones(&state.db).await?;
+    Ok(Json(serde_json::json!({ "zones": zones_list })))
 }
 
 /// `POST /api/v1/zones`
@@ -88,7 +89,7 @@ pub async fn add_zone(
     let canonical = validate_zone_name(&body.name)?;
 
     // Attempt insert; if it fails with a unique constraint the zone already exists.
-    let zone = records::add_zone(&state.db, &canonical)
+    let zone = zones::add_zone(&state.db, &canonical)
         .await
         .map_err(|e| {
             let is_duplicate = match e.downcast_ref::<sqlx::Error>() {
@@ -120,7 +121,7 @@ pub async fn add_zone(
     // Evict any upstream-cached data for names that now fall under this
     // local DNS zone. Without this, a previously cached answer could
     // bypass the zone enforcement on the next query.
-    records::delete_cache_for_zone(&state.db, &canonical)
+    db_cache::delete_cache_for_zone(&state.db, &canonical)
         .await
         .map_err(ApiError::Internal)?;
     state.cache.write().await.clear_zone(&canonical);
@@ -139,7 +140,7 @@ pub async fn remove_zone(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let canonical = validate_zone_name(&name)?;
 
-    let removed = records::remove_zone(&state.db, &canonical)
+    let removed = zones::remove_zone(&state.db, &canonical)
         .await
         .map_err(ApiError::Internal)?;
 

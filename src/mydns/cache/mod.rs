@@ -245,7 +245,7 @@ pub fn spawn_pruner(
                 _ = tokio::time::sleep(Duration::from_secs(60)) => {
                     let pruned_mem = cache.write().await.prune();
 
-                    let pruned_db = match crate::db::records::prune_cache(&db).await {
+                    let pruned_db = match crate::db::cache::prune_cache(&db).await {
                         Ok(n) => n,
                         Err(e) => {
                             tracing::error!(error = %e, "Failed to prune DB cache");

@@ -8,7 +8,7 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 
 | Phase | Status | Commit | Validation | Notes |
 |---|---|---|---|---|
-| 1 — Database boundaries | TODO | — | — | Split persistence ownership |
+| 1 — Database boundaries | DONE | Pending | Unit tests pass | Split persistence ownership |
 | 2 — Configuration boundaries | TODO | — | — | Separate types from format parsing |
 | 3 — Web server boundaries | TODO | — | — | Separate lifecycle/routes/frontend serving |
 | 4 — DNS/runtime ownership | TODO | — | — | Verify runtime ownership without unnecessary rewrite |
@@ -18,12 +18,12 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 ## Agent handoff record
 
 ### Phase 1
-- Status: TODO
-- Started: —
-- Completed: —
-- Commit: —
-- Validation: —
-- Notes: —
+- Status: DONE
+- Started: 2026-09-22
+- Completed: 2026-09-22
+- Commit: Pending
+- Validation: `cargo test` (43/43 tests passed) and `cargo check` (clean build)
+- Notes: Split overloaded database modules (records.rs, mod.rs) by persistence responsibility into records.rs, zones.rs, cache.rs, users.rs, migrations.rs, and settings.rs. Updated all call sites in API, DNS handlers, background tasks, and tests. Behavior preserved without introducing generic layers.
 
 ### Phase 2
 - Status: TODO
