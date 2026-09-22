@@ -2,9 +2,8 @@ use std::net::SocketAddr;
 use hickory_proto::rr::RecordType;
 use super::{DnsHandler, ResolutionResult};
 
-#[allow(non_snake_case)]
 impl DnsHandler {
-        pub(crate) async fn queryBlocklist(
+        pub(crate) async fn query_blocklist(
         &self,
         name: &str,
         rtype: RecordType,
@@ -32,10 +31,4 @@ impl DnsHandler {
         Some(ResolutionResult::NxDomain(false))
     }
 
-    #[tracing::instrument(
-        name = "query_memory_cache",
-        level = tracing::Level::DEBUG,
-        fields(name = %name, rtype = ?rtype),
-        skip(self)
-    )]
 }

@@ -3,9 +3,8 @@ use hickory_proto::rr::{Record, RecordType};
 use crate::dns::record_index::IndexResolution;
 use super::{DnsHandler, ResolutionResult, build_record};
 
-#[allow(non_snake_case)]
 impl DnsHandler {
-        pub(crate) async fn queryRecordIndex(
+    pub(crate) async fn query_record_index(
         &self,
         name: &str,
         rtype: RecordType,
@@ -31,8 +30,8 @@ impl DnsHandler {
                     return None;
                 }
                 let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
-                self.logResolution(src, name, rtype, &records, "INDEX");
-                self.saveToMemoryCache(name, rtype, records.clone(), ttl, true)
+                self.log_resolution(src, name, rtype, &records, "INDEX");
+                self.save_to_memory_cache(name, rtype, records.clone(), ttl, true)
                     .await;
                 Some(ResolutionResult::Positive(records, true))
             }
@@ -42,7 +41,7 @@ impl DnsHandler {
         }
     }
 
-    pub(crate) async fn querySpecialRecords(
+    pub(crate) async fn query_special_records(
         &self,
         name: &str,
         rtype: RecordType,
@@ -52,7 +51,7 @@ impl DnsHandler {
         // nslookup and similar tools reverse-resolve the server IP before sending queries.
         // Without a PTR answer the tool marks the server as unresponsive and drops all
         // subsequent queries. We synthesise localhost. here so no manual DB record is needed.
-        if rtype == RecordType::PTR && isLoopbackPtrName(name) {
+        if rtype == RecordType::PTR && is_loopback_ptr_name(name) {
             if let Some(record) = build_record(name, RecordType::PTR, "localhost.", 3600, None) {
                 tracing::debug!(query = %name, "Synthetic loopback PTR response");
                 return Some(vec![record]);
@@ -67,7 +66,7 @@ impl DnsHandler {
         if name != dashboard_domain || (rtype != RecordType::A && rtype != RecordType::AAAA) {
             return None;
         }
-        let target_ip = self.getLocalInterfaceIpForClient(src.ip());
+        let target_ip = self.get_local_interface_ip_for_client(src.ip());
         if let Some(record) = build_record(name, rtype, &target_ip, 60, None) {
             let _ = self.state.log_tx.send(format!(
                 "[SPECIAL] client={} query={} type={} value=[{}]",
@@ -79,21 +78,15 @@ impl DnsHandler {
         None
     }
 
-    #[tracing::instrument(
-        name = "query_upstream",
-        level = tracing::Level::DEBUG,
-        fields(name = %name, rtype = ?rtype, client = %src),
-        skip(self)
-    )]
-        fn getLocalInterfaceIpForClient(&self, client_ip: IpAddr) -> String {
-        if isPrivateIp(client_ip) {
-            self.getLocalInterfaceIp().to_string()
+    fn get_local_interface_ip_for_client(&self, client_ip: IpAddr) -> String {
+        if is_private_ip(client_ip) {
+            self.get_local_interface_ip().to_string()
         } else {
             "127.0.0.1".to_string()
         }
     }
 
-    fn getLocalInterfaceIp(&self) -> IpAddr {
+    fn get_local_interface_ip(&self) -> IpAddr {
         self.state
             .config
             .try_read()
@@ -104,7 +97,7 @@ impl DnsHandler {
 
 }
 
-fn isPrivateIp(ip: IpAddr) -> bool {
+fn is_private_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
         IpAddr::V6(v6) => {
@@ -115,7 +108,7 @@ fn isPrivateIp(ip: IpAddr) -> bool {
 }
 
 /// Returns true for PTR query names that correspond to loopback addresses.
-fn isLoopbackPtrName(name: &str) -> bool {
+fn is_loopback_ptr_name(name: &str) -> bool {
     if let Some(rest) = name.strip_suffix(".in-addr.arpa") {
         if rest.split('.').next_back() == Some("127") {
             return true;

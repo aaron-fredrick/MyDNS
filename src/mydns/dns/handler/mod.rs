@@ -30,7 +30,6 @@ pub struct DnsHandler {
     state: Arc<AppState>,
 }
 
-#[allow(non_snake_case)]
 impl DnsHandler {
     pub fn new(state: Arc<AppState>) -> Self {
         Self { state }
@@ -61,7 +60,7 @@ impl RequestHandler for DnsHandler {
         let recursion_desired = request.metadata.recursion_desired;
         tracing::debug!(client = %src, query = %name_fqdn, rtype = %rtype, recursion_desired, "DNS query received");
         let result = self
-            .processResolution(&name, rtype, src, recursion_desired)
+            .process_resolution(&name, rtype, src, recursion_desired)
             .await;
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut metadata = Metadata::response_from_request(&request.metadata);
@@ -119,7 +118,6 @@ impl RequestHandler for DnsHandler {
     }
 }
 
-#[allow(non_snake_case)]
 impl DnsHandler {
     #[tracing::instrument(
         name = "process_resolution",
@@ -127,7 +125,7 @@ impl DnsHandler {
         fields(name = %name, rtype = ?rtype, client = %src),
         skip(self)
     )]
-    async fn processResolution(
+    async fn process_resolution(
         &self,
         name: &str,
         rtype: RecordType,
@@ -149,13 +147,13 @@ impl DnsHandler {
             // Cache (memory and persistent) are skipped to prevent stale
             // upstream data from shadowing locally managed records.
             if let Some(result) = self
-                .queryRecordIndex(name, rtype, src, local_zone.as_deref())
+                .query_record_index(name, rtype, src, local_zone.as_deref())
                 .await
             {
                 return result;
             }
 
-            if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
+            if let Some(records) = self.query_special_records(name, rtype, src).await {
                 return ResolutionResult::Positive(records, true);
             }
 
@@ -171,30 +169,30 @@ impl DnsHandler {
         // ── 2. Blocklist ────────────────────────────────────────────────────
         // Check the blocklist before cache so that newly blocked domains
         // cannot be served from a stale cache entry.
-        if let Some(result) = self.queryBlocklist(name, rtype, src).await {
+        if let Some(result) = self.query_blocklist(name, rtype, src).await {
             return result;
         }
 
         // ── 3. Memory cache ─────────────────────────────────────────────────
-        if let Some(result) = self.queryMemoryCache(name, rtype, src).await {
+        if let Some(result) = self.query_memory_cache(name, rtype, src).await {
             return result;
         }
 
         // ── 4. Local record index (non-local-zone dev records, etc.) ────────
         if let Some(result) = self
-            .queryRecordIndex(name, rtype, src, local_zone.as_deref())
+            .query_record_index(name, rtype, src, local_zone.as_deref())
             .await
         {
             return result;
         }
 
         // ── 5. Persistent cache ─────────────────────────────────────────────
-        if let Some(result) = self.queryPersistentCache(name, rtype).await {
+        if let Some(result) = self.query_persistent_cache(name, rtype).await {
             return result;
         }
 
         // ── 6. Special synthetic records ────────────────────────────────────
-        if let Some(records) = self.querySpecialRecords(name, rtype, src).await {
+        if let Some(records) = self.query_special_records(name, rtype, src).await {
             return ResolutionResult::Positive(records, true);
         }
 
@@ -204,10 +202,10 @@ impl DnsHandler {
             return ResolutionResult::NxDomain(false);
         }
 
-        match self.queryUpstream(name, rtype, src).await {
+        match self.query_upstream(name, rtype, src).await {
             ResolutionResult::Positive(records, _) => {
                 let ttl = records.iter().map(|r| r.ttl).min().unwrap_or(300);
-                self.saveToAllCaches(name, rtype, records.clone(), ttl)
+                self.save_to_all_caches(name, rtype, records.clone(), ttl)
                     .await;
                 ResolutionResult::Positive(records, false)
             }
@@ -220,7 +218,7 @@ impl DnsHandler {
                 ResolutionResult::Nodata(false)
             }
             ResolutionResult::NxDomain(_) => {
-                self.handleMissingRecord(name, rtype, src).await;
+                self.handle_missing_record(name, rtype, src).await;
                 ResolutionResult::NxDomain(false)
             }
             ResolutionResult::ServFail => {

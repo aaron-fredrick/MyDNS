@@ -89,7 +89,6 @@ impl UpstreamResolver {
     }
 }
 
-#[allow(non_snake_case)]
 impl DnsHandler {
     #[tracing::instrument(
         name = "query_upstream",
@@ -97,7 +96,7 @@ impl DnsHandler {
         fields(name = %name, rtype = ?rtype, client = %src),
         skip(self)
     )]
-    pub(crate) async fn queryUpstream(&self, name: &str, rtype: RecordType, src: SocketAddr) -> ResolutionResult {
+    pub(crate) async fn query_upstream(&self, name: &str, rtype: RecordType, src: SocketAddr) -> ResolutionResult {
         let fqdn = format!("{}.", name);
         let parsed_name = match fqdn.parse::<Name>() {
             Ok(n) => n,

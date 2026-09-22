@@ -4,9 +4,8 @@ use hickory_proto::rr::{RData, Record, RecordType};
 use crate::cache::CacheResult;
 use super::{DnsHandler, ResolutionResult, build_record};
 
-#[allow(non_snake_case)]
 impl DnsHandler {
-        pub(crate) async fn queryMemoryCache(
+        pub(crate) async fn query_memory_cache(
         &self,
         name: &str,
         rtype: RecordType,
@@ -18,11 +17,11 @@ impl DnsHandler {
             tracing::debug!(cache_type = "memory", result = ?result, "Cache hit");
             return Some(match result {
                 CacheResult::Positive => {
-                    self.logResolution(src, name, rtype, records, "memory");
+                    self.log_resolution(src, name, rtype, records, "memory");
                     ResolutionResult::Positive(records.clone(), is_authoritative)
                 }
                 CacheResult::Negative => {
-                    self.logNegativeCacheHit(src, name, rtype, "memory");
+                    self.log_negative_cache_hit(src, name, rtype, "memory");
                     ResolutionResult::NxDomain(false)
                 }
             });
@@ -37,16 +36,16 @@ impl DnsHandler {
         fields(name = %name, rtype = ?rtype),
         skip(self)
     )]
-    pub(crate) async fn queryPersistentCache(
+    pub(crate) async fn query_persistent_cache(
         &self,
         name: &str,
         rtype: RecordType,
     ) -> Option<ResolutionResult> {
-        self.queryPersistentCacheRecursive(name, rtype, 0).await
+        self.query_persistent_cache_recursive(name, rtype, 0).await
     }
 
     #[async_recursion::async_recursion]
-    async fn queryPersistentCacheRecursive(
+    async fn query_persistent_cacheRecursive(
         &self,
         name: &str,
         rtype: RecordType,
@@ -68,7 +67,7 @@ impl DnsHandler {
 
         if !rows.is_empty() {
             if rows.len() == 1 && rows[0].value == "NX" {
-                self.handleCachedNegativeResult(name, rtype, rows[0].expires_at)
+                self.handle_cached_negative_result(name, rtype, rows[0].expires_at)
                     .await;
                 return Some(ResolutionResult::NxDomain(false));
             }
@@ -92,7 +91,7 @@ impl DnsHandler {
                 if !cname_rows.is_empty() {
                     let target = cname_rows[0].value.trim_end_matches('.').to_string();
                     match self
-                        .queryPersistentCacheRecursive(&target, rtype, depth + 1)
+                        .query_persistent_cacheRecursive(&target, rtype, depth + 1)
                         .await
                     {
                         Some(ResolutionResult::Positive(mut target_recs, _)) => {
@@ -114,16 +113,18 @@ impl DnsHandler {
             }
         }
         None
-    }pub(crate) async fn handleMissingRecord(&self, name: &str, rtype: RecordType, src: SocketAddr) {
+    }
+
+    pub(crate) async fn handle_missing_record(&self, name: &str, rtype: RecordType, src: SocketAddr) {
         tracing::debug!(client = %src, query = %name, r#type = %rtype, "NXDOMAIN");
         let _ = self.state.log_tx.send(format!(
             "[NXDOMAIN] client={} query={} type={}",
             src, name, rtype
         ));
-        self.saveNegativeCache(name, rtype, 60).await;
+        self.save_negative_cache(name, rtype, 60).await;
     }
 
-    pub(crate) async fn saveToMemoryCache(
+    pub(crate) async fn save_to_memory_cache(
         &self,
         name: &str,
         rtype: RecordType,
@@ -141,8 +142,14 @@ impl DnsHandler {
         );
     }
 
-    pub(crate) async fn saveToAllCaches(&self, name: &str, rtype: RecordType, records: Vec<Record>, ttl: u32) {
-        self.saveToMemoryCache(name, rtype, records.clone(), ttl, false)
+    pub(crate) async fn save_to_all_caches(
+        &self,
+        name: &str,
+        rtype: RecordType,
+        records: Vec<Record>,
+        ttl: u32,
+    ) {
+        self.save_to_memory_cache(name, rtype, records.clone(), ttl, false)
             .await;
         for r in &records {
             let owner = r.name.to_string().trim_end_matches('.').to_lowercase();
@@ -163,7 +170,7 @@ impl DnsHandler {
         }
     }
 
-        fn logResolution(
+    fn log_resolution(
         &self,
         src: SocketAddr,
         name: &str,
@@ -171,28 +178,28 @@ impl DnsHandler {
         records: &[Record],
         source: &str,
     ) {
-        let values = self.getRecordValuesString(records);
+        let values = records.iter().map(|r| r.data.to_string()).collect::<Vec<_>>().join(", ");
         let _ = self.state.log_tx.send(format!(
             "[CACHE] client={} query={} type={} value=[{}] source={}",
             src, name, rtype, values, source
         ));
     }
 
-    fn logNegativeCacheHit(&self, src: SocketAddr, name: &str, rtype: RecordType, source: &str) {
+    fn log_negative_cache_hit(&self, src: SocketAddr, name: &str, rtype: RecordType, source: &str) {
         let _ = self.state.log_tx.send(format!(
             "[NEGATIVE CACHE] client={} query={} type={} source={}",
             src, name, rtype, source
         ));
     }
 
-    async fn handleCachedNegativeResult(&self, name: &str, rtype: RecordType, expires_at: i64) {
+    async fn handle_cached_negative_result(&self, name: &str, rtype: RecordType, expires_at: i64) {
         let _ = self.state.log_tx.send(format!(
             "[NEGATIVE CACHE] query={} type={} expires_at={}",
             name, rtype, expires_at
         ));
     }
 
-    async fn saveNegativeCache(&self, name: &str, rtype: RecordType, ttl: u32) {
+    async fn save_negative_cache(&self, name: &str, rtype: RecordType, ttl: u32) {
         let _ = crate::db::records::insert_cache(
             &self.state.db,
             name,

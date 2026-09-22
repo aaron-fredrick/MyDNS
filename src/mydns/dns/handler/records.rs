@@ -1,3 +1,7 @@
+use hickory_proto::op::{Header, HeaderCounts, Metadata, ResponseCode};
+use hickory_proto::rr::{Name, RData, Record, RecordType};
+use hickory_server::server::{Request, ResponseInfo};
+
 pub(crate) fn build_record(
     name: &str,
     rtype: RecordType,
