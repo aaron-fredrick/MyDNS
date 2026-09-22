@@ -8,6 +8,9 @@ use std::{str::FromStr, time::Duration};
 pub mod blocklist;
 pub mod records;
 
+#[cfg(test)]
+mod tests;
+
 /// Initialises the SQLite connection pool and runs all DDL migrations.
 pub async fn init(db_path: &str) -> anyhow::Result<SqlitePool> {
     let options = SqliteConnectOptions::from_str(&format!("sqlite://{}?mode=rwc", db_path))

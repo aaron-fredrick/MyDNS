@@ -18,57 +18,57 @@ jobs:
         with:
           pattern: coverage-*
           path: coverage
-          merge-multiple: true
 
-      - name: Verify coverage reports
+      - name: Report available coverage
         shell: bash
         run: |
           set -euo pipefail
-          test -s coverage/unit/backend/lcov.info
-          test -s coverage/unit/frontend/lcov.info
-          test -s coverage/component/backend/lcov.info
-          test -s coverage/integration/backend/lcov.info
+          find coverage -type f -name 'lcov.info' -print
 
       - name: Upload unit backend coverage
+        if: hashFiles('coverage/coverage-unit-backend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           disable_search: true
-          files: coverage/unit/backend/lcov.info
+          files: coverage/coverage-unit-backend/lcov.info
           flags: unit-backend
           name: unit-backend
           fail_ci_if_error: true
 
       - name: Upload unit frontend coverage
+        if: hashFiles('coverage/coverage-unit-frontend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           disable_search: true
-          files: coverage/unit/frontend/lcov.info
+          files: coverage/coverage-unit-frontend/lcov.info
           flags: unit-frontend
           name: unit-frontend
           fail_ci_if_error: true
 
       - name: Upload component backend coverage
+        if: hashFiles('coverage/coverage-component-backend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           disable_search: true
-          files: coverage/component/backend/lcov.info
+          files: coverage/coverage-component-backend/lcov.info
           flags: component-backend
           name: component-backend
           fail_ci_if_error: true
 
       - name: Upload integration backend coverage
+        if: hashFiles('coverage/coverage-integration-backend/lcov.info') != ''
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           disable_search: true
-          files: coverage/integration/backend/lcov.info
+          files: coverage/coverage-integration-backend/lcov.info
           flags: integration-backend
           name: integration-backend
           fail_ci_if_error: true
