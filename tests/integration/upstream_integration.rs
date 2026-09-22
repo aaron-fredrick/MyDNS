@@ -101,7 +101,7 @@ async fn start_dns_server(upstream_addr: SocketAddr) -> TestUpstreamServerContex
     let pool = db.init_pool().await;
 
     let hash = mydns::web::auth::hash_password(&cfg.admin_password).unwrap();
-    db::records::seed_admin(&pool, &cfg.admin_username, &hash)
+    db::users::seed_admin(&pool, &cfg.admin_username, &hash)
         .await
         .unwrap();
 

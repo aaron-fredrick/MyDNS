@@ -104,6 +104,14 @@ pub async fn list_entries(pool: &SqlitePool) -> anyhow::Result<Vec<BlocklistEntr
     .context("Failed to list blocklist entries")
 }
 
+/// Returns the total number of blocklist entries.
+pub async fn count_entries(pool: &SqlitePool) -> anyhow::Result<i64> {
+    sqlx::query_scalar("SELECT COUNT(*) FROM blocklist")
+        .fetch_one(pool)
+        .await
+        .context("Failed to count blocklist entries")
+}
+
 /// Returns only the canonical domain strings of **enabled** blocklist entries.
 ///
 /// Used exclusively on the DNS hot path and at startup to build

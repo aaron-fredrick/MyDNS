@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::RwLock;
 
-use crate::db::records::find_user_hash;
+use crate::db::users::find_user_hash;
 use crate::error::ApiError;
 use crate::state::AppState;
 

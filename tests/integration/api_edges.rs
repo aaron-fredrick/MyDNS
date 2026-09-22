@@ -40,13 +40,13 @@ async fn settings_update_validates_and_persists_supported_values() {
     assert_eq!(body["router_dns"], "192.0.2.53:53");
 
     assert_eq!(
-        mydns::db::get_setting(&server.pool, "resolver_mode")
+        mydns::db::settings::get_setting(&server.pool, "resolver_mode")
             .await
             .unwrap(),
         Some("recursive".into())
     );
     assert_eq!(
-        mydns::db::get_setting(&server.pool, "resolver_priority")
+        mydns::db::settings::get_setting(&server.pool, "resolver_priority")
             .await
             .unwrap(),
         Some("router_first".into())
@@ -135,7 +135,7 @@ async fn cache_api_covers_listing_and_delete_paths() {
     let c = client();
     let auth = server.auth_header(&c).await;
 
-    mydns::db::records::insert_cache(
+    mydns::db::cache::insert_cache(
         &server.pool,
         "api-cache.home.arpa",
         "A",

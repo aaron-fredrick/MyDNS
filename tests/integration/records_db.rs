@@ -106,19 +106,19 @@ async fn test_admin_seed_is_idempotent_and_lookup_works() {
     let test_db = TestDb::new();
     let pool = test_db.init_pool().await;
 
-    db::records::seed_admin(&pool, "admin", "hash-1")
+    db::users::seed_admin(&pool, "admin", "hash-1")
         .await
         .unwrap();
-    db::records::seed_admin(&pool, "admin", "hash-2")
+    db::users::seed_admin(&pool, "admin", "hash-2")
         .await
         .unwrap();
 
     assert_eq!(
-        db::records::find_user_hash(&pool, "admin").await.unwrap(),
+        db::users::find_user_hash(&pool, "admin").await.unwrap(),
         Some("hash-1".into())
     );
     assert_eq!(
-        db::records::find_user_hash(&pool, "missing").await.unwrap(),
+        db::users::find_user_hash(&pool, "missing").await.unwrap(),
         None
     );
 }
@@ -128,13 +128,13 @@ async fn test_zone_lifecycle_creates_and_removes_apex_records() {
     let test_db = TestDb::new();
     let pool = test_db.init_pool().await;
 
-    let zone = db::records::add_zone(&pool, "home.arpa").await.unwrap();
+    let zone = db::zones::add_zone(&pool, "home.arpa").await.unwrap();
     assert_eq!(zone.name, "home.arpa");
 
-    let zones = db::records::list_zones(&pool).await.unwrap();
+    let zones = db::zones::list_zones(&pool).await.unwrap();
     assert_eq!(zones.len(), 1);
     assert_eq!(
-        db::records::list_zone_names(&pool).await.unwrap(),
+        db::zones::list_zone_names(&pool).await.unwrap(),
         vec!["home.arpa"]
     );
 
@@ -157,8 +157,8 @@ async fn test_zone_lifecycle_creates_and_removes_apex_records() {
     .await
     .unwrap();
 
-    assert!(db::records::remove_zone(&pool, "home.arpa").await.unwrap());
-    assert!(db::records::list_zones(&pool).await.unwrap().is_empty());
+    assert!(db::zones::remove_zone(&pool, "home.arpa").await.unwrap());
+    assert!(db::zones::list_zones(&pool).await.unwrap().is_empty());
     assert!(db::records::find_by_name(&pool, "home.arpa")
         .await
         .unwrap()
@@ -174,17 +174,17 @@ async fn test_seed_zones_is_idempotent_and_normalizes_names() {
     let test_db = TestDb::new();
     let pool = test_db.init_pool().await;
 
-    db::records::seed_zones(
+    db::zones::seed_zones(
         &pool,
         &["Home.ARPA.".into(), "lab.local.".into(), "".into()],
     )
     .await
     .unwrap();
-    db::records::seed_zones(&pool, &["home.arpa".into(), "lab.local".into()])
+    db::zones::seed_zones(&pool, &["home.arpa".into(), "lab.local".into()])
         .await
         .unwrap();
 
-    let names = db::records::list_zone_names(&pool).await.unwrap();
+    let names = db::zones::list_zone_names(&pool).await.unwrap();
     assert_eq!(names, vec!["home.arpa", "lab.local"]);
     assert_eq!(
         db::records::find_by_name(&pool, "home.arpa")
@@ -200,20 +200,29 @@ async fn test_settings_are_inserted_and_replaced() {
     let test_db = TestDb::new();
     let pool = test_db.init_pool().await;
 
-    assert_eq!(db::get_setting(&pool, "resolver.mode").await.unwrap(), None);
-    db::set_setting(&pool, "resolver.mode", "forwarding")
+    assert_eq!(
+        db::settings::get_setting(&pool, "resolver.mode")
+            .await
+            .unwrap(),
+        None
+    );
+    db::settings::set_setting(&pool, "resolver.mode", "forwarding")
         .await
         .unwrap();
     assert_eq!(
-        db::get_setting(&pool, "resolver.mode").await.unwrap(),
+        db::settings::get_setting(&pool, "resolver.mode")
+            .await
+            .unwrap(),
         Some("forwarding".into())
     );
 
-    db::set_setting(&pool, "resolver.mode", "recursive")
+    db::settings::set_setting(&pool, "resolver.mode", "recursive")
         .await
         .unwrap();
     assert_eq!(
-        db::get_setting(&pool, "resolver.mode").await.unwrap(),
+        db::settings::get_setting(&pool, "resolver.mode")
+            .await
+            .unwrap(),
         Some("recursive".into())
     );
 }
@@ -223,17 +232,17 @@ async fn test_cache_identity_keeps_distinct_values_and_updates_same_identity() {
     let test_db = TestDb::new();
     let pool = test_db.init_pool().await;
 
-    db::records::insert_cache(&pool, "multi.test.local", "A", "192.0.2.1", 300, None)
+    db::cache::insert_cache(&pool, "multi.test.local", "A", "192.0.2.1", 300, None)
         .await
         .unwrap();
-    db::records::insert_cache(&pool, "multi.test.local", "A", "192.0.2.2", 300, None)
+    db::cache::insert_cache(&pool, "multi.test.local", "A", "192.0.2.2", 300, None)
         .await
         .unwrap();
-    db::records::insert_cache(&pool, "multi.test.local", "a", "192.0.2.1", 600, None)
+    db::cache::insert_cache(&pool, "multi.test.local", "a", "192.0.2.1", 600, None)
         .await
         .unwrap();
 
-    let rows = db::records::get_cache(&pool, "MULTI.TEST.LOCAL.", "A")
+    let rows = db::cache::get_cache(&pool, "MULTI.TEST.LOCAL.", "A")
         .await
         .unwrap();
     assert_eq!(rows.len(), 2);
@@ -266,29 +275,29 @@ async fn test_cache_delete_by_name_clears_cname_dependents() {
     }
 
     for name in ["target.test.local", "alias.test.local", "deep.test.local"] {
-        db::records::insert_cache(&pool, name, "A", "192.0.2.9", 300, None)
+        db::cache::insert_cache(&pool, name, "A", "192.0.2.9", 300, None)
             .await
             .unwrap();
     }
 
-    let dependents = db::records::find_cname_dependents(&pool, "target.test.local")
+    let dependents = db::cache::find_cname_dependents(&pool, "target.test.local")
         .await
         .unwrap();
     assert_eq!(dependents.len(), 2);
 
-    db::records::delete_cache_for_name(&pool, "target.test.local")
+    db::cache::delete_cache_for_name(&pool, "target.test.local")
         .await
         .unwrap();
 
-    assert!(db::records::get_cache(&pool, "target.test.local", "A")
+    assert!(db::cache::get_cache(&pool, "target.test.local", "A")
         .await
         .unwrap()
         .is_empty());
-    assert!(db::records::get_cache(&pool, "alias.test.local", "A")
+    assert!(db::cache::get_cache(&pool, "alias.test.local", "A")
         .await
         .unwrap()
         .is_empty());
-    assert!(db::records::get_cache(&pool, "deep.test.local", "A")
+    assert!(db::cache::get_cache(&pool, "deep.test.local", "A")
         .await
         .unwrap()
         .is_empty());
