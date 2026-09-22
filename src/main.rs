@@ -2,11 +2,8 @@ use std::sync::Arc;
 
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use mydns::{cache, config, db, dns, privileges, state, web};
-
-use tracing_samply::SamplyLayer;
+use mydns::{cache, config, db, dns, observability, privileges, state, web};
 
 use config::AppConfig;
 use dns::blocklist::BlocklistIndex;
@@ -19,46 +16,14 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     dotenvy::dotenv().ok();
 
-    let log_filename = {
-        let now = chrono::Local::now();
-        format!("mydns_{}.log", now.format("%Y-%m-%d_%H-%M-%S"))
-    };
-    std::fs::create_dir_all("logs")?;
-    let file_appender = tracing_appender::rolling::never("logs", &log_filename);
-    let (non_blocking_file, _file_guard) = tracing_appender::non_blocking(file_appender);
+    // Initialise the tracing/subscriber pipeline. The returned guard keeps the
+    // non-blocking file writer alive; it must not be dropped until main exits.
+    let tracing_config = observability::telemetry::tracing::TracingConfig::default();
+    let _tracing_guard = observability::telemetry::tracing::init(tracing_config)?;
+
+    tracing::info!(log_file = %_tracing_guard.log_filename, "MyDNS starting");
+
     let (log_tx, _) = broadcast::channel::<String>(1024);
-
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-
-    let subscriber = tracing_subscriber::registry()
-        .with(env_filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking_file)
-                .with_ansi(false),
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stdout)
-                .with_ansi(true),
-        );
-
-    let samply_layer = match SamplyLayer::new() {
-        Ok(layer) => {
-            println!("SamplyLayer initialized successfully");
-            Some(layer)
-        }
-        Err(e) => {
-            println!("SamplyLayer initialization failed: {e}");
-            None
-        }
-    };
-
-    let subscriber = subscriber.with(samply_layer);
-    subscriber.init();
-
-    tracing::info!(log_file = %log_filename, "MyDNS starting");
 
     let mut cfg = AppConfig::from_config_file()?;
     tracing::info!(bind_host = %cfg.bind_host, dns_port = cfg.dns_port, http_host = %cfg.http_host, http_port = cfg.http_port, "Configuration loaded");
