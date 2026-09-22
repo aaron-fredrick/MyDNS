@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::time::Duration;
 use hickory_proto::rr::{RData, Record, RecordType};
 use crate::cache::CacheResult;
@@ -113,15 +114,7 @@ impl DnsHandler {
             }
         }
         None
-    }
-
-    #[tracing::instrument(
-        name = "query_record_index",
-        level = tracing::Level::DEBUG,
-        fields(name = %name, rtype = ?rtype),
-        skip(self)
-    )]
-        pub(crate) async fn handleMissingRecord(&self, name: &str, rtype: RecordType, src: SocketAddr) {
+    }pub(crate) async fn handleMissingRecord(&self, name: &str, rtype: RecordType, src: SocketAddr) {
         tracing::debug!(client = %src, query = %name, r#type = %rtype, "NXDOMAIN");
         let _ = self.state.log_tx.send(format!(
             "[NXDOMAIN] client={} query={} type={}",
@@ -210,6 +203,4 @@ impl DnsHandler {
         )
         .await;
     }
-}
-
 }

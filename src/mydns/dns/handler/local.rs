@@ -2,7 +2,6 @@ use std::net::{IpAddr, SocketAddr};
 use hickory_proto::rr::{Record, RecordType};
 use crate::dns::record_index::IndexResolution;
 use super::{DnsHandler, ResolutionResult, build_record};
-use super::records::isLoopbackPtrName;
 
 #[allow(non_snake_case)]
 impl DnsHandler {
@@ -103,4 +102,24 @@ impl DnsHandler {
             .unwrap_or(IpAddr::from([127, 0, 0, 1]))
     }
 
+}
+
+fn isPrivateIp(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
+        IpAddr::V6(v6) => {
+            let segs = v6.segments();
+            (segs[0] & 0xfe00) == 0xfc00 || (segs[0] & 0xffc0) == 0xfe80
+        }
+    }
+}
+
+/// Returns true for PTR query names that correspond to loopback addresses.
+fn isLoopbackPtrName(name: &str) -> bool {
+    if let Some(rest) = name.strip_suffix(".in-addr.arpa") {
+        if rest.split('.').next_back() == Some("127") {
+            return true;
+        }
+    }
+    name == "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa"
 }

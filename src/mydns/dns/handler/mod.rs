@@ -18,6 +18,7 @@ pub mod upstream;
 
 pub(crate) use records::{build_record, failed_response_info};
 
+#[derive(Debug)]
 enum ResolutionResult {
     Positive(Vec<Record>, bool), // records, is_authoritative (DNS AA bit)
     Nodata(bool),                // is_authoritative
@@ -232,15 +233,3 @@ impl DnsHandler {
             }
         }
     }
-
-    /// Checks whether `name` is on the blocklist.
-    ///
-    /// Returns `Some(NxDomain(false))` when blocked (never upstream, never
-    /// cached). The blocklist is authoritative over the cache so that
-    /// toggling a domain on/off takes effect immediately without a cache flush.
-    #[tracing::instrument(
-        name = "query_blocklist",
-        level = tracing::Level::DEBUG,
-        fields(name = %name, rtype = ?rtype),
-        skip(self)
-    )]

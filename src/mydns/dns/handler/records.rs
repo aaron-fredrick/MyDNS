@@ -94,33 +94,3 @@ pub(crate) fn failed_response_info(request: &Request) -> ResponseInfo {
         counts: HeaderCounts::default(),
     })
 }
-
-#[allow(non_snake_case)]
-pub(crate) fn isPrivateIp(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
-        IpAddr::V6(v6) => {
-            let segs = v6.segments();
-            (segs[0] & 0xfe00) == 0xfc00 || (segs[0] & 0xffc0) == 0xfe80
-        }
-    }
-}
-
-/// Returns true for PTR query names that correspond to loopback addresses:
-/// - `1.0.0.127.in-addr.arpa` and any other `127.x.x.x.in-addr.arpa` range
-/// - `1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa` (::1)
-#[allow(non_snake_case)]
-pub(crate) fn isLoopbackPtrName(name: &str) -> bool {
-    // IPv4 loopback: 127.0.0.0/8 → ends with .127.in-addr.arpa
-    if let Some(rest) = name.strip_suffix(".in-addr.arpa") {
-        // The PTR name is the reversed octets, so 127.x.x.x becomes x.x.x.127
-        if rest.split('.').next_back() == Some("127") {
-            return true;
-        }
-    }
-    // IPv6 loopback ::1 → 1.0.0...0.ip6.arpa (32 nibbles)
-    if name == "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa" {
-        return true;
-    }
-    false
-}

@@ -350,10 +350,3 @@ impl UpstreamResolver {
         UpstreamResolution::ServFail
     }
 }
-
-#[tracing::instrument(
-    name = "query_resolver",
-    level = tracing::Level::DEBUG,
-    fields(name = %name, rtype = ?rtype)
-    }
-}
