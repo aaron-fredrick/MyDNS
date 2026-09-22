@@ -36,6 +36,10 @@ pub struct RecordIndex {
 }
 
 impl RecordIndex {
+    fn normalize_name(name: &str) -> String {
+        name.trim_end_matches('.').to_lowercase()
+    }
+
     /// Loads all DNS records from the database and builds the index.
     pub async fn load_from_db(db: &SqlitePool) -> anyhow::Result<Self> {
         let all_records = records::list_records(db).await?;
@@ -74,7 +78,7 @@ impl RecordIndex {
     /// where neither name nor type change.
     pub fn upsert(&mut self, record: DnsRecord) {
         let key = (
-            record.name.to_lowercase(),
+            Self::normalize_name(&record.name),
             record.record_type.to_uppercase(),
         );
         let bucket = self.inner.entry(key).or_default();
@@ -101,7 +105,7 @@ impl RecordIndex {
     /// - `rtype = None` removes all records for the name across every type.
     /// - `rtype = Some(t)` removes only records of that specific type.
     pub fn remove(&mut self, name: &str, rtype: Option<&str>) {
-        let lower_name = name.to_lowercase();
+        let lower_name = Self::normalize_name(name);
         match rtype {
             Some(t) => {
                 self.inner.remove(&(lower_name, t.to_uppercase()));
@@ -117,7 +121,7 @@ impl RecordIndex {
     /// without CNAME chain traversal.
     fn lookup_raw(&self, name: &str, rtype: &str) -> Option<&[DnsRecord]> {
         self.inner
-            .get(&(name.to_lowercase(), rtype.to_uppercase()))
+            .get(&(Self::normalize_name(name), rtype.to_uppercase()))
             .map(Vec::as_slice)
     }
 
@@ -144,7 +148,7 @@ impl RecordIndex {
         rtype_str: &str,
         zone_apex: Option<&str>,
     ) -> IndexResolution {
-        let mut current = name.trim_end_matches('.').to_lowercase();
+        let mut current = Self::normalize_name(name);
         let mut chain: Vec<DnsRecord> = Vec::new();
         let mut visited: HashSet<String> = HashSet::new();
         let upper_rtype = rtype_str.to_uppercase();
@@ -167,7 +171,7 @@ impl RecordIndex {
                     Some(cname_records) if !cname_records.is_empty() => {
                         let cname = &cname_records[0];
                         chain.push(cname.clone());
-                        current = cname.value.trim_end_matches('.').to_lowercase();
+                        current = Self::normalize_name(&cname.value);
                         continue; // Loop to collect records at the target
                     }
                     _ => {
@@ -211,7 +215,7 @@ impl RecordIndex {
                 Some(cname_records) if !cname_records.is_empty() => {
                     let cname = &cname_records[0];
                     chain.push(cname.clone());
-                    current = cname.value.trim_end_matches('.').to_lowercase();
+                    current = Self::normalize_name(&cname.value);
                 }
                 _ => {
                     // If we have accumulated a CNAME chain but the final target is
@@ -242,7 +246,7 @@ impl RecordIndex {
     /// Returns `true` if any record exists for `name` regardless of type,
     /// or if the name matches the configured authoritative zone apex.
     fn name_exists(&self, name: &str, zone_apex: Option<&str>) -> bool {
-        let lower = name.trim_end_matches('.').to_lowercase();
+        let lower = Self::normalize_name(name);
         if Some(lower.as_str())
             == zone_apex
                 .map(|s| s.trim_end_matches('.').to_lowercase())
@@ -679,7 +683,7 @@ mod additional_tests {
     }
 
     #[test]
-    fn normalization_is_case_insensitive_for_lookup_and_mutation() {
+    fn normalization_is_case_insensitive_and_dot_insensitive_for_lookup_and_mutation() {
         let mut index = RecordIndex::default();
         index.upsert(record(1, "HOST.Example.COM.", "a", "192.0.2.1"));
         assert!(matches!(
