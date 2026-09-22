@@ -39,12 +39,10 @@ pub async fn get_stats(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let (hits, misses) = state.cache_stats.snapshot();
     let cache_size = state.cache.read().await.len();
-    let record_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM dns_records")
-        .fetch_one(&state.db)
+    let record_count: i64 = crate::db::records::count_records(&state.db)
         .await
         .unwrap_or(0);
-    let blocklist_size: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM blocklist")
-        .fetch_one(&state.db)
+    let blocklist_size: i64 = crate::db::blocklist::count_entries(&state.db)
         .await
         .unwrap_or(0);
 

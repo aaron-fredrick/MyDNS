@@ -65,38 +65,38 @@ async fn main() -> anyhow::Result<()> {
 
     let pool = db::init(&cfg.db_path).await?;
 
-    if let Some(prio) = db::get_setting(&pool, "resolver_priority").await? {
+    if let Some(prio) = db::settings::get_setting(&pool, "resolver_priority").await? {
         if let Ok(p) = prio.parse::<config::ResolverPriority>() {
             cfg.resolver_priority = p;
         }
     }
-    if let Some(cf) = db::get_setting(&pool, "cloudflare_dns").await? {
+    if let Some(cf) = db::settings::get_setting(&pool, "cloudflare_dns").await? {
         if let Ok(a) = cf.parse::<std::net::SocketAddr>() {
             cfg.cloudflare_dns = a;
         }
     }
-    if let Some(rt) = db::get_setting(&pool, "router_dns").await? {
+    if let Some(rt) = db::settings::get_setting(&pool, "router_dns").await? {
         cfg.router_dns = rt.parse::<std::net::SocketAddr>().ok();
     }
 
     if cfg.jwt_secret.is_empty() {
-        if let Some(saved_secret) = db::get_setting(&pool, "jwt_secret").await? {
+        if let Some(saved_secret) = db::settings::get_setting(&pool, "jwt_secret").await? {
             cfg.jwt_secret = saved_secret;
         } else {
             cfg.jwt_secret = config::generate_secret(64);
-            db::set_setting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
+            db::settings::set_setting(&pool, "jwt_secret", &cfg.jwt_secret).await?;
             tracing::info!("Generated and persisted new JWT secret");
         }
     }
 
     privileges::check_and_exit_if_insufficient(cfg.dns_port, cfg.http_port);
 
-    if db::records::find_user_hash(&pool, &cfg.admin_username)
+    if db::users::find_user_hash(&pool, &cfg.admin_username)
         .await?
         .is_none()
     {
         let hash = web::auth::hash_password(&cfg.admin_password)?;
-        db::records::seed_admin(&pool, &cfg.admin_username, &hash).await?;
+        db::users::seed_admin(&pool, &cfg.admin_username, &hash).await?;
         tracing::info!(username = %cfg.admin_username, "Admin user seeded");
     }
     cfg.admin_password.clear();
@@ -117,11 +117,11 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Seed DB zones from config (idempotent — skips duplicates).
-    db::records::seed_zones(&pool, &cfg.allowed_zones).await?;
+    db::zones::seed_zones(&pool, &cfg.allowed_zones).await?;
 
     // Build the live trie from DB so zone changes made via the API persist
     // across restarts without requiring a config file edit.
-    let zone_names = db::records::list_zone_names(&pool).await?;
+    let zone_names = db::zones::list_zone_names(&pool).await?;
     tracing::info!(zones = ?zone_names, "Local DNS zones loaded from DB");
     let zone_trie = ZoneTrie::from_zones(&zone_names);
     let record_index = RecordIndex::load_from_db(&pool).await?;

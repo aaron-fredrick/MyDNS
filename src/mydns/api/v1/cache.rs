@@ -45,7 +45,7 @@ pub async fn list_cache(
     }
 
     // 2. Get DB entries
-    if let Ok(db_entries) = crate::db::records::list_cache_entries(&state.db).await {
+    if let Ok(db_entries) = crate::db::cache::list_cache_entries(&state.db).await {
         let now = chrono::Utc::now().timestamp();
         for row in db_entries {
             let key = (row.name.clone(), row.record_type.clone());
@@ -83,7 +83,7 @@ pub async fn clear_cache(
     state.cache.write().await.clear();
 
     // Clear DB
-    let _ = crate::db::records::clear_cache(&state.db).await;
+    let _ = crate::db::cache::clear_cache(&state.db).await;
 
     let _ = state.log_tx.send("[CRUD] Cache cleared".to_string());
     tracing::info!("DNS cache cleared by admin");
@@ -105,7 +105,7 @@ pub async fn delete_cache_entry(
     state.cache.write().await.remove(&name, rtype);
 
     // Delete from DB
-    let _ = crate::db::records::delete_cache_entry(&state.db, &name, &rtype_str).await;
+    let _ = crate::db::cache::delete_cache_entry(&state.db, &name, &rtype_str).await;
 
     let _ = state
         .log_tx

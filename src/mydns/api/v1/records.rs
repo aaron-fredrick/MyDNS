@@ -7,6 +7,7 @@ use axum::{
 };
 
 use crate::db::records::{self, CreateRecord, UpdateRecord};
+use crate::db::{cache as db_cache, zones as db_zones};
 use crate::error::ApiError;
 use crate::state::AppState;
 use crate::web::auth::JwtClaims;
@@ -20,7 +21,7 @@ async fn cache_invalidation_names(
     for name in names {
         let normalized = name.trim_end_matches('.').to_lowercase();
         invalidation.insert(normalized.clone());
-        for dependent in records::find_cname_dependents(pool, &normalized).await? {
+        for dependent in db_cache::find_cname_dependents(pool, &normalized).await? {
             invalidation.insert(dependent);
         }
     }
@@ -30,7 +31,7 @@ async fn cache_invalidation_names(
 async fn invalidate_caches(state: &Arc<AppState>, names: &[String]) -> anyhow::Result<()> {
     let names = cache_invalidation_names(&state.db, names).await?;
     for name in &names {
-        records::delete_cache_for_name(&state.db, name).await?;
+        db_cache::delete_cache_for_name(&state.db, name).await?;
         state.cache.write().await.remove_name(name);
     }
     Ok(())
@@ -67,7 +68,7 @@ pub async fn create_record(
     } else {
         // For local DNS records, validate against the live DB zones so
         // that zone changes made via the API are reflected immediately.
-        let zone_names = records::list_zone_names(&state.db)
+        let zone_names = db_zones::list_zone_names(&state.db)
             .await
             .map_err(ApiError::Internal)?;
         validation::validate_zone(&body.name, &zone_names)?;
@@ -112,7 +113,7 @@ pub async fn update_record(
 
     if let Some(ref new_name) = body.name {
         if !old.is_dev {
-            let zone_names = records::list_zone_names(&state.db)
+            let zone_names = db_zones::list_zone_names(&state.db)
                 .await
                 .map_err(ApiError::Internal)?;
             validation::validate_zone(new_name, &zone_names)?;

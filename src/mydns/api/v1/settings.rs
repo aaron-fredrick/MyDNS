@@ -4,7 +4,7 @@ use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{self, ResolverMode, ResolverPriority};
-use crate::db;
+use crate::db::settings;
 use crate::dns::upstream::UpstreamResolver;
 use crate::error::ApiError;
 use crate::state::AppState;
@@ -66,21 +66,21 @@ pub async fn update_settings(
         cfg.resolver_mode = mode_str
             .parse::<ResolverMode>()
             .map_err(|e| ApiError::BadRequest(e.to_string()))?;
-        db::set_setting(&state.db, "resolver_mode", mode_str).await?;
+        settings::set_setting(&state.db, "resolver_mode", mode_str).await?;
     }
 
     if let Some(ref prio_str) = body.resolver_priority {
         cfg.resolver_priority = prio_str
             .parse::<ResolverPriority>()
             .map_err(|e| ApiError::BadRequest(e.to_string()))?;
-        db::set_setting(&state.db, "resolver_priority", prio_str).await?;
+        settings::set_setting(&state.db, "resolver_priority", prio_str).await?;
     }
 
     if let Some(ref addr_str) = body.cloudflare_dns {
         cfg.cloudflare_dns = addr_str
             .parse()
             .map_err(|_| ApiError::BadRequest("Invalid cloudflare_dns address".into()))?;
-        db::set_setting(&state.db, "cloudflare_dns", addr_str).await?;
+        settings::set_setting(&state.db, "cloudflare_dns", addr_str).await?;
     }
 
     if let Some(ref addr_str) = body.router_dns {
@@ -88,7 +88,7 @@ pub async fn update_settings(
             .parse()
             .map_err(|_| ApiError::BadRequest("Invalid router_dns address".into()))?;
         cfg.router_dns = Some(addr);
-        db::set_setting(&state.db, "router_dns", addr_str).await?;
+        settings::set_setting(&state.db, "router_dns", addr_str).await?;
     }
 
     // Rebuild the upstream resolver chain with the updated config.

@@ -579,7 +579,7 @@ async fn test_apex_soa_ns_removed_on_zone_deletion() {
     );
 
     // Delete the zone via DB (same as zones_api::remove_zone).
-    records::remove_zone(&server.pool, "apex-test.local")
+    mydns::db::zones::remove_zone(&server.pool, "apex-test.local")
         .await
         .expect("Zone removal failed");
 
@@ -597,7 +597,7 @@ async fn test_apex_soa_ns_removed_on_zone_deletion() {
     );
 
     // Verify zone is gone from zones table.
-    let zone_names = records::list_zone_names(&server.pool)
+    let zone_names = mydns::db::zones::list_zone_names(&server.pool)
         .await
         .expect("Failed to reload zone names");
     assert!(

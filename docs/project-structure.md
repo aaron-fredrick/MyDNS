@@ -144,6 +144,8 @@ The V1 documentation set is:
 
 `docs/ui/` is the repository-authoritative UI specification covering information architecture, screens, states, responsive behavior, cache live updates and DNS log presentation. Figma can support design work, but V1 must not depend on Figma being available.
 
+`docs/backend-structure/` is the repository-authoritative phased plan for the Rust backend structure refactor. It defines subsystem ownership, phase-by-phase implementation boundaries, acceptance criteria, and an AI-agent handoff tracker.
+
 ## Scripts
 
 `scripts/` contains repeatable project operations that do not belong inside the application, such as DNS smoke tests, stress-test invocation, release packaging, clean-tree checks and deployment helpers.
