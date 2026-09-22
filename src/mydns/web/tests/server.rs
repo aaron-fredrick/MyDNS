@@ -51,9 +51,7 @@ async fn run_reports_listener_bind_failure() {
 
     let error = result.expect_err("server should fail when the port is already bound");
     assert!(
-        error
-            .to_string()
-            .contains("Failed to bind HTTP server"),
+        error.to_string().contains("Failed to bind HTTP server"),
         "unexpected bind error: {error}"
     );
 }
