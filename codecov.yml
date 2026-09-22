@@ -1,5 +1,5 @@
-# Coverage is intentionally split by runtime surface. Thresholds remain
-# non-blocking until the expanded suite establishes a measured baseline.
+# Coverage is split by runtime/test surface. Thresholds remain
+# non-blocking while the test suite establishes measured baselines.
 coverage:
   status:
     project:
@@ -10,17 +10,19 @@ coverage:
         informational: true
 
 # These are process entrypoints rather than independently testable business
-# logic. Their behavior is verified by build/startup/E2E smoke jobs instead of
-# inflating line-coverage targets with tracing/bootstrap plumbing.
+# logic. main.rs and the frontend bootstrap are covered by startup/build/E2E
+# checks rather than unit-coverage targets.
 ignore:
   - "src/main.rs"
   - "src/frontend/src/main.tsx"
 
+# Keep Codecov flag names aligned with the flags uploaded by
+# .github/workflows/ci-coverage-upload.yml.
 flag_management:
   individual_flags:
-    - name: backend
+    - name: unit-backend
       paths:
-        - src/
+        - "src/mydns/**"
       statuses:
         - type: project
           target: auto
@@ -28,9 +30,32 @@ flag_management:
         - type: patch
           target: auto
           threshold: 1%
-    - name: frontend
+
+    - name: unit-frontend
       paths:
-        - src/frontend/
+        - "src/frontend/**"
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
+        - type: patch
+          target: auto
+          threshold: 1%
+
+    - name: component-backend
+      paths:
+        - "src/mydns/**"
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
+        - type: patch
+          target: auto
+          threshold: 1%
+
+    - name: integration-backend
+      paths:
+        - "src/mydns/**"
       statuses:
         - type: project
           target: auto
