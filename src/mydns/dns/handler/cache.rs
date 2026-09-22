@@ -45,7 +45,7 @@ impl DnsHandler {
     }
 
     #[async_recursion::async_recursion]
-    async fn query_persistent_cacheRecursive(
+    async fn query_persistent_cache_recursive(
         &self,
         name: &str,
         rtype: RecordType,
@@ -91,7 +91,7 @@ impl DnsHandler {
                 if !cname_rows.is_empty() {
                     let target = cname_rows[0].value.trim_end_matches('.').to_string();
                     match self
-                        .query_persistent_cacheRecursive(&target, rtype, depth + 1)
+                        .query_persistent_cache_recursive(&target, rtype, depth + 1)
                         .await
                     {
                         Some(ResolutionResult::Positive(mut target_recs, _)) => {
@@ -175,7 +175,7 @@ impl DnsHandler {
         }
     }
 
-    fn log_resolution(
+    pub(crate) fn log_resolution(
         &self,
         src: SocketAddr,
         name: &str,

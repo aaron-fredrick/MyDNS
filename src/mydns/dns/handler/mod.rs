@@ -16,10 +16,10 @@ mod local;
 mod records;
 pub mod upstream;
 
-pub(crate) use records::{build_record, failed_response_info};
+pub(crate) use records::build_record;
 
 #[derive(Debug)]
-enum ResolutionResult {
+pub(crate) enum ResolutionResult {
     Positive(Vec<Record>, bool), // records, is_authoritative (DNS AA bit)
     Nodata(bool),                // is_authoritative
     NxDomain(bool),              // is_authoritative
