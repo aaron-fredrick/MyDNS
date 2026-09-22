@@ -6,5 +6,10 @@
 mod metrics;
 mod types;
 
+pub mod alerts;
+pub mod health;
+pub mod resources;
+pub mod telemetry;
+
 pub use metrics::Metrics;
 pub use types::{HistorySample, LatencyStats, MetricsHistory, MetricsSnapshot, UpstreamStats};
