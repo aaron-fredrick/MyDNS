@@ -125,6 +125,20 @@ async fn ws_terminates_on_client_close_message() {
 }
 
 #[tokio::test]
+async fn ws_terminates_when_receiver_ends() {
+    let (_log_tx, mut log_rx) = broadcast::channel(16);
+    let sink = TestSink::default();
+    let stream = TestStream::new(vec![]);
+
+    let handle = tokio::spawn(async move {
+        handle_socket_stream(sink, stream, &mut log_rx).await;
+    });
+
+    let res = tokio::time::timeout(std::time::Duration::from_millis(500), handle).await;
+    assert!(res.is_ok(), "handler should terminate when receiver ends");
+}
+
+#[tokio::test]
 async fn ws_terminates_on_broadcast_channel_close() {
     let (log_tx, mut log_rx) = broadcast::channel(16);
     let sink = TestSink::default();
