@@ -116,10 +116,7 @@ allowed = ["home.arpa"]
             ResolverPriority::RouterFirst,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5354),
             Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5355)),
-            vec![SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)),
-                53,
-            )],
+            vec![SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)), 53)],
         )
         .unwrap();
         let state = AppState::new(
