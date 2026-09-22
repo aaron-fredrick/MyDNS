@@ -101,48 +101,9 @@ pub(crate) fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Res
 
     #[cfg(not(debug_assertions))]
     {
-        use anyhow::Context;
         use axum::http::{header, Method};
 
-        let mut origins = Vec::new();
-        let bind_hosts = if config.http_host.is_unspecified() {
-            let mut hosts = vec![config.http_host];
-            let interfaces = local_ip_address::list_afinet_netifas()
-                .context("Failed to enumerate local network interfaces")?;
-            hosts.extend(
-                interfaces
-                    .into_iter()
-                    .map(|(_, ip)| ip)
-                    .filter(|ip| !ip.is_unspecified()),
-            );
-            hosts
-        } else {
-            vec![config.http_host]
-        };
-
-        for host in bind_hosts {
-            if !host.is_unspecified() {
-                origins.push(origin_header(&host.to_string(), config.http_port)?);
-            }
-        }
-
-        for domain in &config.cors_domains {
-            let domain = domain.trim().trim_end_matches('.');
-            if domain.is_empty() || domain.contains("://") || domain.contains('/') {
-                anyhow::bail!(
-                    "Invalid cors_domains entry '{}': expected a hostname without scheme or path",
-                    domain
-                );
-            }
-            origins.push(origin_header(domain, config.http_port)?);
-        }
-
-        origins.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
-        origins.dedup_by(|a, b| a == b);
-
-        if origins.is_empty() {
-            anyhow::bail!("Release CORS origin allowlist is empty");
-        }
+        let origins = parse_cors_origins(config)?;
 
         Ok(CorsLayer::new()
             .allow_origin(origins)
@@ -151,8 +112,57 @@ pub(crate) fn build_cors_layer(config: &crate::config::AppConfig) -> anyhow::Res
     }
 }
 
-#[cfg(not(debug_assertions))]
-fn origin_header(host: &str, port: u16) -> anyhow::Result<axum::http::HeaderValue> {
+#[cfg(any(test, not(debug_assertions)))]
+pub(crate) fn parse_cors_origins(
+    config: &crate::config::AppConfig,
+) -> anyhow::Result<Vec<axum::http::HeaderValue>> {
+    use anyhow::Context;
+
+    let mut origins = Vec::new();
+    let bind_hosts = if config.http_host.is_unspecified() {
+        let mut hosts = vec![config.http_host];
+        let interfaces = local_ip_address::list_afinet_netifas()
+            .context("Failed to enumerate local network interfaces")?;
+        hosts.extend(
+            interfaces
+                .into_iter()
+                .map(|(_, ip)| ip)
+                .filter(|ip| !ip.is_unspecified()),
+        );
+        hosts
+    } else {
+        vec![config.http_host]
+    };
+
+    for host in bind_hosts {
+        if !host.is_unspecified() {
+            origins.push(origin_header(&host.to_string(), config.http_port)?);
+        }
+    }
+
+    for domain in &config.cors_domains {
+        let domain = domain.trim().trim_end_matches('.');
+        if domain.is_empty() || domain.contains("://") || domain.contains('/') {
+            anyhow::bail!(
+                "Invalid cors_domains entry '{}': expected a hostname without scheme or path",
+                domain
+            );
+        }
+        origins.push(origin_header(domain, config.http_port)?);
+    }
+
+    origins.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+    origins.dedup_by(|a, b| a == b);
+
+    if origins.is_empty() {
+        anyhow::bail!("Release CORS origin allowlist is empty");
+    }
+
+    Ok(origins)
+}
+
+#[cfg(any(test, not(debug_assertions)))]
+pub(crate) fn origin_header(host: &str, port: u16) -> anyhow::Result<axum::http::HeaderValue> {
     use std::net::IpAddr;
 
     let origin = if host.parse::<IpAddr>().is_ok() && host.contains(':') {

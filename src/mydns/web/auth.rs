@@ -21,19 +21,19 @@ use crate::error::ApiError;
 use crate::state::AppState;
 
 // Login is limited per client IP to reduce brute-force exposure.
-const MAX_LOGIN_ATTEMPTS: u32 = 5;
-const LOGIN_WINDOW_SECONDS: u64 = 300;
-const WS_AUTH_PROTOCOL_PREFIX: &str = "mydns-auth.";
-const MAX_TRACKED_LOGIN_IPS: usize = 10_000;
+pub(crate) const MAX_LOGIN_ATTEMPTS: u32 = 5;
+pub(crate) const LOGIN_WINDOW_SECONDS: u64 = 300;
+pub(crate) const WS_AUTH_PROTOCOL_PREFIX: &str = "mydns-auth.";
+pub(crate) const MAX_TRACKED_LOGIN_IPS: usize = 10_000;
 
 #[derive(Clone)]
-struct LoginAttemptTracker {
-    attempts: u32,
-    window_start: u64,
+pub(crate) struct LoginAttemptTracker {
+    pub(crate) attempts: u32,
+    pub(crate) window_start: u64,
 }
 
 pub struct LoginRateLimiter {
-    trackers: Arc<RwLock<HashMap<IpAddr, LoginAttemptTracker>>>,
+    pub(crate) trackers: Arc<RwLock<HashMap<IpAddr, LoginAttemptTracker>>>,
 }
 
 impl LoginRateLimiter {
@@ -132,6 +132,7 @@ pub async fn login(
     Ok(Json(LoginResponse { token }))
 }
 
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct JwtClaims(pub Claims);
 
@@ -172,7 +173,7 @@ pub fn hash_password(password: &str) -> anyhow::Result<String> {
     Ok(hash.to_string())
 }
 
-fn verify_password(password: &str, hash: &str) -> Result<(), ApiError> {
+pub(crate) fn verify_password(password: &str, hash: &str) -> Result<(), ApiError> {
     let parsed = PasswordHash::new(hash)
         .map_err(|_| ApiError::Unauthorized("Invalid credentials".into()))?;
     Argon2::default()
@@ -180,7 +181,7 @@ fn verify_password(password: &str, hash: &str) -> Result<(), ApiError> {
         .map_err(|_| ApiError::Unauthorized("Invalid credentials".into()))
 }
 
-fn issue_token(username: &str, secret: &str) -> anyhow::Result<String> {
+pub(crate) fn issue_token(username: &str, secret: &str) -> anyhow::Result<String> {
     let now = epoch_now();
     let claims = Claims {
         sub: username.to_string(),
@@ -195,7 +196,7 @@ fn issue_token(username: &str, secret: &str) -> anyhow::Result<String> {
     .context("JWT encode failed")
 }
 
-fn validate_token(token: &str, secret: &str) -> anyhow::Result<Claims> {
+pub(crate) fn validate_token(token: &str, secret: &str) -> anyhow::Result<Claims> {
     Ok(decode::<Claims>(
         token,
         &DecodingKey::from_secret(secret.as_bytes()),
@@ -207,7 +208,7 @@ fn validate_token(token: &str, secret: &str) -> anyhow::Result<Claims> {
 /// Extract JWTs from normal HTTP Authorization headers or the browser WebSocket
 /// subprotocol used by the frontend. Browsers do not allow arbitrary headers
 /// when constructing a WebSocket, so the latter is required for live logs.
-fn extract_bearer(parts: &Parts) -> anyhow::Result<&str> {
+pub(crate) fn extract_bearer(parts: &Parts) -> anyhow::Result<&str> {
     if let Some(token) = parts
         .headers
         .get("Authorization")
@@ -230,139 +231,9 @@ fn extract_bearer(parts: &Parts) -> anyhow::Result<&str> {
         .context("Missing or malformed Authorization header")
 }
 
-fn epoch_now() -> u64 {
+pub(crate) fn epoch_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::http::Request;
-
-    #[test]
-    fn issued_token_validates_with_same_secret() {
-        let token = issue_token("admin", "test-secret").unwrap();
-        let claims = validate_token(&token, "test-secret").unwrap();
-        assert_eq!(claims.sub, "admin");
-    }
-
-    #[test]
-    fn tampered_token_is_rejected() {
-        let token = issue_token("admin", "test-secret").unwrap();
-        assert!(validate_token(&format!("{}x", token), "test-secret").is_err());
-    }
-
-    #[test]
-    fn token_signed_with_wrong_secret_is_rejected() {
-        let token = issue_token("admin", "test-secret").unwrap();
-        assert!(validate_token(&token, "wrong-secret").is_err());
-    }
-
-    #[test]
-    fn expired_token_is_rejected() {
-        let now = epoch_now();
-        let claims = Claims {
-            sub: "admin".into(),
-            iat: now.saturating_sub(7200),
-            exp: now.saturating_sub(3600),
-        };
-        let token = encode(
-            &Header::default(),
-            &claims,
-            &EncodingKey::from_secret(b"test-secret"),
-        )
-        .unwrap();
-        assert!(validate_token(&token, "test-secret").is_err());
-    }
-
-    #[test]
-    fn password_hash_verifies_only_original_password() {
-        let hash = hash_password("correct-password").unwrap();
-        assert!(verify_password("correct-password", &hash).is_ok());
-        assert!(verify_password("wrong-password", &hash).is_err());
-    }
-
-    #[test]
-    fn websocket_subprotocol_token_is_extracted() {
-        let request = Request::builder()
-            .header("Sec-WebSocket-Protocol", "chat, mydns-auth.test-token")
-            .body(())
-            .unwrap();
-        let (parts, _) = request.into_parts();
-        assert_eq!(extract_bearer(&parts).unwrap(), "test-token");
-    }
-
-    #[test]
-    fn authorization_bearer_token_is_extracted() {
-        let request = Request::builder()
-            .header("Authorization", "Bearer test-token")
-            .body(())
-            .unwrap();
-        let (parts, _) = request.into_parts();
-        assert_eq!(extract_bearer(&parts).unwrap(), "test-token");
-    }
-
-    #[test]
-    fn malformed_authorization_is_rejected() {
-        for value in ["Basic test-token", "Bearer", "bearer test-token", ""] {
-            let request = Request::builder()
-                .header("Authorization", value)
-                .body(())
-                .unwrap();
-            let (parts, _) = request.into_parts();
-            assert!(
-                extract_bearer(&parts).is_err(),
-                "unexpectedly accepted {value:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn websocket_protocol_without_auth_token_is_rejected() {
-        let request = Request::builder()
-            .header("Sec-WebSocket-Protocol", "chat, superchat")
-            .body(())
-            .unwrap();
-        let (parts, _) = request.into_parts();
-        assert!(extract_bearer(&parts).is_err());
-    }
-
-    #[test]
-    fn malformed_password_hash_is_rejected() {
-        let candidate = format!("{}-{}", "test", "input");
-        assert!(verify_password(candidate.as_str(), "not-a-password-hash").is_err());
-    }
-
-    #[tokio::test]
-    async fn login_rate_limiter_allows_five_attempts_then_blocks() {
-        let limiter = LoginRateLimiter::new();
-        let ip = "192.0.2.10".parse().unwrap();
-
-        for attempt in 1..=5 {
-            assert!(
-                limiter.check_rate_limit(ip).await.is_ok(),
-                "attempt {attempt} should be allowed"
-            );
-        }
-        assert!(matches!(
-            limiter.check_rate_limit(ip).await,
-            Err(ApiError::TooManyRequests(_))
-        ));
-    }
-
-    #[tokio::test]
-    async fn login_rate_limiter_tracks_ips_independently() {
-        let limiter = LoginRateLimiter::new();
-        let first = "192.0.2.10".parse().unwrap();
-        let second = "192.0.2.11".parse().unwrap();
-
-        for _ in 0..5 {
-            limiter.check_rate_limit(first).await.unwrap();
-        }
-        assert!(limiter.check_rate_limit(first).await.is_err());
-        assert!(limiter.check_rate_limit(second).await.is_ok());
-    }
 }
