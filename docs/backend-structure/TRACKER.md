@@ -13,7 +13,7 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 | 3 — Web server boundaries | DONE | Pending | Unit + integration tests pass (209/209) | Separate lifecycle/routes/frontend serving |
 | 4 — DNS/runtime ownership | DONE | Pending | Structure validated, no changes needed | Verify runtime ownership without unnecessary rewrite |
 | 5 — API/application boundary | DONE | 8956a484 | `cargo test` 209/209 passed (exit 0, actually run) | API boundary audit complete; one prior violation (stats.rs raw SQL) already fixed; all other handlers confirmed clean |
-| 6 — Final verification | TODO | — | — | Final tree/dependency/naming/documentation check |
+| 6 — Final verification | DONE | Pending | Unit + integration tests pass (209/209) | Verified tree structure, backwards dependencies, no MVC layers |
 
 ## Agent handoff record
 
@@ -95,12 +95,12 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 - No `services/`, `repositories/`, `models/`, or other generic layers introduced.
 
 ### Phase 6
-- Status: TODO
-- Started: —
-- Completed: —
-- Commit: —
-- Validation: —
-- Notes: —
+- Status: DONE
+- Started: 2026-09-22
+- Completed: 2026-09-22
+- Commit: Pending
+- Validation: `cargo fmt -- --check` (clean), `cargo check` (clean), `cargo test` (209/209 tests passed).
+- Notes: Verified that the tree structure accurately reflects subsystem ownership. No generic `utils`, `helpers`, `services`, `repositories`, or `managers` were found. No backwards dependencies from DB/Cache/DNS into API/Web were found. No code changes were needed as the architectural rules are already satisfied by the previous phases. The backend structure is ready to be considered finished.
 
 ## Global agent rules
 
