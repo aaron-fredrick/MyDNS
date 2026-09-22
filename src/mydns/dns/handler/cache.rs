@@ -56,14 +56,14 @@ impl DnsHandler {
             return Some(ResolutionResult::ServFail);
         }
 
-        let rows =
-            match crate::db::cache::get_cache(&self.state.db, name, &rtype.to_string()).await {
-                Ok(r) => r,
-                Err(e) => {
-                    tracing::error!(error = %e, name = %name, "Failed to query persistent cache");
-                    return Some(ResolutionResult::ServFail);
-                }
-            };
+        let rows = match crate::db::cache::get_cache(&self.state.db, name, &rtype.to_string()).await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!(error = %e, name = %name, "Failed to query persistent cache");
+                return Some(ResolutionResult::ServFail);
+            }
+        };
 
         if !rows.is_empty() {
             if rows.len() == 1 && rows[0].value == "NX" {
@@ -85,8 +85,7 @@ impl DnsHandler {
         }
 
         if rtype != RecordType::CNAME {
-            if let Ok(cname_rows) =
-                crate::db::cache::get_cache(&self.state.db, name, "CNAME").await
+            if let Ok(cname_rows) = crate::db::cache::get_cache(&self.state.db, name, "CNAME").await
             {
                 if !cname_rows.is_empty() {
                     let target = cname_rows[0].value.trim_end_matches('.').to_string();

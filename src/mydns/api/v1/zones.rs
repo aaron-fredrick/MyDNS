@@ -6,8 +6,8 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::db::zones;
 use crate::db::cache as db_cache;
+use crate::db::zones;
 use crate::dns::zone_trie::ZoneTrie;
 use crate::error::ApiError;
 use crate::state::AppState;
@@ -89,25 +89,23 @@ pub async fn add_zone(
     let canonical = validate_zone_name(&body.name)?;
 
     // Attempt insert; if it fails with a unique constraint the zone already exists.
-    let zone = zones::add_zone(&state.db, &canonical)
-        .await
-        .map_err(|e| {
-            let is_duplicate = match e.downcast_ref::<sqlx::Error>() {
-                Some(sqlx::Error::Database(db_err)) => db_err.is_unique_violation(),
-                _ => {
-                    let msg = e.to_string();
-                    msg.contains("UNIQUE")
-                        || msg.contains("unique")
-                        || (msg.contains("constraint failed") && msg.contains("zones.name"))
-                }
-            };
-
-            if is_duplicate {
-                ApiError::BadRequest(format!("Zone '{}' already exists", canonical))
-            } else {
-                ApiError::Internal(e)
+    let zone = zones::add_zone(&state.db, &canonical).await.map_err(|e| {
+        let is_duplicate = match e.downcast_ref::<sqlx::Error>() {
+            Some(sqlx::Error::Database(db_err)) => db_err.is_unique_violation(),
+            _ => {
+                let msg = e.to_string();
+                msg.contains("UNIQUE")
+                    || msg.contains("unique")
+                    || (msg.contains("constraint failed") && msg.contains("zones.name"))
             }
-        })?;
+        };
+
+        if is_duplicate {
+            ApiError::BadRequest(format!("Zone '{}' already exists", canonical))
+        } else {
+            ApiError::Internal(e)
+        }
+    })?;
 
     reload_trie(&state).await?;
 

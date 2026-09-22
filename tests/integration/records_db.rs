@@ -200,12 +200,19 @@ async fn test_settings_are_inserted_and_replaced() {
     let test_db = TestDb::new();
     let pool = test_db.init_pool().await;
 
-    assert_eq!(db::settings::get_setting(&pool, "resolver.mode").await.unwrap(), None);
+    assert_eq!(
+        db::settings::get_setting(&pool, "resolver.mode")
+            .await
+            .unwrap(),
+        None
+    );
     db::settings::set_setting(&pool, "resolver.mode", "forwarding")
         .await
         .unwrap();
     assert_eq!(
-        db::settings::get_setting(&pool, "resolver.mode").await.unwrap(),
+        db::settings::get_setting(&pool, "resolver.mode")
+            .await
+            .unwrap(),
         Some("forwarding".into())
     );
 
@@ -213,7 +220,9 @@ async fn test_settings_are_inserted_and_replaced() {
         .await
         .unwrap();
     assert_eq!(
-        db::settings::get_setting(&pool, "resolver.mode").await.unwrap(),
+        db::settings::get_setting(&pool, "resolver.mode")
+            .await
+            .unwrap(),
         Some("recursive".into())
     );
 }

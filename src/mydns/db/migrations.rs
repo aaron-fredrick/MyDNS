@@ -1,4 +1,3 @@
-
 use sqlx::SqlitePool;
 
 /// Runs all DDL migrations: creates tables, enforces constraints, and applies

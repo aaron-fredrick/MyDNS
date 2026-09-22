@@ -1,6 +1,6 @@
 use super::fixtures::TestDb;
-use crate::mydns::db::{records, users, zones};
 use crate::mydns::db::records::{CreateRecord, UpdateRecord};
+use crate::mydns::db::{records, users, zones};
 
 #[tokio::test]
 async fn record_crud_covers_case_normalization_and_partial_updates() {
@@ -133,10 +133,7 @@ async fn users_can_be_seeded_idempotently_and_missing_users_return_none() {
         users::find_user_hash(&pool, "admin").await.unwrap(),
         Some("hash-1".into())
     );
-    assert_eq!(
-        users::find_user_hash(&pool, "missing").await.unwrap(),
-        None
-    );
+    assert_eq!(users::find_user_hash(&pool, "missing").await.unwrap(), None);
 }
 
 #[tokio::test]

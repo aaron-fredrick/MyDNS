@@ -82,10 +82,7 @@ async fn test_persistent_cache_clear_removes_all_entries() {
         .await
         .unwrap();
 
-    assert_eq!(
-        db::cache::list_cache_entries(&pool).await.unwrap().len(),
-        2
-    );
+    assert_eq!(db::cache::list_cache_entries(&pool).await.unwrap().len(), 2);
 
     db::cache::clear_cache(&pool).await.unwrap();
 
