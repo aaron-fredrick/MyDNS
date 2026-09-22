@@ -57,9 +57,9 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 - Validation: `cargo fmt -- --check` (exit 0, clean); `cargo check` (exit 0, clean); `cargo test` (exit 0, **209/209 tests passed** — 150 unit + 59 integration, actually run and verified)
 - Notes: Complete independent audit of all `api/v1/` modules against the Phase 5 architectural rule. Details in agent handoff record below.
 
-#### Phase 5 Full Audit (2026-09-22, second agent pass)
+#### Phase 5 Full Audit (2026-09-22, second and third agent passes)
 
-**Prior state:** The previous agent fixed one genuine violation (raw SQL `COUNT(*)` in `stats.rs` moved to `db::records::count_records` and `db::blocklist::count_entries`). However, it marked the phase DONE with "exit 0 assumed" — not actually run. This pass performed the complete audit and ran all validation.
+**Prior state:** The first agent fixed one genuine violation (raw SQL `COUNT(*)` in `stats.rs` moved to `db::records::count_records` and `db::blocklist::count_entries`). However, it marked the phase DONE with "exit 0 assumed" — not actually run. The subsequent passes performed the complete audit, manually inspected the code to confirm no other violations existed, and actually ran all validation.
 
 **CodeGraph traces performed:**
 - `reload_blocklist_index` callers: only `add_blocklist_entry`, `update_blocklist_entry`, `delete_blocklist_entry` in `api/v1/blocklist.rs`
