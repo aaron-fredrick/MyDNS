@@ -1,11 +1,11 @@
+use super::{build_record, DnsHandler, ResolutionResult};
+use crate::cache::CacheResult;
+use hickory_proto::rr::{RData, Record, RecordType};
 use std::net::SocketAddr;
 use std::time::Duration;
-use hickory_proto::rr::{RData, Record, RecordType};
-use crate::cache::CacheResult;
-use super::{DnsHandler, ResolutionResult, build_record};
 
 impl DnsHandler {
-        pub(crate) async fn query_memory_cache(
+    pub(crate) async fn query_memory_cache(
         &self,
         name: &str,
         rtype: RecordType,
@@ -115,7 +115,12 @@ impl DnsHandler {
         None
     }
 
-    pub(crate) async fn handle_missing_record(&self, name: &str, rtype: RecordType, src: SocketAddr) {
+    pub(crate) async fn handle_missing_record(
+        &self,
+        name: &str,
+        rtype: RecordType,
+        src: SocketAddr,
+    ) {
         tracing::debug!(client = %src, query = %name, r#type = %rtype, "NXDOMAIN");
         let _ = self.state.log_tx.send(format!(
             "[NXDOMAIN] client={} query={} type={}",
@@ -178,7 +183,11 @@ impl DnsHandler {
         records: &[Record],
         source: &str,
     ) {
-        let values = records.iter().map(|r| r.data.to_string()).collect::<Vec<_>>().join(", ");
+        let values = records
+            .iter()
+            .map(|r| r.data.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         let _ = self.state.log_tx.send(format!(
             "[CACHE] client={} query={} type={} value=[{}] source={}",
             src, name, rtype, values, source

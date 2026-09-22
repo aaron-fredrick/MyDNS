@@ -1,9 +1,9 @@
-use std::net::SocketAddr;
-use hickory_proto::rr::RecordType;
 use super::{DnsHandler, ResolutionResult};
+use hickory_proto::rr::RecordType;
+use std::net::SocketAddr;
 
 impl DnsHandler {
-        pub(crate) async fn query_blocklist(
+    pub(crate) async fn query_blocklist(
         &self,
         name: &str,
         rtype: RecordType,
@@ -30,5 +30,4 @@ impl DnsHandler {
         ));
         Some(ResolutionResult::NxDomain(false))
     }
-
 }

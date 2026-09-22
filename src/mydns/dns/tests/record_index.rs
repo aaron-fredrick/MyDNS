@@ -60,7 +60,12 @@ fn existing_name_with_missing_type_is_nodata() {
 #[test]
 fn cname_chain_is_prepended_to_target_record() {
     let mut index = RecordIndex::default();
-    index.upsert(record(1, "alias.example.com", "CNAME", "target.example.com"));
+    index.upsert(record(
+        1,
+        "alias.example.com",
+        "CNAME",
+        "target.example.com",
+    ));
     index.upsert(record(2, "target.example.com", "A", "1.2.3.4"));
 
     match index.resolve_authoritative("alias.example.com", "A", None) {
@@ -76,7 +81,12 @@ fn cname_chain_is_prepended_to_target_record() {
 #[test]
 fn cname_to_missing_target_returns_cname_chain() {
     let mut index = RecordIndex::default();
-    index.upsert(record(1, "alias.example.com", "CNAME", "external.example.net."));
+    index.upsert(record(
+        1,
+        "alias.example.com",
+        "CNAME",
+        "external.example.net.",
+    ));
 
     match index.resolve_authoritative("alias.example.com", "A", None) {
         IndexResolution::Found(records) => {
@@ -190,7 +200,12 @@ fn any_returns_all_records_at_owner() {
 #[test]
 fn any_follows_cname_chain() {
     let mut index = RecordIndex::default();
-    index.upsert(record(1, "alias.example.com", "CNAME", "target.example.com"));
+    index.upsert(record(
+        1,
+        "alias.example.com",
+        "CNAME",
+        "target.example.com",
+    ));
     index.upsert(record(2, "target.example.com", "A", "1.2.3.4"));
     index.upsert(record(3, "target.example.com", "AAAA", "2001:db8::1"));
 

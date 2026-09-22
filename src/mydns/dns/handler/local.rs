@@ -1,7 +1,7 @@
-use std::net::{IpAddr, SocketAddr};
-use hickory_proto::rr::{Record, RecordType};
+use super::{build_record, DnsHandler, ResolutionResult};
 use crate::dns::record_index::IndexResolution;
-use super::{DnsHandler, ResolutionResult, build_record};
+use hickory_proto::rr::{Record, RecordType};
+use std::net::{IpAddr, SocketAddr};
 
 impl DnsHandler {
     pub(crate) async fn query_record_index(
@@ -94,7 +94,6 @@ impl DnsHandler {
             .map(|cfg| cfg.bind_host)
             .unwrap_or(IpAddr::from([127, 0, 0, 1]))
     }
-
 }
 
 fn is_private_ip(ip: IpAddr) -> bool {

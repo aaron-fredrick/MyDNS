@@ -1,10 +1,10 @@
-use std::net::{IpAddr, SocketAddr};
-use std::time::Duration;
+use super::forward::query_resolver;
+use super::{UpstreamResolution, UpstreamResolver};
 use colored::Colorize;
 use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{Name, RData, Record, RecordType};
-use super::{UpstreamResolution, UpstreamResolver};
-use super::forward::query_resolver;
+use std::net::{IpAddr, SocketAddr};
+use std::time::Duration;
 
 async fn raw_dns_query(
     server: SocketAddr,
@@ -17,7 +17,11 @@ async fn raw_dns_query(
     msg.metadata.recursion_desired = false;
     msg.add_query(DnsQuery::query(name.clone(), rtype));
     let bytes = msg.to_vec().ok()?;
-    let bind_addr = if server.is_ipv6() { "[::]:0" } else { "0.0.0.0:0" };
+    let bind_addr = if server.is_ipv6() {
+        "[::]:0"
+    } else {
+        "0.0.0.0:0"
+    };
     let socket = tokio::net::UdpSocket::bind(bind_addr).await.ok()?;
     socket.send_to(&bytes, server).await.ok()?;
     let mut recv_buf = vec![0u8; 4096];
@@ -25,31 +29,72 @@ async fn raw_dns_query(
     let start = tokio::time::Instant::now();
     let udp_response = loop {
         let elapsed = start.elapsed();
-        if elapsed >= timeout { return None; }
-        let recv_result = tokio::time::timeout(timeout - elapsed, socket.recv_from(&mut recv_buf)).await;
-        let (len, src_addr) = match recv_result { Ok(Ok(res)) => res, _ => return None };
-        if src_addr != server { continue; }
-        let parsed = match Message::from_vec(&recv_buf[..len]) { Ok(p) => p, Err(_) => continue };
-        if parsed.id != id || parsed.message_type != MessageType::Response || parsed.op_code != OpCode::Query { continue; }
-        let has_matching_query = parsed.queries.iter().any(|q| q.name() == name && (q.query_type() == rtype || rtype == hickory_proto::rr::RecordType::ANY));
-        if !has_matching_query && !parsed.queries.is_empty() { continue; }
+        if elapsed >= timeout {
+            return None;
+        }
+        let recv_result =
+            tokio::time::timeout(timeout - elapsed, socket.recv_from(&mut recv_buf)).await;
+        let (len, src_addr) = match recv_result {
+            Ok(Ok(res)) => res,
+            _ => return None,
+        };
+        if src_addr != server {
+            continue;
+        }
+        let parsed = match Message::from_vec(&recv_buf[..len]) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if parsed.id != id
+            || parsed.message_type != MessageType::Response
+            || parsed.op_code != OpCode::Query
+        {
+            continue;
+        }
+        let has_matching_query = parsed.queries.iter().any(|q| {
+            q.name() == name
+                && (q.query_type() == rtype || rtype == hickory_proto::rr::RecordType::ANY)
+        });
+        if !has_matching_query && !parsed.queries.is_empty() {
+            continue;
+        }
         break parsed;
     };
-    if udp_response.metadata.truncation { return raw_dns_query_tcp(server, &bytes, id).await; }
+    if udp_response.metadata.truncation {
+        return raw_dns_query_tcp(server, &bytes, id).await;
+    }
     Some(udp_response)
 }
-async fn raw_dns_query_tcp(server: SocketAddr, query_bytes: &[u8], expected_id: u16) -> Option<hickory_proto::op::Message> {
+async fn raw_dns_query_tcp(
+    server: SocketAddr,
+    query_bytes: &[u8],
+    expected_id: u16,
+) -> Option<hickory_proto::op::Message> {
     use hickory_proto::op::Message;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    let mut stream = tokio::time::timeout(Duration::from_secs(4), tokio::net::TcpStream::connect(server)).await.ok()?.ok()?;
+    let mut stream = tokio::time::timeout(
+        Duration::from_secs(4),
+        tokio::net::TcpStream::connect(server),
+    )
+    .await
+    .ok()?
+    .ok()?;
     let len_prefix = (query_bytes.len() as u16).to_be_bytes();
     stream.write_all(&len_prefix).await.ok()?;
     stream.write_all(query_bytes).await.ok()?;
-    let response_len = tokio::time::timeout(Duration::from_secs(4), stream.read_u16()).await.ok()?.ok()? as usize;
+    let response_len = tokio::time::timeout(Duration::from_secs(4), stream.read_u16())
+        .await
+        .ok()?
+        .ok()? as usize;
     let mut recv_buf = vec![0u8; response_len];
-    tokio::time::timeout(Duration::from_secs(4), stream.read_exact(&mut recv_buf)).await.ok()?.ok()?;
+    tokio::time::timeout(Duration::from_secs(4), stream.read_exact(&mut recv_buf))
+        .await
+        .ok()?
+        .ok()?;
     let parsed = Message::from_vec(&recv_buf).ok()?;
-    if parsed.id != expected_id { return None; }
+    if parsed.id != expected_id {
+        return None;
+    }
     Some(parsed)
 }
 impl UpstreamResolver {
@@ -59,7 +104,11 @@ impl UpstreamResolver {
         fields(name = %name, rtype = ?rtype, root_hints_count = self.root_hints.len()),
         skip(self)
     )]
-    pub(super) async fn resolve_iterative(&self, name: &Name, rtype: RecordType) -> UpstreamResolution {
+    pub(super) async fn resolve_iterative(
+        &self,
+        name: &Name,
+        rtype: RecordType,
+    ) -> UpstreamResolution {
         let mut current_servers = self.root_hints.clone();
         eprintln!(
             "{} Starting iterative recursion for {} (type {}) with {} root hints",

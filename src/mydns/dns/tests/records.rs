@@ -45,10 +45,14 @@ fn rejects_invalid_values() {
 
 #[test]
 fn rejects_malformed_soa() {
-    assert!(
-        build_record("example.com", RecordType::SOA, "ns1.example.com. hostmaster.example.com.", 300, None)
-            .is_none()
-    );
+    assert!(build_record(
+        "example.com",
+        RecordType::SOA,
+        "ns1.example.com. hostmaster.example.com.",
+        300,
+        None
+    )
+    .is_none());
 }
 
 #[test]
@@ -61,22 +65,10 @@ fn normalizes_record_names_to_fqdns() {
 
 #[test]
 fn respects_mx_priority_and_default() {
-    let explicit = build_record(
-        "mail.test",
-        RecordType::MX,
-        "mx.example.com",
-        600,
-        Some(5),
-    )
-    .expect("MX should build");
-    let defaulted = build_record(
-        "mail.test",
-        RecordType::MX,
-        "mx.example.com",
-        600,
-        None,
-    )
-    .expect("MX should build");
+    let explicit = build_record("mail.test", RecordType::MX, "mx.example.com", 600, Some(5))
+        .expect("MX should build");
+    let defaulted = build_record("mail.test", RecordType::MX, "mx.example.com", 600, None)
+        .expect("MX should build");
 
     assert_eq!(explicit.record_type(), RecordType::MX);
     assert_eq!(defaulted.record_type(), RecordType::MX);

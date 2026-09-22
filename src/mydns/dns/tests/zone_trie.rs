@@ -25,7 +25,10 @@ fn finds_deep_subdomain_zone() {
 #[test]
 fn chooses_longest_matching_zone() {
     let trie = trie(&["example.com", "sub.example.com"]);
-    assert_eq!(trie.find_zone("api.sub.example.com"), Some("sub.example.com"));
+    assert_eq!(
+        trie.find_zone("api.sub.example.com"),
+        Some("sub.example.com")
+    );
     assert_eq!(trie.find_zone("www.example.com"), Some("example.com"));
 }
 
