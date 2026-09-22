@@ -10,7 +10,7 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 |---|---|---|---|---|
 | 1 — Database boundaries | DONE | Pending | Unit tests pass | Split persistence ownership |
 | 2 — Configuration boundaries | DONE | Pending | Unit + integration tests pass (209/209) | Separate types from format parsing |
-| 3 — Web server boundaries | TODO | — | — | Separate lifecycle/routes/frontend serving |
+| 3 — Web server boundaries | DONE | Pending | Unit + integration tests pass (209/209) | Separate lifecycle/routes/frontend serving |
 | 4 — DNS/runtime ownership | TODO | — | — | Verify runtime ownership without unnecessary rewrite |
 | 5 — API/application boundary | TODO | — | — | Keep API thin |
 | 6 — Final verification | TODO | — | — | Final tree/dependency/naming/documentation check |
@@ -34,12 +34,13 @@ Allowed statuses: `TODO`, `IN PROGRESS`, `BLOCKED`, `DONE`.
 - Notes: Extracted `AppConfig`, `ResolverMode`, `ResolverPriority`, `default_root_hints`, and `IANA_ROOT_HINTS` into `config/types.rs`. Moved TOML-specific structs and `AppConfig::from_toml_str` / `from_toml_file` into `config/toml.rs`. Moved INI parser and `AppConfig::from_ini_file` into `config/ini.rs`. Moved all config tests into `config/tests.rs`. `config/mod.rs` is now a thin entry point: re-exports public types, owns `AppConfig::from_config_file` (format-dispatch), and `generate_secret`. All existing public paths (`crate::config::AppConfig`, `crate::config::ResolverMode`, etc.) remain stable. No unrelated code changed (only `src/mydns/config/mod.rs` differs from HEAD).
 
 ### Phase 3
-- Status: TODO
-- Started: —
-- Completed: —
-- Commit: —
-- Validation: —
-- Notes: —
+- Status: DONE
+- Started: 2026-09-22
+- Completed: 2026-09-22
+- Commit: Pending
+- Validation: `cargo check` (clean, exit 0); `cargo test` (209/209 tests passed — 150 unit + 59 integration, exit 0)
+- Notes: Extracted embedded frontend asset serving (`FrontendAssets`, `serve_frontend`, `serve_frontend_root`, `serve_asset`) into `web/frontend.rs`. Extracted router construction, middleware, and CORS configuration (`build_app`, `build_cors_layer`, `origin_header`) into `web/routes.rs`. Reduced `web/server.rs` to only handle the HTTP server lifecycle (bind, serve, graceful shutdown). Added new module declarations to `web/mod.rs`. No other files were touched.
+
 
 ### Phase 4
 - Status: TODO
