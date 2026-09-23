@@ -65,8 +65,7 @@ The observability telemetry boundary now contains the real subscriber/compositio
 
 2. **The non-blocking file writer has logging ownership.** Its `WorkerGuard` must stay alive for the process lifetime. This is a logging lifecycle concern, not a trace lifecycle concern. `LoggingGuard` now owns that lifetime directly.
 
-3. **No new crate dependencies.** All required crates (`tracing-subscriber`,
-   `tracing-appender`, `tracing-samply`) are already in `Cargo.toml`.
+3. **No new crate dependencies.** The telemetry foundation uses the existing `tracing-subscriber` and `tracing-appender` dependencies already present in `Cargo.toml`. Profiling dependencies are outside the telemetry phase scope.
 
 5. **Text format preserved.** File output: no ANSI. Stdout: ANSI enabled. No
    JSON format has been added. JSON is a potential future task.
