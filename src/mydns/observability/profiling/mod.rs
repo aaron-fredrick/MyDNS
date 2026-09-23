@@ -18,7 +18,7 @@ use tracing_samply::SamplyLayer;
 pub fn layer() -> Option<SamplyLayer> {
     match SamplyLayer::new() {
         Ok(layer) => {
-            eprintln!("[telemetry] Samply profiler attached — SamplyLayer active");
+            eprintln!("[profiling] Samply profiler attached — SamplyLayer active");
             Some(layer)
         }
         Err(_) => None,
