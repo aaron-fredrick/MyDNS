@@ -22,7 +22,7 @@ Logging and tracing are intentionally correlated but remain separate responsibil
 
 The telemetry bootstrap/composition layer owns installation of the single global subscriber/registry. `tracing-subscriber` is shared infrastructure and is not itself the definition of the tracing subsystem.
 
-The project already uses `tracing` and `tracing-subscriber`. Samply is an optional profiling consumer attached by the telemetry composition layer. The next step is consistent span instrumentation rather than adding ad-hoc timers everywhere.
+The project already uses `tracing` and `tracing-subscriber`. The next step is consistent span instrumentation rather than adding ad-hoc timers everywhere.
 
 ## Trace hierarchy
 
