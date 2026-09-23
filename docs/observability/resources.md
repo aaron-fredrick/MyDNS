@@ -4,6 +4,8 @@
 
 MyDNS needs visibility into resources consumed by the process and the storage used by operational artifacts.
 
+Resource telemetry owns the measurement and sampling of CPU, memory, filesystem, log-storage, and SQLite-storage conditions. It publishes those measurements through the metrics/telemetry boundary. Health and alerts consume the resulting resource signals; they do not own the sampling implementation.
+
 This is telemetry and belongs under the telemetry layer. It has a dedicated document because resource pressure can affect health and alerting.
 
 ## CPU
@@ -104,14 +106,17 @@ resource sampler
    +--> logs
    +--> SQLite files
    |
-   +--> metrics
-   +--> warning logs on state transitions
+   +--> resource metrics
+   +--> logging on resource state transitions
    +--> health state input
+   +--> alert evaluation inputs
 ```
 
 Recommended sample interval: 10 seconds initially.
 
 The interval should be configurable later if needed.
+
+The sampler should not write logs, decide readiness, or fire notifications directly. It produces resource observations; logging, health, and alerting consume those observations according to their own responsibilities.
 
 ## Resource health states
 
