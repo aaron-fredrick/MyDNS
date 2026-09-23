@@ -12,9 +12,22 @@ The three primary signals are:
 
 Instrumentation is the code-level mechanism that creates these signals.
 
+## Responsibility boundaries
+
+Telemetry is the umbrella for the signals, not a single implementation that owns all of their storage or output.
+
+- **Metrics** owns numerical measurements, aggregation, bounded labels, and metric exposure/export.
+- **Logging** owns structured log events, levels, filtering, formatting, destinations, retention, and the lifecycle of log writers.
+- **Tracing** owns spans, trace context, parent/child relationships, span attributes, sampling, and trace storage/export.
+- **Telemetry composition** owns initialization and integration of these components into the runtime observability pipeline.
+
+These components may use shared Rust infrastructure such as `tracing` and `tracing-subscriber`. Shared infrastructure is an integration mechanism, not a transfer of responsibility. A log event can inherit tracing context, and metrics can describe the same request window, without making logging responsible for traces or tracing responsible for log persistence.
+
+The single global subscriber/registry is composed once by the telemetry bootstrap layer. Individual components contribute their own layers or consumers; they do not install competing global subscriber systems.
+
 ## Instrumentation rules
 
-Use Rust `tracing` for request/span instrumentation and structured events.
+Use Rust `tracing` for request/span instrumentation and structured events. The `tracing` API provides the common instrumentation mechanism; logging and tracing remain separate semantic responsibilities.
 
 Prefer:
 

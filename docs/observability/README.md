@@ -55,8 +55,10 @@ The current implementation is therefore a foundation, not the final observabilit
 8. **DNS hot paths must not perform expensive telemetry work.**
 9. **No secrets, passwords, JWTs, authorization headers, or full DNS payloads are emitted by default.**
 10. **The management dashboard consumes stable observability APIs rather than coupling directly to internal Rust structures.**
-11. **The same underlying signal should be reusable by metrics, logs, health, dashboard views, and alert rules.**
-12. **Observability must remain bounded in memory, CPU, disk usage, and label cardinality.**
+11. **Metrics, logging, and tracing have separate responsibilities even when they share infrastructure and correlation context.**
+12. **The telemetry pipeline composes observability components; it does not absorb their domain responsibilities.**
+13. **The same underlying execution context may be correlated across metrics, logs, traces, health, dashboard views, and alert rules without making those signals interchangeable.**
+14. **Observability must remain bounded in memory, CPU, disk usage, and label cardinality.**
 
 ## Documents
 

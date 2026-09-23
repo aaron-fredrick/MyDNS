@@ -31,7 +31,52 @@ telemetry/resource conditions.
 Resource samplers feed metrics/logs and may contribute to health.
 ```
 
+## Responsibility boundaries
+
+The observability components are intentionally separate responsibilities. They may share infrastructure and correlation context, but one component must not implement another component's lifecycle or storage concerns.
+
+| Component | Owns | May integrate with |
+|---|---|---|
+| **Metrics** | Numerical measurements, aggregation, bounded labels, and metric exposure/export | request/trace context where useful for correlation, without using trace IDs as metric labels |
+| **Logging** | Log events, levels, filtering, formatting, stdout/file output, retention, and non-blocking log-writer lifecycle | tracing context, request context, and operational state |
+| **Tracing** | Instrumentation model, spans, parent/child relationships, trace context, span attributes, sampling, and trace storage/export | logging context and request lifecycle |
+| **Telemetry pipeline** | Composition and initialization of the observability components and their shared subscriber infrastructure | all telemetry components |
+| **Profiling** | Optional runtime performance profiling integration such as Samply | tracing/subscriber infrastructure where the profiler consumes it |
+
+`tracing-subscriber` is shared Rust infrastructure for consuming `tracing` events and spans. Its use by logging, tracing, or profiling does not transfer ownership of those responsibilities to another component.
+
+For example, a request may have one trace context while producing a trace span, structured log events, and metric observations. Correlation is intentional; the resulting signals remain independently owned.
+
+## Telemetry composition
+
+The runtime topology is:
+
+```text
+                         MyDNS application
+                                |
+                       instrumentation/events
+                                |
+                    +-----------v-----------+
+                    |  Telemetry composition|
+                    |       / bootstrap      |
+                    +-----------+-----------+
+                                |
+              +-----------------+-----------------+
+              |                 |                 |
+              v                 v                 v
+           Metrics           Logging           Tracing
+              |                 |                 |
+          metric API       stdout/file       TraceStore
+          /export             output          /export
+
+                         Optional profiling
+                              (Samply)
+```
+
+The composition layer installs the single global subscriber/registry and combines the layers supplied by the individual observability components. Logging owns log-output concerns; tracing owns span and trace concerns. They are not separate competing global subscriber systems.
+
 ## Cross-layer relationships
+
 
 ### Metrics -> Health
 
@@ -112,14 +157,14 @@ DNS request span
 
 ## Boundary rule
 
-Internal modules may emit signals, but only the observability subsystem owns:
+Internal modules may emit signals, but only the appropriate observability component owns its canonical semantics:
 
-- canonical metric names
-- common log fields
-- sampling policy
-- resource sampling
-- health aggregation
-- alert definitions
-- external observability export
+- **Metrics** owns canonical metric names, labels, aggregation, and metric exposure/export.
+- **Logging** owns log fields used for log records, levels, formatting, filtering, destinations, retention, redaction policy, and log-writer lifecycle.
+- **Tracing** owns span names, trace fields/context, hierarchy, sampling, trace retention/storage, and trace export.
+- **Telemetry composition** owns assembly of those components into the runtime pipeline.
+- **Resource telemetry** owns resource sampling and resource measurements, while health and alerts consume the resulting signals.
+- **Health** owns health aggregation and endpoint semantics.
+- **Alerts** owns alert definitions and evaluation policy.
 
-Feature modules should not implement their own competing observability systems.
+Feature modules should emit observations through these canonical boundaries rather than implementing competing telemetry systems.
