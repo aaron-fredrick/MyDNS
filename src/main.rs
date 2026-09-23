@@ -16,12 +16,12 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     dotenvy::dotenv().ok();
 
-    // Initialise the tracing/subscriber pipeline. The returned guard keeps the
+    // Initialise the telemetry pipeline. The returned guard keeps the
     // non-blocking file writer alive; it must not be dropped until main exits.
-    let tracing_config = observability::telemetry::tracing::TracingConfig::default();
-    let _tracing_guard = observability::telemetry::tracing::init(tracing_config)?;
+    let logging_config = observability::telemetry::logging::LoggingConfig::default();
+    let _logging_guard = observability::telemetry::pipeline::init(logging_config)?;
 
-    tracing::info!(log_file = %_tracing_guard.log_filename, "MyDNS starting");
+    tracing::info!(log_file = %_logging_guard.log_filename, "MyDNS starting");
 
     let (log_tx, _) = broadcast::channel::<String>(1024);
 

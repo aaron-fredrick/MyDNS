@@ -1,17 +1,18 @@
-//! Tracing pipeline configuration.
+//! Logging configuration.
 
 use chrono::Local;
 
-/// Configuration for the MyDNS tracing/subscriber pipeline.
+/// Configuration for the MyDNS logging pipeline.
 ///
 /// This is the single point that controls the subscriber setup: where log files
 /// are written, what filter level is applied, and what the log file is named.
 /// All fields have sensible defaults that replicate the previous behaviour
 /// in `main.rs`.
-pub struct TracingConfig {
+pub struct LoggingConfig {
     /// Directory under which log files are written.
     ///
-    /// Created automatically by [`super::pipeline::init`] if it does not exist.
+    /// Created automatically by [`super::super::pipeline::init`] if it does not
+    /// exist.
     pub log_directory: String,
 
     /// Name of the log file within [`log_directory`](Self::log_directory).
@@ -27,7 +28,7 @@ pub struct TracingConfig {
     pub env_filter_fallback: String,
 }
 
-impl TracingConfig {
+impl LoggingConfig {
     /// Create a config with a freshly-generated timestamped log filename.
     ///
     /// This is equivalent to what `main.rs` previously computed inline:
@@ -44,7 +45,7 @@ impl TracingConfig {
     }
 }
 
-impl Default for TracingConfig {
+impl Default for LoggingConfig {
     fn default() -> Self {
         Self::new()
     }
@@ -56,13 +57,13 @@ mod tests {
 
     #[test]
     fn default_log_directory_is_logs() {
-        let cfg = TracingConfig::default();
+        let cfg = LoggingConfig::default();
         assert_eq!(cfg.log_directory, "logs");
     }
 
     #[test]
     fn default_log_filename_has_expected_prefix_and_suffix() {
-        let cfg = TracingConfig::default();
+        let cfg = LoggingConfig::default();
         assert!(
             cfg.log_filename.starts_with("mydns_"),
             "filename should start with 'mydns_': {}",
@@ -77,7 +78,7 @@ mod tests {
 
     #[test]
     fn default_env_filter_fallback_is_info() {
-        let cfg = TracingConfig::default();
+        let cfg = LoggingConfig::default();
         assert_eq!(cfg.env_filter_fallback, "info");
     }
 }
