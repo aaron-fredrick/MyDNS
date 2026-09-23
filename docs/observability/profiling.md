@@ -20,9 +20,9 @@ The runtime profiling path is:
 ```text
 MyDNS process
     |
-telemetry pipeline
+observability pipeline
     |
-optional Samply layer
+optional profiling layer
     |
 Samply profiler
     |
@@ -39,7 +39,7 @@ The profiling layer is optional:
 The integration is owned by:
 
 ```text
-src/mydns/observability/telemetry/profiling/
+src/mydns/observability/profiling/
 └── mod.rs
 ```
 
