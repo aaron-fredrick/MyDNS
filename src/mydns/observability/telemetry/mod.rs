@@ -6,4 +6,5 @@
 pub mod logging;
 pub mod metrics;
 pub mod pipeline;
+pub mod profiling;
 pub mod tracing;
