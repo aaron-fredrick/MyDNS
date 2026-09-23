@@ -32,9 +32,9 @@ The observability telemetry boundary now contains the real subscriber/compositio
 
 | File | Purpose |
 |------|---------|
-| `logging/config.rs` | Logging configuration — log directory, filename, and output/filter settings |
-| `logging/guard.rs` | Logging guard — keeps the non-blocking log writer `WorkerGuard` alive |
-| `telemetry/pipeline.rs` | Telemetry composition — builds and installs the single global subscriber from component layers |
+| `config.rs` | Current tracing-module configuration; its log directory, filename, and filter settings are logging-owned concerns and should move under the logging component when the implementation boundary is refactored |
+| `guard.rs` | Current guard for the non-blocking log writer; the writer lifecycle is a logging-owned concern even though the guard is currently located with the tracing bootstrap |
+| `pipeline.rs` | Current subscriber composition; it combines logging, tracing, and optional profiling layers and should be treated as telemetry composition rather than tracing-owned semantics |
 | `span_names.rs` | Canonical span-name constants for the full DNS/HTTP/DB hierarchy |
 | `fields.rs` | Canonical structured field-name constants (component, outcome, http.*, db.*) |
 
@@ -49,7 +49,7 @@ The observability telemetry boundary now contains the real subscriber/compositio
 
 1. **Single telemetry bootstrap entry point.** Subscriber composition is owned by the observability boundary. Logging owns log-output layers and writer lifetime; tracing owns span vocabulary and instrumentation; optional profiling layers such as Samply are composed by the telemetry bootstrap. `main.rs` no longer needs to know about subscriber crate internals.
 
-2. **The logging guard carries the `WorkerGuard`.** The non-blocking file writer requires its `WorkerGuard` to stay alive for the process lifetime. This is a logging lifecycle concern, not a trace lifecycle concern. The top-level telemetry guard may own the logging guard so `main.rs` only needs to retain the composed observability lifetime.
+2. **The non-blocking file writer has logging ownership.** Its `WorkerGuard` must stay alive for the process lifetime. This is a logging lifecycle concern, not a trace lifecycle concern. The current implementation retains that guard through `TracingGuard`; the eventual component split should preserve the lifecycle while moving ownership to logging.
 
 3. **No new crate dependencies.** All required crates (`tracing-subscriber`,
    `tracing-appender`, `tracing-samply`) are already in `Cargo.toml`.
@@ -242,14 +242,11 @@ Do not make dashboard functionality depend on external observability infrastruct
 
 ### `src/main.rs`
 
-Calls the top-level observability/telemetry bootstrap. No subscriber, logging,
-tracing, or profiling policy should be added here.
+Currently calls the tracing-module initialization entry point. The architectural target is for `main.rs` to call the top-level observability/telemetry bootstrap instead. No subscriber, logging, tracing, or profiling policy should be added here.
 
 ### `src/mydns/observability/`
 
-Owns the canonical observability boundary and telemetry composition. Keep the
-responsibilities of metrics, logging, tracing, and future profiling components
-separate even when they share subscriber infrastructure.
+Owns the canonical observability boundary. The implementation is being evolved so telemetry composition and individual signal responsibilities remain separate even when they share subscriber infrastructure.
 
 ### `src/mydns/state/`
 
