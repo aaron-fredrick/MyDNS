@@ -39,9 +39,9 @@ The observability components are intentionally separate responsibilities. They m
 |---|---|---|
 | **Metrics** | Numerical measurements, aggregation, bounded labels, and metric exposure/export | request/trace context where useful for correlation, without using trace IDs as metric labels |
 | **Logging** | Log events, levels, filtering, formatting, stdout/file output, retention, and non-blocking log-writer lifecycle | tracing context, request context, and operational state |
-| **Tracing** | Instrumentation model, spans, parent/child relationships, trace context, span attributes, sampling, and trace storage/export | logging context and request lifecycle |
+| **Tracing** | Instrumentation model, spans, parent/child relationships, trace context, span attributes, sampling, and future trace storage/export | logging context and request lifecycle |
 | **Telemetry pipeline** | Composition and initialization of the observability components and their shared subscriber infrastructure | all telemetry components |
-| **Profiling** | Optional runtime performance profiling integration such as Samply | tracing/subscriber infrastructure where the profiler consumes it |
+| **Profiling** | Optional runtime performance profiling integration such as Samply and performance-profile lifecycle | tracing/subscriber infrastructure where the profiler consumes it |
 
 `tracing-subscriber` is shared Rust infrastructure for consuming `tracing` events and spans. Its use by logging, tracing, or profiling does not transfer ownership of those responsibilities to another component.
 
@@ -73,7 +73,7 @@ The runtime topology is:
                               (Samply)
 ```
 
-The composition layer installs the single global subscriber/registry and combines the layers supplied by the individual observability components. Logging owns log-output concerns; tracing owns span and trace concerns. They are not separate competing global subscriber systems.
+The composition layer installs the single global subscriber/registry and combines the layers supplied by the individual observability components. Logging owns log-output concerns; tracing owns span and trace concerns; profiling owns the optional Samply integration. They are not separate competing global subscriber systems.
 
 ## Cross-layer relationships
 
@@ -111,7 +111,7 @@ Logs are useful for event-based alerts such as:
 
 Logs should not be the primary source for high-frequency numerical alerts when a metric can represent the same condition.
 
-### Traces -> Metrics / Logs
+### Profiling -> Performance analysis\n\nProfiling is consumed as a diagnostic performance-analysis capability. It can be used alongside metrics and traces to explain CPU hotspots, but it is not a primary alerting signal and does not own request or trace semantics.\n\n### Traces -> Metrics / Logs
 
 A trace/span should carry enough context to correlate a diagnostic event with a request. Trace identifiers should be included in structured logs where available.
 
