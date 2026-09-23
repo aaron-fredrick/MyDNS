@@ -10,7 +10,7 @@ The three primary signals are:
 - **Logs** — structured events.
 - **Traces** — timed execution paths represented as spans.
 
-Instrumentation is the code-level mechanism that creates these signals.
+Instrumentation is the code-level mechanism that creates these signals.\n\nProfiling is related to observability but is intentionally outside the three primary telemetry signals. It provides sampled runtime performance data and is treated as a separate diagnostic capability.
 
 ## Responsibility boundaries
 
@@ -19,13 +19,13 @@ Telemetry is the umbrella for the signals, not a single implementation that owns
 - **Metrics** owns numerical measurements, aggregation, bounded labels, and metric exposure/export.
 - **Logging** owns structured log events, levels, filtering, formatting, destinations, retention, and the lifecycle of log writers.
 - **Tracing** owns spans, trace context, parent/child relationships, span attributes, sampling, and trace storage/export.
-- **Telemetry composition** owns initialization and integration of these components into the runtime observability pipeline.
+- **Profiling** owns optional runtime performance profiling integration such as Samply.\n- **Telemetry composition** owns initialization and integration of these components into the runtime observability pipeline.
 
 These components may use shared Rust infrastructure such as `tracing` and `tracing-subscriber`. Shared infrastructure is an integration mechanism, not a transfer of responsibility. A log event can inherit tracing context, and metrics can describe the same request window, without making logging responsible for traces or tracing responsible for log persistence.
 
 The single global subscriber/registry is composed once by the telemetry bootstrap layer. Individual components contribute their own layers or consumers; they do not install competing global subscriber systems.
 
-## Instrumentation rules
+## Profiling\n\nMyDNS uses optional Samply integration for runtime performance analysis. Profiling is not required for normal service operation and is not an alerting signal. It should be used to identify CPU/execution hotspots alongside metrics and tracing. The profiling integration lives under `telemetry/profiling/`; the pipeline only composes the optional profiling layer.\n\nSee [Profiling](profiling.md) for the profiling model and operational guidance.\n\n## Instrumentation rules
 
 Use Rust `tracing` for request/span instrumentation and structured events. The `tracing` API provides the common instrumentation mechanism; logging and tracing remain separate semantic responsibilities.
 
