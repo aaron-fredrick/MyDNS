@@ -18,8 +18,7 @@ Telemetry is the umbrella for the signals, not a single implementation that owns
 
 - **Metrics** owns numerical measurements, aggregation, bounded labels, and metric exposure/export.
 - **Logging** owns structured log events, levels, filtering, formatting, destinations, retention, and the lifecycle of log writers.
-- **Tracing** owns spans, trace context, parent/child relationships, span attributes, sampling, and trace storage/export.
-- **Profiling** owns optional runtime performance profiling integration such as Samply.\n- **Telemetry composition** owns initialization and integration of these components into the runtime observability pipeline.
+- **Tracing** owns spans, trace context, parent/child relationships, span attributes, sampling, and trace storage/export.\n- **Telemetry composition** owns initialization and integration of these components into the runtime observability pipeline.
 
 These components may use shared Rust infrastructure such as `tracing` and `tracing-subscriber`. Shared infrastructure is an integration mechanism, not a transfer of responsibility. A log event can inherit tracing context, and metrics can describe the same request window, without making logging responsible for traces or tracing responsible for log persistence.
 
