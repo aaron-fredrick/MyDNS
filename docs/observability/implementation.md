@@ -39,7 +39,7 @@ The observability telemetry boundary now contains the real subscriber/compositio
 | `telemetry/logging/mod.rs` | Logging ownership boundary and public logging types |
 | `telemetry/tracing/span_names.rs` | Canonical span-name vocabulary |
 | `telemetry/tracing/fields.rs` | Canonical structured field-name vocabulary |
-| `telemetry/profiling/mod.rs` | Optional Samply profiling-layer integration |
+| `observability/profiling/mod.rs` | Optional Samply profiling-layer integration |
 | `telemetry/mod.rs` | Declares the telemetry subsystems |
 
 #### Modified files
