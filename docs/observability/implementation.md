@@ -61,7 +61,7 @@ The observability telemetry boundary now contains the real subscriber/compositio
 
 ### Design decisions
 
-1. **Single telemetry bootstrap entry point.** Subscriber composition is owned by the observability boundary. Logging owns log-output layers and writer lifetime; tracing owns span vocabulary and instrumentation. The telemetry bootstrap composes the telemetry components without making `main.rs` manage subscriber crate internals. Existing profiling integration is composed by the same bootstrap but remains a separate observability capability.
+1. **Single telemetry bootstrap entry point.** Subscriber composition is owned by the observability boundary. Logging owns log-output layers and writer lifetime; tracing owns span vocabulary and instrumentation. The telemetry bootstrap composes the telemetry components without making `main.rs` manage subscriber crate internals.
 
 2. **The non-blocking file writer has logging ownership.** Its `WorkerGuard` must stay alive for the process lifetime. This is a logging lifecycle concern, not a trace lifecycle concern. `LoggingGuard` now owns that lifetime directly.
 
@@ -249,7 +249,7 @@ Do not make dashboard functionality depend on external observability infrastruct
 
 ### `src/main.rs`
 
-Constructs `LoggingConfig` and calls the top-level telemetry bootstrap. No subscriber, logging, tracing, or profiling policy should be added here.
+Constructs `LoggingConfig` and calls the top-level telemetry bootstrap. No subscriber, logging, or tracing policy should be added here.
 
 ### `src/mydns/observability/`
 
