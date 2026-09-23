@@ -4,7 +4,7 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 1 — Telemetry foundation | ✅ **Done** | Infrastructure only; see §Phase 1 below |
+| Phase 1 — Telemetry foundation | ✅ **Done** | Logging, tracing vocabulary, telemetry composition, and optional profiling integration; see §Phase 1 below |
 | Phase 2 — HTTP instrumentation | 🔲 Not started | |
 | Phase 3 — DNS instrumentation | 🔲 Not started | |
 | Phase 4 — Database instrumentation | 🔲 Not started | |
@@ -28,28 +28,31 @@
 
 The observability telemetry boundary now contains the real subscriber/composition foundation rather than keeping subscriber policy in `main.rs`. Tracing vocabulary is defined separately from logging output concerns.
 
-#### New files
+#### Current files
 
 | File | Purpose |
 |------|---------|
-| `config.rs` | Current tracing-module configuration; its log directory, filename, and filter settings are logging-owned concerns and should move under the logging component when the implementation boundary is refactored |
-| `guard.rs` | Current guard for the non-blocking log writer; the writer lifecycle is a logging-owned concern even though the guard is currently located with the tracing bootstrap |
-| `pipeline.rs` | Current subscriber composition; it combines logging, tracing, and optional profiling layers and should be treated as telemetry composition rather than tracing-owned semantics |
-| `span_names.rs` | Canonical span-name constants for the full DNS/HTTP/DB hierarchy |
-| `fields.rs` | Canonical structured field-name constants (component, outcome, http.*, db.*) |
+| `telemetry/pipeline.rs` | Single subscriber/composition entry point; assembles logging, tracing, and optional profiling |
+| `telemetry/logging/config.rs` | Logging configuration: log directory, filename, and filter fallback |
+| `telemetry/logging/layer.rs` | Non-blocking log writer infrastructure |
+| `telemetry/logging/guard.rs` | Lifetime guard for the non-blocking log writer |
+| `telemetry/logging/mod.rs` | Logging ownership boundary and public logging types |
+| `telemetry/tracing/span_names.rs` | Canonical span-name vocabulary |
+| `telemetry/tracing/fields.rs` | Canonical structured field-name vocabulary |
+| `telemetry/profiling/mod.rs` | Optional Samply profiling-layer integration |
+| `telemetry/mod.rs` | Declares the telemetry subsystems |
 
 #### Modified files
 
 | File | Change |
 |------|--------|
-| `src/mydns/observability/telemetry/tracing/mod.rs` | Declares the five new submodules; re-exports `TracingConfig`, `TracingGuard`, `init` |
-| `src/main.rs` | Replaced the inline subscriber block (~40 lines) with `tracing_foundation::init(config)?` |
+| `src/main.rs` | Constructs `LoggingConfig` explicitly and initializes the top-level telemetry pipeline; retains the returned logging guard for process lifetime |
 
 ### Design decisions
 
-1. **Single telemetry bootstrap entry point.** Subscriber composition is owned by the observability boundary. Logging owns log-output layers and writer lifetime; tracing owns span vocabulary and instrumentation; optional profiling layers such as Samply are composed by the telemetry bootstrap. `main.rs` no longer needs to know about subscriber crate internals.
+1. **Single telemetry bootstrap entry point.** Subscriber composition is owned by the observability boundary. Logging owns log-output layers and writer lifetime; tracing owns span vocabulary and instrumentation; profiling owns the optional Samply integration. The telemetry bootstrap composes those components, and `main.rs` no longer needs to know about subscriber crate internals.
 
-2. **The non-blocking file writer has logging ownership.** Its `WorkerGuard` must stay alive for the process lifetime. This is a logging lifecycle concern, not a trace lifecycle concern. The current implementation retains that guard through `TracingGuard`; the eventual component split should preserve the lifecycle while moving ownership to logging.
+2. **The non-blocking file writer has logging ownership.** Its `WorkerGuard` must stay alive for the process lifetime. This is a logging lifecycle concern, not a trace lifecycle concern. `LoggingGuard` now owns that lifetime directly.
 
 3. **No new crate dependencies.** All required crates (`tracing-subscriber`,
    `tracing-appender`, `tracing-samply`) are already in `Cargo.toml`.
