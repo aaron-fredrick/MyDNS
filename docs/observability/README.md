@@ -67,7 +67,8 @@ The current implementation is therefore a foundation, not the final observabilit
 - [Telemetry](telemetry.md) — instrumentation strategy and signal ownership.
 - [Metrics](metrics.md) — metric catalogue, names, labels, aggregation, and retention.
 - [Logging](logging.md) — structured logs, levels, fields, destinations, and redaction.
-- [Tracing](tracing.md) — spans, propagation, sampling, and DNS/API/DB traces.\n- [Profiling](profiling.md) — runtime performance profiling and Samply integration.
+- [Tracing](tracing.md) — spans, propagation, sampling, and DNS/API/DB traces.
+- [Profiling](profiling.md) — runtime performance profiling and Samply integration.
 - [Health](health.md) — liveness/readiness semantics and status mapping.
 - [Alerts](alerts.md) — alert conditions, severity, deduplication, and notification mapping.
 - [Resources](resources.md) — CPU, memory, disk, log-file, and SQLite storage telemetry.
