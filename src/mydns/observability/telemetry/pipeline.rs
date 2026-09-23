@@ -27,10 +27,9 @@
 //! stored inside [`super::logging::LoggingGuard`] and returned to `main`,
 //! which binds it to a long-lived variable.
 
-use tracing_samply::SamplyLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use super::logging::{layer::build_writer, LoggingConfig, LoggingGuard};
+use super::{logging::{layer::build_writer, LoggingConfig, LoggingGuard}, profiling};
 
 /// Build and install the global `tracing` subscriber for MyDNS.
 ///
@@ -72,31 +71,18 @@ pub fn init(config: LoggingConfig) -> anyhow::Result<LoggingGuard> {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.env_filter_fallback));
 
-    // ── 4. Optional Samply profiling layer ─────────────────────────────────────
+    // ── 4. Optional profiling layer ───────────────────────────────────────────
     //
-    // Samply attaches when its profiler is running. Not finding a profiler is
-    // the expected normal case — skipped silently. Only the attached case
-    // emits a diagnostic, since that represents an explicit profiling session.
-    //
-    // eprintln! is used here because the subscriber is not yet installed so
-    // tracing macros are not yet available.
-    let samply_layer = match SamplyLayer::new() {
-        Ok(layer) => {
-            eprintln!("[telemetry] Samply profiler attached — SamplyLayer active");
-            Some(layer)
-        }
-        Err(_) => {
-            // Normal case: Samply is not running. No diagnostic needed.
-            None
-        }
-    };
+    // Profiling owns the Samply integration. The normal non-profiled case is
+    // silent; an attached profiler is reported before subscriber installation.
+    let profiling_layer = profiling::layer();
 
     // ── 5. Assemble and install ────────────────────────────────────────────────
     tracing_subscriber::registry()
         .with(env_filter)
         .with(file_layer)
         .with(stdout_layer)
-        .with(samply_layer)
+        .with(profiling_layer)
         .init();
 
     Ok(LoggingGuard::new(writer.worker_guard, config.log_filename))
