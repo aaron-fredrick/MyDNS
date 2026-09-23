@@ -17,9 +17,8 @@ MyDNS currently initializes `tracing-subscriber` with:
 - ANSI enabled on stdout
 - timestamped files under `logs/`
 - a broadcast channel used by the application state for log streaming
-- Samply as an additional profiling layer
 
-These are runtime composition concerns: the telemetry bootstrap should assemble the logging layers with other observability layers. The logging component owns the file/stdout output and non-blocking writer lifecycle; Samply remains an optional profiling consumer.
+These are runtime composition concerns. The telemetry bootstrap assembles the logging layers with the other telemetry layers. The logging component owns the file/stdout output and non-blocking writer lifecycle.
 
 ## Log levels
 
