@@ -29,7 +29,8 @@
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use super::{logging::{layer::build_writer, LoggingConfig, LoggingGuard}, profiling};
+use super::logging::{layer::build_writer, LoggingConfig, LoggingGuard};
+use crate::observability::profiling;
 
 /// Build and install the global `tracing` subscriber for MyDNS.
 ///
