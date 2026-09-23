@@ -8,6 +8,7 @@ mod types;
 
 pub mod alerts;
 pub mod health;
+pub mod profiling;
 pub mod resources;
 pub mod telemetry;
 
