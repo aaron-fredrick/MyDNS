@@ -1,5 +1,11 @@
 # Logging
 
+## Responsibility
+
+Logging owns the lifecycle of log records from emission to configured destinations. It owns log levels, filtering, formatting, stdout/file output, retention/rotation policy, redaction, live log presentation, and the lifetime of non-blocking log writers.
+
+Logging may consume tracing context when a log event occurs inside a span. That context is correlation data; it does not make tracing responsible for log output or make logging responsible for trace storage.
+
 ## Current implementation
 
 MyDNS currently initializes `tracing-subscriber` with:
@@ -11,9 +17,9 @@ MyDNS currently initializes `tracing-subscriber` with:
 - ANSI enabled on stdout
 - timestamped files under `logs/`
 - a broadcast channel used by the application state for log streaming
-- Samply as an additional tracing layer
+- Samply as an additional profiling layer
 
-This should be retained as the base and formalized.
+These are runtime composition concerns: the telemetry bootstrap should assemble the logging layers with other observability layers. The logging component owns the file/stdout output and non-blocking writer lifecycle; Samply remains an optional profiling consumer.
 
 ## Log levels
 
@@ -71,6 +77,8 @@ Examples:
 Use for highly detailed development diagnostics. It should not be the normal production level.
 
 ## Structured fields
+
+Log fields describe log records. Where a log event is emitted inside a tracing span, tracing context such as `trace_id` and `request_id` may be included for correlation. Canonical tracing span names and trace context remain owned by the tracing component.
 
 Common fields:
 
@@ -151,6 +159,10 @@ It must:
 - not become the authoritative log store
 
 The dashboard should consume a sanitized presentation representation rather than arbitrary internal events.
+
+## Logging versus tracing
+
+Logging records events. Tracing records execution structure. A single request may therefore produce both a trace and log events carrying the same correlation context. Neither signal replaces the other, and the logging subsystem must not become the trace store.
 
 ## Logging versus metrics
 
