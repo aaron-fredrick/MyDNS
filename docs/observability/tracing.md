@@ -123,6 +123,47 @@ metric anomaly
    -> exact failing operation
 ```
 
+## Future trace storage and visualisation
+
+Trace storage is a **planned later phase**, not part of the current tracing implementation.
+
+The goal is for MyDNS to remain self-contained while eventually allowing the dashboard to inspect a request as a visual span tree and correlate it with logs. Before the observability pipeline is configured for dashboard visualisation, introduce a dedicated trace storage/query layer.
+
+The initial planned storage approach is **embedded SQLite**, using a trace-specific schema rather than treating the existing application database as a generic telemetry dump.
+
+Conceptually:
+
+```text
+Rust tracing
+    ↓
+MyDNS trace model
+    ↓
+TraceStore
+    ↓
+SQLite
+    ↓
+MyDNS dashboard trace API
+    ↓
+visual trace tree
+```
+
+The trace store should preserve enough information to reconstruct parent/child relationships, including:
+
+- trace ID
+- span ID
+- parent span ID
+- span/operation name
+- start time
+- duration
+- status
+- bounded attributes
+
+The storage design should include bounded retention, indexes for recent/slow/error traces, and configurable storage limits. Normal high-volume DNS traffic should be sampled; errors and slow operations should remain highly visible.
+
+This storage layer should **not be implemented now**. It is a later step that should be designed and implemented alongside the observability pipeline work required for dashboard visualisation.
+
+The storage abstraction should also keep the option open for a future OTLP/OpenTelemetry export path without coupling the dashboard to SQLite.
+
 ## Performance
 
 Tracing must be low overhead:
