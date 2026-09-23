@@ -24,7 +24,7 @@ Observability
     └── SQLite storage
 ```
 
-Resources are telemetry, not a separate observability signal type. They are included as a dedicated operational category because MyDNS needs to expose host/process/storage pressure and because those signals feed health and alerts.
+Telemetry is the primary signal-producing layer. Profiling is a separate diagnostic capability for sampled runtime performance analysis. Resources are an operational observability category, not a telemetry signal type. They are included as a dedicated operational category because MyDNS needs to expose host/process/storage pressure and because those signals feed health and alerts.
 
 ## Current project baseline
 
