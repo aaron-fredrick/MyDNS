@@ -4,7 +4,7 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 1 — Telemetry foundation | ✅ **Done** | Logging, tracing vocabulary, telemetry composition, and optional profiling integration; see §Phase 1 below |
+| Phase 1 — Telemetry foundation | ✅ **Done** | Logging, tracing vocabulary, and telemetry composition; see §Phase 1 below |
 | Phase 2 — HTTP instrumentation | 🔲 Not started | |
 | Phase 3 — DNS instrumentation | 🔲 Not started | |
 | Phase 4 — Database instrumentation | 🔲 Not started | |
@@ -22,6 +22,18 @@
 
 ---
 
+## Current capability outside the phased telemetry work
+
+### Profiling
+
+Optional Samply profiling is already implemented as a separate observability capability under `observability/profiling/`. It is not part of the telemetry phases and is not a Phase 1 deliverable.
+
+The telemetry pipeline composes the profiling layer because Samply integrates with the shared `tracing-subscriber` infrastructure. That composition does not make profiling part of telemetry ownership.
+
+See [Profiling](profiling.md) for its scope and current implementation.
+
+---
+
 ## Phase 1 — Telemetry foundation ✅
 
 ### What was implemented
@@ -32,14 +44,13 @@ The observability telemetry boundary now contains the real subscriber/compositio
 
 | File | Purpose |
 |------|---------|
-| `telemetry/pipeline.rs` | Single subscriber/composition entry point; assembles logging, tracing, and optional profiling |
+| `telemetry/pipeline.rs` | Single subscriber/composition entry point for the telemetry pipeline |
 | `telemetry/logging/config.rs` | Logging configuration: log directory, filename, and filter fallback |
 | `telemetry/logging/layer.rs` | Non-blocking log writer infrastructure |
 | `telemetry/logging/guard.rs` | Lifetime guard for the non-blocking log writer |
 | `telemetry/logging/mod.rs` | Logging ownership boundary and public logging types |
 | `telemetry/tracing/span_names.rs` | Canonical span-name vocabulary |
 | `telemetry/tracing/fields.rs` | Canonical structured field-name vocabulary |
-| `observability/profiling/mod.rs` | Optional Samply profiling-layer integration |
 | `telemetry/mod.rs` | Declares the telemetry subsystems |
 
 #### Modified files
@@ -50,19 +61,12 @@ The observability telemetry boundary now contains the real subscriber/compositio
 
 ### Design decisions
 
-1. **Single telemetry bootstrap entry point.** Subscriber composition is owned by the observability boundary. Logging owns log-output layers and writer lifetime; tracing owns span vocabulary and instrumentation; profiling owns the optional Samply integration. The telemetry bootstrap composes those components, and `main.rs` no longer needs to know about subscriber crate internals.
+1. **Single telemetry bootstrap entry point.** Subscriber composition is owned by the observability boundary. Logging owns log-output layers and writer lifetime; tracing owns span vocabulary and instrumentation. The telemetry bootstrap composes the telemetry components without making `main.rs` manage subscriber crate internals. Existing profiling integration is composed by the same bootstrap but remains a separate observability capability.
 
 2. **The non-blocking file writer has logging ownership.** Its `WorkerGuard` must stay alive for the process lifetime. This is a logging lifecycle concern, not a trace lifecycle concern. `LoggingGuard` now owns that lifetime directly.
 
 3. **No new crate dependencies.** All required crates (`tracing-subscriber`,
    `tracing-appender`, `tracing-samply`) are already in `Cargo.toml`.
-
-4. **Samply remains optional.** `SamplyLayer::new()` failing is non-fatal and
-   is the expected normal case — Samply is only present when the operator
-   explicitly attaches the `samply record` profiler. The absent case is
-   **silent**: no stderr output is emitted. Only the rarer attached case
-   prints a brief diagnostic to stderr (using `eprintln!`, because the
-   tracing subscriber is not yet installed at that point).
 
 5. **Text format preserved.** File output: no ANSI. Stdout: ANSI enabled. No
    JSON format has been added. JSON is a potential future task.
@@ -245,11 +249,11 @@ Do not make dashboard functionality depend on external observability infrastruct
 
 ### `src/main.rs`
 
-Currently calls the tracing-module initialization entry point. The architectural target is for `main.rs` to call the top-level observability/telemetry bootstrap instead. No subscriber, logging, tracing, or profiling policy should be added here.
+Constructs `LoggingConfig` and calls the top-level telemetry bootstrap. No subscriber, logging, tracing, or profiling policy should be added here.
 
 ### `src/mydns/observability/`
 
-Owns the canonical observability boundary. The implementation is being evolved so telemetry composition and individual signal responsibilities remain separate even when they share subscriber infrastructure.
+Owns the canonical observability boundary. Telemetry and profiling are separate capabilities under this boundary, even though the telemetry pipeline composes the profiling layer through shared subscriber infrastructure.
 
 ### `src/mydns/state/`
 
