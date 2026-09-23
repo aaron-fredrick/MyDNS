@@ -4,7 +4,25 @@
 
 Tracing explains **how a request moved through MyDNS** and where time was spent.
 
-The project already uses `tracing` and `tracing-subscriber`, and Samply is attached as a subscriber layer. The next step is consistent span instrumentation rather than adding ad-hoc timers everywhere.
+## Responsibility
+
+Tracing owns the execution model represented by spans and traces:
+
+- instrumentation and meaningful operation boundaries
+- canonical span names
+- span hierarchy and parent/child relationships
+- trace and span context
+- bounded span attributes
+- error/outcome semantics
+- sampling policy
+- future trace storage/query
+- trace export, including a possible future OTLP/OpenTelemetry path
+
+Logging and tracing are intentionally correlated but remain separate responsibilities. Logging owns log records and their destinations; tracing owns spans and trace storage. A log event may inherit trace context, and a trace may be correlated with logs, without either subsystem taking ownership of the other.
+
+The telemetry bootstrap/composition layer owns installation of the single global subscriber/registry. `tracing-subscriber` is shared infrastructure and is not itself the definition of the tracing subsystem.
+
+The project already uses `tracing` and `tracing-subscriber`. Samply is an optional profiling consumer attached by the telemetry composition layer. The next step is consistent span instrumentation rather than adding ad-hoc timers everywhere.
 
 ## Trace hierarchy
 
