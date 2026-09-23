@@ -12,6 +12,7 @@ Observability
 │   ├── Metrics
 │   ├── Logging
 │   └── Tracing
+├── Profiling
 ├── Health
 │   ├── Liveness
 │   └── Readiness
