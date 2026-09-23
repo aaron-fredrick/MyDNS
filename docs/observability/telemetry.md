@@ -10,7 +10,7 @@ The three primary signals are:
 - **Logs** — structured events.
 - **Traces** — timed execution paths represented as spans.
 
-Instrumentation is the code-level mechanism that creates these signals.\n\nProfiling is related to observability but is intentionally outside the three primary telemetry signals. It provides sampled runtime performance data and is treated as a separate diagnostic capability.
+Instrumentation is the code-level mechanism that creates these signals.
 
 ## Responsibility boundaries
 
@@ -24,7 +24,7 @@ These components may use shared Rust infrastructure such as `tracing` and `traci
 
 The single global subscriber/registry is composed once by the telemetry bootstrap layer. Individual components contribute their own layers or consumers; they do not install competing global subscriber systems.
 
-## Profiling\n\nMyDNS uses optional Samply integration for runtime performance analysis. Profiling is not required for normal service operation and is not an alerting signal. It should be used to identify CPU/execution hotspots alongside metrics and tracing. The profiling integration lives under `telemetry/profiling/`; the pipeline only composes the optional profiling layer.\n\nSee [Profiling](profiling.md) for the profiling model and operational guidance.\n\n## Instrumentation rules
+## Instrumentation rules
 
 Use Rust `tracing` for request/span instrumentation and structured events. The `tracing` API provides the common instrumentation mechanism; logging and tracing remain separate semantic responsibilities.
 
