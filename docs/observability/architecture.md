@@ -111,7 +111,11 @@ Logs are useful for event-based alerts such as:
 
 Logs should not be the primary source for high-frequency numerical alerts when a metric can represent the same condition.
 
-### Profiling -> Performance analysis\n\nProfiling is consumed as a diagnostic performance-analysis capability. It can be used alongside metrics and traces to explain CPU hotspots, but it is not a primary alerting signal and does not own request or trace semantics.\n\n### Traces -> Metrics / Logs
+### Profiling -> Performance analysis
+
+Profiling is consumed as a diagnostic performance-analysis capability. It can be used alongside metrics and traces to explain CPU hotspots, but it is not a primary alerting signal and does not own request or trace semantics.
+
+### Traces -> Metrics / Logs
 
 A trace/span should carry enough context to correlate a diagnostic event with a request. Trace identifiers should be included in structured logs where available.
 
