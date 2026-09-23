@@ -1,7 +1,7 @@
 //! Telemetry subsystems for MyDNS observability.
 //!
 //! [`pipeline`] is the single composition point that wires logging, tracing,
-//! and future signals into the global `tracing-subscriber` registry.
+//! and optional profiling into the global `tracing-subscriber` registry.
 
 pub mod logging;
 pub mod metrics;
