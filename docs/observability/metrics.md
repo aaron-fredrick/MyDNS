@@ -1,5 +1,11 @@
 # Metrics
 
+## Responsibility
+
+Metrics owns numerical measurements and their lifecycle: metric definitions, bounded labels, aggregation, recording, in-process metric state, and metric exposure/export. Metrics may correlate with request or trace context for diagnostics, but trace IDs and other unbounded identifiers must not become metric labels.
+
+Metrics do not own log formatting/output, trace hierarchy/storage, health endpoint semantics, or alert notification delivery. Those components may consume metric signals.
+
 ## Current implementation
 
 The existing backend `Metrics` type already provides:
