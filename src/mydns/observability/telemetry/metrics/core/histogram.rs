@@ -25,6 +25,12 @@ impl MergeableHistogram {
         }
     }
 
+    pub fn latency() -> Self {
+        Self::new(&[
+            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 3000.0, 5000.0,
+        ])
+    }
+
     pub fn response() -> Self {
         // 500ms+ is a candidate warning threshold and 3000ms+ a candidate critical threshold
         // for DNS response latency. 5000ms is intentionally the final finite bound: above ~5s,
@@ -32,9 +38,7 @@ impl MergeableHistogram {
         // * IMPORTANT: these thresholds are candidates for alert rules, not alerting itself.
         // TODO: Wire suitable warning/critical latency thresholds into the alerting capability
         // after instrumentation and real workload data establish appropriate policy.
-        Self::new(&[
-            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 3000.0, 5000.0,
-        ])
+        Self::latency()
     }
 
     pub fn upstream() -> Self {
