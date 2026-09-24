@@ -348,14 +348,14 @@ impl MetricsAggregator {
     }
 
     pub fn get_in_memory_history(&self) -> Vec<HistoryBucket> {
-        self.state
-            .lock()
-            .unwrap()
-            .history
-            .recent
-            .iter()
-            .cloned()
-            .collect()
+        let state = self.state.lock().unwrap();
+        let mut history: Vec<_> = state.history.recent.iter().cloned().collect();
+
+        if !state.history.current.is_empty() {
+            history.push(state.history.current.clone());
+        }
+
+        history
     }
 }
 

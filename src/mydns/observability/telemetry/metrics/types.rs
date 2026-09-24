@@ -253,6 +253,28 @@ impl HistoryBucket {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.request_count == 0
+            && self.response_count == 0
+            && self.blocked_count == 0
+            && self.cache_hits == 0
+            && self.cache_misses == 0
+            && self.cache_evictions == 0
+            && self.upstream_requests == 0
+            && self.upstream_successes == 0
+            && self.upstream_failures == 0
+            && self.upstream_timeouts == 0
+            && self.upstream_retries == 0
+            && self.blocked_reason_counts.is_empty()
+            && self.record_type_counts.is_empty()
+            && self.transport_counts.is_empty()
+            && self.response_code_counts.is_empty()
+            && self.resolution_outcome_counts.is_empty()
+            && self.resolution_path_counts.is_empty()
+            && self.response_latency.count == 0
+            && self.upstream_latency.count == 0
+    }
+
     pub fn merge(&mut self, other: &Self) {
         if self.resolution_seconds != other.resolution_seconds {
             return;
