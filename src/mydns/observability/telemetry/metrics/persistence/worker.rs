@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use super::domains::dns::DnsMetricsAggregator;
+use crate::observability::telemetry::metrics::domains::dns::DnsMetricsAggregator;
 use super::repository;
 use crate::observability::database::ObservabilityDatabase;
 
