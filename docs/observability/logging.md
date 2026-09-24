@@ -168,3 +168,12 @@ Logging records events. Tracing records execution structure. A single request ma
 Do not log every DNS request at INFO.
 
 Use metrics for volume and rates. Use traces for execution paths. Use logs for exceptional or state-transition events.
+
+
+## Timezone handling
+
+Log timestamps should remain machine-correlatable and deterministic. The logging system should use UTC as the canonical stored timestamp.
+
+Where a human-facing log view or dashboard presentation benefits from local time, the configured application timezone may be used for presentation. Logging must not independently infer its timezone from the Windows/Linux host configuration.
+
+The global application timezone is therefore a presentation/calendar setting, not a replacement for UTC event timestamps.
