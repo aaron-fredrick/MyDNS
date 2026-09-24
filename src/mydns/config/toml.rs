@@ -6,7 +6,13 @@ use serde::Deserialize;
 use super::types::{AppConfig, ResolverMode, ResolverPriority};
 
 #[derive(Debug, Deserialize, Default)]
+pub(crate) struct TomlSystemSection {
+    pub timezone: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
 pub(crate) struct TomlConfigFile {
+    system: Option<TomlSystemSection>,
     server: Option<TomlServerSection>,
     database: Option<TomlDatabaseSection>,
     auth: Option<TomlAuthSection>,
@@ -27,6 +33,7 @@ pub(crate) struct TomlServerSection {
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct TomlDatabaseSection {
     path: Option<String>,
+    observability_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -82,6 +89,7 @@ impl AppConfig {
                 anyhow::anyhow!("Missing required config.toml field: [auth].admin_password")
             })?;
 
+        let system = parsed.system.unwrap_or_default();
         let server = parsed.server.unwrap_or_default();
         let database = parsed.database.unwrap_or_default();
         let resolver = parsed.resolver.unwrap_or_default();
@@ -114,6 +122,8 @@ impl AppConfig {
                 .dashboard_domain
                 .unwrap_or_else(|| "mydns.local".to_string()),
             db_path: database.path.unwrap_or_else(|| "mydns.db".to_string()),
+            observability_db_path: database.observability_path.unwrap_or_else(|| "observability.db".to_string()),
+            timezone: system.timezone.unwrap_or_else(|| "UTC".to_string()),
             jwt_secret: auth.jwt_secret.unwrap_or_default(),
             admin_username,
             admin_password,

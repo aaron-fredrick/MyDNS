@@ -115,6 +115,10 @@ pub struct AppConfig {
     pub dashboard_domain: String,
     /// Path to the SQLite database file.
     pub db_path: String,
+    /// Path to the SQLite observability database file.
+    pub observability_db_path: String,
+    /// System timezone for period boundaries (e.g. "UTC" or "Asia/Colombo").
+    pub timezone: String,
     /// HMAC secret used to sign/verify JWTs.
     pub jwt_secret: String,
     /// Dashboard admin username (required).

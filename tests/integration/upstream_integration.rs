@@ -85,6 +85,8 @@ async fn start_dns_server(upstream_addr: SocketAddr) -> TestUpstreamServerContex
         cors_domains: vec!["mydns.local".to_string()],
         dashboard_domain: "mydns.local".to_string(),
         db_path: db.path_str(),
+        observability_db_path: "observability.db".to_string(),
+        timezone: "UTC".to_string(),
         jwt_secret: mydns::config::generate_secret(64),
         admin_username: "admin".to_string(),
         admin_password: "changeme123".to_string(),

@@ -41,6 +41,14 @@ impl AppConfig {
                 .get("db_path")
                 .cloned()
                 .unwrap_or_else(|| "mydns.db".to_string()),
+            observability_db_path: values
+                .get("observability_db_path")
+                .cloned()
+                .unwrap_or_else(|| "observability.db".to_string()),
+            timezone: values
+                .get("timezone")
+                .cloned()
+                .unwrap_or_else(|| "UTC".to_string()),
             jwt_secret: values.get("jwt_secret").cloned().unwrap_or_default(),
             admin_username,
             admin_password,
