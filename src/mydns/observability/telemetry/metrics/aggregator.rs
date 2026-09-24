@@ -9,6 +9,7 @@ use super::types::{BoundedCounts, HistoryBucket, MergeableHistogram, Operational
 
 const BUCKET_SECONDS: i64 = 60;
 const RECENT_HISTORY_SECONDS: i64 = 60 * 60;
+
 // Keep enough backlog for a prolonged observability-database outage without allowing
 // an unbounded in-memory queue. At 10,000 minute buckets this represents ~6.9 days.
 // * IMPORTANT: this threshold should be wired into the alerting system so a growing
