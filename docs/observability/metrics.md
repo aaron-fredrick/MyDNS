@@ -135,3 +135,110 @@ Recommended DNS/API latency buckets should be tuned around sub-millisecond to mu
 ## Metric correctness
 
 Do not derive availability as 100% when there have been no upstream requests and then use that value directly for an alert. A no-traffic state is distinct from an observed healthy upstream.
+
+
+## Operational period and historical retention
+
+The metrics lifecycle is split into two related but distinct forms of data:
+
+1. **24-hour operational period aggregate** — answers what happened during the current completed operational period.
+2. **Historical performance time series** — answers how system performance changed over time.
+
+The 24-hour operational period is not a lifetime counter. Counters, categorical breakdowns, and period aggregates accumulate in memory during the current period. At the 24-hour boundary, the period is finalized as a snapshot and persisted to SQLite. The in-memory operational counters and breakdowns are then reset for the next period.
+
+The period snapshot may contain:
+
+- total DNS queries
+- blocked queries
+- upstream requests, successes, and failures
+- DNS errors
+- cache evictions
+- query-type breakdowns
+- resolution-outcome breakdowns
+- aggregate response latency
+- aggregate upstream latency
+- other finalized statistics belonging to that operational period
+
+The period snapshot is independent of the historical time-series retention policy. It is a finalized 24-hour operational summary, not another copy of the time-series buckets.
+
+### Historical performance resolution
+
+Historical performance data is retained at progressively coarser resolutions as it ages:
+
+| Data age | Resolution | Purpose |
+|---|---:|---|
+| Current 0–24 hours | 1 minute | Detailed operational analysis |
+| 24–48 hours | 1 hour | Short-term historical comparison |
+| ~2–7 days | 3–6 hours | Weekly trends |
+| ~1 week–1 month | 12 hours | Monthly trends |
+| ~1 month–1 year | 1 day | Long-term/yearly trends |
+| Beyond 1 year | TBD | Retention/archive policy |
+
+The exact weekly roll-up resolution (3 or 6 hours) remains configurable and can be finalized during implementation. Storage tiers should primarily be age-based; calendar week/month/year presentation belongs to the API/dashboard layer rather than defining the physical retention boundaries.
+
+The roll-up lifecycle is:
+
+```
+1-minute buckets
+      ↓
+1-hour buckets
+      ↓
+3/6-hour buckets
+      ↓
+12-hour buckets
+      ↓
+1-day buckets
+```
+
+Once a coarser aggregate has been safely persisted, older finer-grained data can be removed according to the retention policy.
+
+### In-memory versus SQLite ownership
+
+SQLite is the authoritative store for retained historical metrics. RAM is an operational cache and hot-path aggregation layer.
+
+```
+RAM
+├── current 24-hour operational tally
+└── recent ~1 hour of 1-minute performance buckets
+
+SQLite
+├── finalized 24-hour operational snapshots
+├── 1-minute history for the current 24 hours
+├── 1-hour history for the previous 24–48 hours
+├── 3/6-hour history for the weekly range
+├── 12-hour history for the monthly range
+└── 1-day history for the yearly range
+```
+
+The DNS/request hot path should update only in-memory counters and time buckets. A background persistence task writes finalized minute buckets to SQLite. Background roll-up work produces the coarser historical tiers.
+
+Keeping approximately one hour of minute buckets in RAM is a performance optimization; it does not define the historical retention period. SQLite remains authoritative for historical queries and recovery of retained history.
+
+### Historical bucket contents
+
+Historical buckets should store aggregated observations rather than retaining individual latency samples for the entire retention period. A minute bucket should conceptually contain values such as:
+
+- timestamp
+- request count
+- error count
+- response-latency aggregate
+- upstream request count
+- upstream failure count
+- upstream-latency aggregate
+- other bounded performance aggregates needed by the dashboard
+
+Percentiles such as p50, p95, and p99 must use a mergeable distribution representation (for example, an appropriate histogram/sketch) when they need to survive roll-up. Percentiles must not be averaged across buckets, because an average of percentiles is not generally a valid percentile of the combined population.
+
+### Derived metrics
+
+Metrics such as requests per minute, error rate, upstream availability, cache hit rate, and throughput should be derived from their underlying counters or aggregated buckets where practical. They should not be maintained as independent sources of truth when the underlying measurements already exist.
+
+This preserves the distinction between:
+
+- **event counters** — queries, blocks, upstream requests, failures, evictions, errors
+- **categorical breakdowns** — query types and resolution outcomes
+- **performance distributions** — response and upstream latency
+- **current-state gauges** — cache size, record count, blocklist size, and similar state
+- **calculated metrics** — rates, percentages, throughput, and other derived values
+
+This retention model extends the existing dashboard history described above; it does not remove the existing metric groups, dashboard endpoint, histogram guidance, or correctness requirements.
