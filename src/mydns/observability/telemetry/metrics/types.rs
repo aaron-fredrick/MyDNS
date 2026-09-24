@@ -76,12 +76,23 @@ impl MergeableHistogram {
     }
 
     pub fn response() -> Self {
-        Self::new(&[1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0])
+        // 500ms+ is already operationally significant; 3000ms+ is critical for a DNS
+        // response path. 5000ms is intentionally the final finite bound: above ~5s,
+        // finer tail resolution is not useful for MyDNS operational decisions.
+        // * IMPORTANT: these thresholds are candidates for alert rules, not alerting itself.
+        // ? Confirm the warning/critical thresholds against real MyDNS workload after
+        // instrumentation before making them hard alerting policy.
+        Self::new(&[
+            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 3000.0, 5000.0,
+        ])
     }
 
     pub fn upstream() -> Self {
+        // Upstream resolution can legitimately have a longer tail than local response work,
+        // but 5000ms remains the practical upper bound for the same operational reason.
         Self::new(&[
-            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2000.0,
+            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2000.0, 3000.0,
+            5000.0,
         ])
     }
 
@@ -119,6 +130,10 @@ impl MergeableHistogram {
     }
 
     /// Returns an approximate quantile using the histogram buckets.
+    // TODO: Investigate a mergeable percentile/distribution algorithm or pipeline that can
+    // retain enough information for more accurate p50/p95/p99 calculations. Determine whether
+    // MyDNS actually needs exact percentile accuracy or whether bounded histograms are sufficient
+    // for diagnostics, alerting, and long-term rollups before changing this representation.
     ///
     /// The estimate is intentionally bounded by the bucket containing the
     /// quantile. The overflow bucket has no finite upper bound, so quantiles
