@@ -1,18 +1,23 @@
 use std::sync::Arc;
 use std::time::Duration;
+
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use super::aggregator::MetricsAggregator;
 use super::repository;
 use crate::observability::database::ObservabilityDatabase;
 
+const PERSIST_INTERVAL: Duration = Duration::from_secs(60);
+
 pub fn spawn_persistence(
     metrics: Arc<MetricsAggregator>,
     database: Arc<ObservabilityDatabase>,
     cancel: CancellationToken,
-) {
+) -> JoinHandle<()> {
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        let mut interval = tokio::time::interval(PERSIST_INTERVAL);
+
         loop {
             tokio::select! {
                 _ = interval.tick() => {
@@ -28,7 +33,7 @@ pub fn spawn_persistence(
                 }
             }
         }
-    });
+    })
 }
 
 async fn persist_once(
@@ -36,17 +41,19 @@ async fn persist_once(
     database: &ObservabilityDatabase,
 ) -> anyhow::Result<()> {
     let now = chrono::Utc::now();
+
     metrics.finalize_due_periods(now);
     metrics.finalize_completed_buckets(now);
 
     let periods = metrics.pending_periods();
     let buckets = metrics.pending_buckets();
-    if periods.is_empty() && buckets.is_empty() {
-        return Ok(());
+
+    if !periods.is_empty() || !buckets.is_empty() {
+        repository::persist(database, &periods, &buckets).await?;
+        metrics.acknowledge_periods(&periods);
+        metrics.acknowledge_buckets(&buckets);
     }
 
-    repository::persist(database, &periods, &buckets).await?;
-    metrics.acknowledge_periods(&periods);
-    metrics.acknowledge_buckets(&buckets);
+    repository::roll_up(database, now).await?;
     Ok(())
 }

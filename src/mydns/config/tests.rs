@@ -5,6 +5,9 @@ use std::net::{IpAddr, SocketAddr};
 #[test]
 fn test_parse_toml_full() {
     let toml_str = r#"
+[system]
+timezone = "Asia/Colombo"
+
 [server]
 bind_host = "0.0.0.0"
 dns_port = 5353
@@ -15,6 +18,7 @@ run_as_group = "dnsgroup"
 
 [database]
 path = "custom.db"
+observability_path = "observability-custom.db"
 
 [auth]
 admin_username = "superuser"
@@ -42,6 +46,8 @@ cors_domains = ["dashboard.local", "app.local"]
     assert_eq!(cfg.run_as_user, "dnsuser");
     assert_eq!(cfg.run_as_group, "dnsgroup");
     assert_eq!(cfg.db_path, "custom.db");
+    assert_eq!(cfg.observability_db_path, "observability-custom.db");
+    assert_eq!(cfg.timezone, "Asia/Colombo");
     assert_eq!(cfg.admin_username, "superuser");
     assert_eq!(cfg.admin_password, "secretpassword");
     assert_eq!(cfg.jwt_secret, "customjwtsecret");
@@ -72,11 +78,12 @@ admin_password = "password"
     assert_eq!(cfg.dns_port, 53);
     assert_eq!(cfg.http_port, 8080);
     assert_eq!(cfg.db_path, "mydns.db");
+    assert_eq!(cfg.observability_db_path, "observability.db");
+    assert_eq!(cfg.timezone, "UTC");
     assert_eq!(cfg.resolver_mode, ResolverMode::Forwarding);
     assert_eq!(cfg.resolver_priority, ResolverPriority::CloudflareFirst);
     assert_eq!(cfg.allowed_zones.len(), 1);
     assert_eq!(cfg.allowed_zones[0], "home.arpa");
-    // When not set, root_hints should be empty (resolved to IANA defaults at runtime).
     assert_eq!(cfg.root_hints.len(), 0);
 }
 
@@ -84,9 +91,7 @@ admin_password = "password"
 fn test_default_root_hints_has_13_entries() {
     let hints = default_root_hints();
     assert_eq!(hints.len(), 13);
-    // All should use port 53.
     assert!(hints.iter().all(|a| a.port() == 53));
-    // The well-known A root server IP.
     assert!(hints.iter().any(|a| a.ip().to_string() == "198.41.0.4"));
 }
 
@@ -221,4 +226,20 @@ admin_password = "password"
 "#
     )
     .is_err());
+}
+
+#[test]
+fn ini_rejects_invalid_timezone() {
+    let path = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        path.path(),
+        r#"
+timezone=Not/A/Timezone
+admin_username=admin
+admin_password=password
+"#,
+    )
+    .unwrap();
+
+    assert!(AppConfig::from_ini_file(path.path()).is_err());
 }

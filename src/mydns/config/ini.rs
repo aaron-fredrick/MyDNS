@@ -5,7 +5,6 @@ use std::str::FromStr;
 use super::types::{AppConfig, ResolverMode, ResolverPriority};
 
 impl AppConfig {
-    /// Legacy INI configuration parser for backwards compatibility.
     pub fn from_ini_file(path: &Path) -> anyhow::Result<Self> {
         let contents = std::fs::read_to_string(path)
             .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path.display(), e))?;
@@ -13,6 +12,14 @@ impl AppConfig {
 
         let admin_username = required(&values, "admin_username")?;
         let admin_password = required(&values, "admin_password")?;
+
+        let timezone = values
+            .get("timezone")
+            .cloned()
+            .unwrap_or_else(|| "UTC".to_string());
+        timezone
+            .parse::<chrono_tz::Tz>()
+            .map_err(|e| anyhow::anyhow!("Invalid timezone '{}': {}", timezone, e))?;
 
         let cors_domains = values
             .get("cors_domains")
@@ -45,10 +52,7 @@ impl AppConfig {
                 .get("observability_db_path")
                 .cloned()
                 .unwrap_or_else(|| "observability.db".to_string()),
-            timezone: values
-                .get("timezone")
-                .cloned()
-                .unwrap_or_else(|| "UTC".to_string()),
+            timezone,
             jwt_secret: values.get("jwt_secret").cloned().unwrap_or_default(),
             admin_username,
             admin_password,

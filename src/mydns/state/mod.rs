@@ -11,29 +11,29 @@ use crate::dns::blocklist::BlocklistIndex;
 use crate::dns::record_index::RecordIndex;
 use crate::dns::upstream::UpstreamResolver;
 use crate::dns::zone_trie::ZoneTrie;
+use crate::observability::database::ObservabilityDatabase;
+use crate::observability::telemetry::metrics::MetricsAggregator;
 use crate::observability::Metrics;
 use crate::web::auth::LoginRateLimiter;
 
-/// Central shared state threaded through all DNS and HTTP handlers via `Arc`.
 pub struct AppState {
     pub db: SqlitePool,
     pub cache: Arc<RwLock<DnsCache>>,
     pub cache_stats: Arc<CacheStats>,
     /// Backend-owned operational telemetry shared by DNS and management surfaces.
     pub metrics: Arc<Metrics>,
+    /// New telemetry metrics aggregator. The legacy dashboard metrics remain
+    /// separate until their consumers are migrated.
+    pub telemetry_metrics: Arc<MetricsAggregator>,
+    /// Shared SQLite store for observability data.
+    pub observability_db: Arc<ObservabilityDatabase>,
     pub log_tx: broadcast::Sender<String>,
     pub start_time: Instant,
     pub config: Arc<RwLock<AppConfig>>,
     pub upstream: Arc<RwLock<UpstreamResolver>>,
     pub login_rate_limiter: Arc<LoginRateLimiter>,
-    /// Label-inverted trie for O(depth) local zone ownership lookup.
     pub zone_trie: Arc<RwLock<ZoneTrie>>,
-    /// In-memory local DNS record index for zero-DB-hit hot-path resolution.
     pub record_index: Arc<RwLock<RecordIndex>>,
-    /// In-memory domain blocklist for zero-DB-hit blocked-query enforcement.
-    ///
-    /// Loaded from `blocklist` table at startup and hot-reloaded via the
-    /// Blocklist API on every add/update/delete without requiring a restart.
     pub blocklist_index: Arc<RwLock<BlocklistIndex>>,
     #[allow(dead_code)]
     pub cancel: CancellationToken,
@@ -50,12 +50,16 @@ impl AppState {
         record_index: RecordIndex,
         zone_trie: ZoneTrie,
         blocklist_index: BlocklistIndex,
+        telemetry_metrics: Arc<MetricsAggregator>,
+        observability_db: Arc<ObservabilityDatabase>,
     ) -> Arc<Self> {
         Arc::new(Self {
             db,
             cache: Arc::new(RwLock::new(DnsCache::new())),
             cache_stats: CacheStats::new(),
             metrics: Metrics::new(),
+            telemetry_metrics,
+            observability_db,
             log_tx,
             start_time: Instant::now(),
             config: Arc::new(RwLock::new(config)),
@@ -75,10 +79,14 @@ mod tests {
     use crate::config::{ResolverMode, ResolverPriority};
     use sqlx::sqlite::SqlitePoolOptions;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use tempfile::NamedTempFile;
 
     fn test_config() -> AppConfig {
         AppConfig::from_toml_str(
             r#"
+[system]
+timezone = "Asia/Colombo"
+
 [auth]
 admin_username = "admin"
 admin_password = "test-password"
@@ -109,6 +117,15 @@ allowed = ["home.arpa"]
             .connect("sqlite::memory:")
             .await
             .unwrap();
+        let observability_file = NamedTempFile::new().unwrap();
+        let observability_db = Arc::new(
+            ObservabilityDatabase::init(observability_file.path().to_str().unwrap())
+                .await
+                .unwrap(),
+        );
+        let telemetry_metrics =
+            MetricsAggregator::new(test_config().timezone.parse().unwrap());
+
         let (log_tx, mut log_rx) = broadcast::channel(4);
         let cancel = CancellationToken::new();
         let upstream = UpstreamResolver::from_config(
@@ -119,6 +136,7 @@ allowed = ["home.arpa"]
             vec![SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)), 53)],
         )
         .unwrap();
+
         let state = AppState::new(
             db.clone(),
             test_config(),
@@ -128,6 +146,8 @@ allowed = ["home.arpa"]
             RecordIndex::default(),
             ZoneTrie::from_zones(&["home.arpa".to_string()]),
             BlocklistIndex::from_domains(&["blocked.example".to_string()]),
+            telemetry_metrics,
+            observability_db,
         );
 
         assert_eq!(state.db.size(), db.size());
@@ -135,11 +155,13 @@ allowed = ["home.arpa"]
         assert_eq!(state.cache_stats.snapshot(), (0, 0));
         assert_eq!(state.metrics.snapshot().queries_total, 0);
         assert_eq!(state.metrics.snapshot().queries_blocked, 0);
+        assert!(state.telemetry_metrics.get_in_memory_history().is_empty());
         assert!(state.start_time.elapsed().as_secs() < 1);
 
         let config = state.config.read().await;
         assert_eq!(config.admin_username, "admin");
         assert_eq!(config.resolver_priority, ResolverPriority::RouterFirst);
+        assert_eq!(config.timezone, "Asia/Colombo");
         drop(config);
 
         let upstream = state.upstream.read().await;

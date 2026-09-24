@@ -49,8 +49,6 @@ pub(crate) struct TomlResolverSection {
     priority: Option<ResolverPriority>,
     cloudflare_dns: Option<SocketAddr>,
     router_dns: Option<SocketAddr>,
-    /// Optional list of root hint addresses (e.g. ["198.41.0.4:53", ...]).
-    /// When omitted the built-in IANA defaults are used.
     root_hints: Option<Vec<SocketAddr>>,
 }
 
@@ -63,14 +61,12 @@ pub(crate) struct TomlZonesSection {
 }
 
 impl AppConfig {
-    /// Loads configuration from a TOML file.
     pub fn from_toml_file(path: &Path) -> anyhow::Result<Self> {
         let contents = std::fs::read_to_string(path)
             .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", path.display(), e))?;
         Self::from_toml_str(&contents)
     }
 
-    /// Parses configuration from a TOML string.
     pub fn from_toml_str(contents: &str) -> anyhow::Result<Self> {
         let parsed: TomlConfigFile = toml::from_str(contents)
             .map_err(|e| anyhow::anyhow!("Failed to parse config.toml: {}", e))?;
@@ -94,6 +90,7 @@ impl AppConfig {
         timezone
             .parse::<chrono_tz::Tz>()
             .map_err(|e| anyhow::anyhow!("Invalid system.timezone '{}': {}", timezone, e))?;
+
         let server = parsed.server.unwrap_or_default();
         let database = parsed.database.unwrap_or_default();
         let resolver = parsed.resolver.unwrap_or_default();

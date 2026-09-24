@@ -16,8 +16,6 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     dotenvy::dotenv().ok();
 
-    // Initialise the telemetry pipeline. The returned guard keeps the
-    // non-blocking file writer alive; it must not be dropped until main exits.
     let logging_config = observability::telemetry::logging::LoggingConfig::default();
     let _logging_guard = observability::telemetry::pipeline::init(logging_config)?;
 
@@ -26,7 +24,14 @@ async fn main() -> anyhow::Result<()> {
     let (log_tx, _) = broadcast::channel::<String>(1024);
 
     let mut cfg = AppConfig::from_config_file()?;
-    tracing::info!(bind_host = %cfg.bind_host, dns_port = cfg.dns_port, http_host = %cfg.http_host, http_port = cfg.http_port, "Configuration loaded");
+    tracing::info!(
+        bind_host = %cfg.bind_host,
+        dns_port = cfg.dns_port,
+        http_host = %cfg.http_host,
+        http_port = cfg.http_port,
+        timezone = %cfg.timezone,
+        "Configuration loaded"
+    );
 
     let pool = db::init(&cfg.db_path).await?;
 
@@ -74,27 +79,32 @@ async fn main() -> anyhow::Result<()> {
         cfg.root_hints.clone(),
     )?;
 
-    // Purge ephemeral dev records before building the index so they never
-    // survive a restart. This must happen before RecordIndex::load_from_db.
     let purged = db::records::delete_dev_records(&pool).await?;
     if purged > 0 {
         tracing::info!(count = purged, "Purged ephemeral dev records on startup");
     }
 
-    // Seed DB zones from config (idempotent — skips duplicates).
     db::zones::seed_zones(&pool, &cfg.allowed_zones).await?;
 
-    // Build the live trie from DB so zone changes made via the API persist
-    // across restarts without requiring a config file edit.
     let zone_names = db::zones::list_zone_names(&pool).await?;
     tracing::info!(zones = ?zone_names, "Local DNS zones loaded from DB");
     let zone_trie = ZoneTrie::from_zones(&zone_names);
     let record_index = RecordIndex::load_from_db(&pool).await?;
 
-    // Load the blocklist into memory for zero-DB-hit blocked-query enforcement.
     let enabled_domains = db::blocklist::list_enabled_domains(&pool).await?;
     tracing::info!(count = enabled_domains.len(), "Blocklist loaded from DB");
     let blocklist_index = BlocklistIndex::from_domains(&enabled_domains);
+
+    let timezone = cfg
+        .timezone
+        .parse::<chrono_tz::Tz>()
+        .map_err(|error| anyhow::anyhow!("Invalid configured timezone '{}': {error}", cfg.timezone))?;
+
+    let observability_db = Arc::new(
+        observability::database::ObservabilityDatabase::init(&cfg.observability_db_path).await?,
+    );
+    let telemetry_metrics =
+        observability::telemetry::metrics::aggregator::MetricsAggregator::new(timezone);
 
     let cancel = CancellationToken::new();
     let state = state::AppState::new(
@@ -106,10 +116,16 @@ async fn main() -> anyhow::Result<()> {
         record_index,
         zone_trie,
         blocklist_index,
+        Arc::clone(&telemetry_metrics),
+        Arc::clone(&observability_db),
     );
 
-    // Attach the shared collector after AppState owns the resolver. This keeps
-    // upstream telemetry in the resolver implementation without coupling it to HTTP.
+    let metrics_persistence = observability::telemetry::metrics::persistence::spawn_persistence(
+        Arc::clone(&telemetry_metrics),
+        Arc::clone(&observability_db),
+        cancel.clone(),
+    );
+
     {
         let metrics = Arc::clone(&state.metrics);
         state.upstream.write().await.attach_metrics(metrics);
@@ -145,6 +161,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let _ = tokio::join!(dns_handle, http_handle);
+    let _ = metrics_persistence.await;
     tracing::info!("MyDNS shutdown complete");
     Ok(())
 }
@@ -163,6 +180,6 @@ async fn await_shutdown_signal() {
     {
         tokio::signal::ctrl_c()
             .await
-            .expect("Failed to register Ctrl+C handler");
+            .expect("Failed to register Ctrl+C");
     }
 }
