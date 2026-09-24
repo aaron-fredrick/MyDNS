@@ -68,12 +68,11 @@ allowed = ["example.com"]
             .parse::<chrono_tz::Tz>()
             .expect("valid test timezone");
         let observability_path = temp_dir.path().join("observability.db");
-        let observability_db =
-            crate::observability::database::ObservabilityDatabase::init(
-                &observability_path.to_string_lossy(),
-            )
-            .await
-            .expect("failed to initialize observability database");
+        let observability_db = crate::observability::database::ObservabilityDatabase::init(
+            &observability_path.to_string_lossy(),
+        )
+        .await
+        .expect("failed to initialize observability database");
         let telemetry_metrics =
             crate::observability::telemetry::metrics::MetricsAggregator::new(timezone);
 
