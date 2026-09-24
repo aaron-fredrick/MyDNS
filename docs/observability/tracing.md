@@ -191,3 +191,12 @@ Tracing must be low overhead:
 - avoid high-cardinality attributes
 - sample high-volume successful DNS requests
 - keep error/slow-request visibility high
+
+
+## Time and timezone handling
+
+Trace timestamps and durations use UTC/absolute time for storage, ordering, correlation, and elapsed-time calculations.
+
+The global application timezone may be applied by the dashboard or trace presentation layer when rendering timestamps for operators. Tracing must not independently infer a local timezone from the host OS.
+
+This keeps trace correlation stable across Windows and Linux while allowing human-facing views to use the configured local timezone.
