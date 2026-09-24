@@ -54,41 +54,47 @@ impl MetricsAggregator {
     pub fn record_query(&self, record_type: &str, transport: &str) {
         self.roll_history_if_needed(Utc::now());
         self.queries.fetch_add(1, Ordering::Relaxed);
-        self.record_type_counts.lock().unwrap().record(record_type);
-        self.transport_counts.lock().unwrap().record(transport);
+        self.record_type_counts.lock().unwrap().record(&record_type.trim().to_ascii_uppercase());
+        self.transport_counts.lock().unwrap().record(&transport.trim().to_ascii_lowercase());
+        let record_type = record_type.trim().to_ascii_uppercase();
+        let transport = transport.trim().to_ascii_lowercase();
         let mut h = self.history.lock().unwrap();
         h.current.request_count += 1;
-        h.current.record_type_counts.record(record_type);
-        h.current.transport_counts.record(transport);
+        h.current.record_type_counts.record(&record_type);
+        h.current.transport_counts.record(&transport);
     }
 
     pub fn record_response(&self, response_code: &str, latency_ms: f64) {
         self.roll_history_if_needed(Utc::now());
         self.responses.fetch_add(1, Ordering::Relaxed);
-        self.response_code_counts.lock().unwrap().record(response_code);
+        let response_code = response_code.trim().to_ascii_uppercase();
+        self.response_code_counts.lock().unwrap().record(&response_code);
         self.response_latency.lock().unwrap().record(latency_ms);
         let mut h = self.history.lock().unwrap();
         h.current.response_count += 1;
-        h.current.response_code_counts.record(response_code);
+        h.current.response_code_counts.record(&response_code);
         h.current.response_latency.record(latency_ms);
     }
 
     pub fn record_blocked(&self, reason: &str) {
         self.roll_history_if_needed(Utc::now());
         self.blocked.fetch_add(1, Ordering::Relaxed);
-        self.blocked_reason_counts.lock().unwrap().record(reason);
+        let reason = reason.trim().to_ascii_lowercase();
+        self.blocked_reason_counts.lock().unwrap().record(&reason);
         let mut h = self.history.lock().unwrap();
         h.current.blocked_count += 1;
-        h.current.blocked_reason_counts.record(reason);
+        h.current.blocked_reason_counts.record(&reason);
     }
 
     pub fn record_resolution(&self, outcome: &str, path: &str) {
         self.roll_history_if_needed(Utc::now());
-        self.resolution_outcome_counts.lock().unwrap().record(outcome);
-        self.resolution_path_counts.lock().unwrap().record(path);
+        let outcome = outcome.trim().to_ascii_lowercase();
+        let path = path.trim().to_ascii_lowercase();
+        self.resolution_outcome_counts.lock().unwrap().record(&outcome);
+        self.resolution_path_counts.lock().unwrap().record(&path);
         let mut h = self.history.lock().unwrap();
-        h.current.resolution_outcome_counts.record(outcome);
-        h.current.resolution_path_counts.record(path);
+        h.current.resolution_outcome_counts.record(&outcome);
+        h.current.resolution_path_counts.record(&path);
     }
 
     pub fn record_cache(&self, hit: bool) {
