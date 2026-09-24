@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
         observability::database::ObservabilityDatabase::init(&cfg.observability_db_path).await?,
     );
     let telemetry_metrics =
-        observability::telemetry::metrics::aggregator::MetricsAggregator::new(timezone);
+        observability::telemetry::metrics::domains::dns::DnsMetricsAggregator::new(timezone);
 
     let cancel = CancellationToken::new();
     let state = state::AppState::new(
