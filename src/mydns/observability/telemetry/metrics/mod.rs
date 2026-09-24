@@ -1,6 +1,6 @@
-pub mod aggregator;
-
-pub use aggregator::MetricsAggregator;
+pub mod core;
+pub mod domains;
 pub mod persistence;
 pub mod repository;
-pub mod types;
+
+pub use domains::dns::DnsMetricsAggregator;

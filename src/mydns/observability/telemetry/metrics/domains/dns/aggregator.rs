@@ -5,7 +5,8 @@ use chrono::TimeZone;
 use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, Utc};
 use chrono_tz::Tz;
 
-use super::types::{BoundedCounts, HistoryBucket, MergeableHistogram, OperationalPeriodSnapshot};
+use super::types::{HistoryBucket, OperationalPeriodSnapshot};
+use crate::observability::telemetry::metrics::core::{BoundedCounts, MergeableHistogram};
 
 const BUCKET_SECONDS: i64 = 60;
 const RECENT_HISTORY_SECONDS: i64 = 60 * 60;

@@ -12,7 +12,7 @@ use crate::dns::record_index::RecordIndex;
 use crate::dns::upstream::UpstreamResolver;
 use crate::dns::zone_trie::ZoneTrie;
 use crate::observability::database::ObservabilityDatabase;
-use crate::observability::telemetry::metrics::MetricsAggregator;
+use crate::observability::telemetry::metrics::domains::dns::DnsMetricsAggregator;
 use crate::observability::Metrics;
 use crate::web::auth::LoginRateLimiter;
 
@@ -24,7 +24,7 @@ pub struct AppState {
     pub metrics: Arc<Metrics>,
     /// New telemetry metrics aggregator. The legacy dashboard metrics remain
     /// separate until their consumers are migrated.
-    pub telemetry_metrics: Arc<MetricsAggregator>,
+    pub telemetry_metrics: Arc<DnsMetricsAggregator>,
     /// Shared SQLite store for observability data.
     pub observability_db: Arc<ObservabilityDatabase>,
     pub log_tx: broadcast::Sender<String>,
@@ -123,7 +123,7 @@ allowed = ["home.arpa"]
                 .await
                 .unwrap(),
         );
-        let telemetry_metrics = MetricsAggregator::new(test_config().timezone.parse().unwrap());
+        let telemetry_metrics = DnsMetricsAggregator::new(test_config().timezone.parse().unwrap());
 
         let (log_tx, mut log_rx) = broadcast::channel(4);
         let cancel = CancellationToken::new();

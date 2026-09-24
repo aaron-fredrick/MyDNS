@@ -2,7 +2,7 @@ use anyhow::Context;
 use chrono::{DateTime, Duration, Utc};
 use sqlx::{Row, SqliteConnection};
 
-use super::types::{HistoryBucket, OperationalPeriodSnapshot};
+use super::domains::dns::types::{HistoryBucket, OperationalPeriodSnapshot};
 use crate::observability::database::ObservabilityDatabase;
 
 pub async fn persist(
