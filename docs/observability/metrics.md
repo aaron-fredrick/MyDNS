@@ -259,3 +259,241 @@ In particular:
 - The host operating system's timezone must not implicitly change metric behavior.
 
 The configured timezone should be a canonical application setting, such as system.timezone, rather than a metrics-specific setting.
+
+
+## Measurement model and metric lifecycle
+
+The canonical metric model is based on four stages:
+
+```
+Observation
+    ↓
+In-memory accumulation
+    ↓
+Time-period aggregation
+    ↓
+Derived presentation
+```
+
+An individual DNS, HTTP, database, or resource event produces one or more metric observations. The hot path updates bounded in-memory state. Finalized buckets and operational periods are persisted asynchronously. The API/dashboard derives rates, percentages, throughput, and percentile values from the persisted or in-memory aggregates.
+
+The same underlying observation may therefore contribute to both the current operational period and the historical time series.
+
+### Metric data classes
+
+Every metric should be classified as one of these data classes:
+
+| Class | Meaning | Examples | Aggregation rule |
+|---|---|---|---|
+| Event counter | Number of occurrences | queries, blocked requests, errors, upstream requests, cache hits, evictions | sum |
+| Categorical count | Number of occurrences by bounded category | record type, response code, resolution outcome, resolution path | sum per category |
+| Distribution | Distribution of measured values | response latency, upstream latency, HTTP latency, DB latency | merge distribution |
+| Gauge | Current state/value | cache entries, records, zones, blocklist entries, memory, CPU utilization | current value; optionally sample historically |
+| Derived metric | Calculated from primitive measurements | RPS/RPM, error rate, hit rate, availability, percentages | calculate on read |
+
+Derived metrics are not independent counters. Their underlying primitive measurements are the source of truth.
+
+### DNS observations
+
+For a completed DNS request, the metrics pipeline should capture the bounded facts needed to answer:
+
+- how many requests occurred?
+- what record types were requested?
+- what transport handled them?
+- what response code/outcome was produced?
+- was the request blocked?
+- which resolution path handled it?
+- did the request hit or miss cache?
+- did it require upstream resolution?
+- how long did the DNS operation take?
+- if upstream was used, how long did upstream resolution take?
+- did the upstream operation succeed, fail, timeout, or retry?
+
+The DNS metric pipeline should therefore measure at least:
+
+```
+DNS traffic
+├── request count
+├── response count
+├── blocked count
+├── record-type counts
+└── transport counts
+
+DNS outcome
+├── response-code counts
+├── resolution-outcome counts
+└── resolution-path counts
+
+Cache
+├── hits
+├── misses
+└── evictions
+
+Upstream
+├── requests
+├── successes
+├── failures
+├── timeouts
+└── retries
+
+Performance
+├── total DNS response latency distribution
+└── upstream latency distribution
+```
+
+The existing canonical metric names remain the external vocabulary. The additional resolution-path and bounded categorical measurements are required so that the operational aggregate and historical buckets can explain where DNS traffic was handled, not only whether it succeeded.
+
+### 1-minute performance bucket
+
+Each finalized one-minute bucket is a compact summary of the observations belonging to that minute.
+
+It should contain, as applicable:
+
+```
+timestamp
+request_count
+response_count
+blocked_count
+
+response_code_counts
+record_type_counts
+resolution_outcome_counts
+resolution_path_counts
+
+cache_hits
+cache_misses
+cache_evictions
+
+upstream_requests
+upstream_successes
+upstream_failures
+upstream_timeouts
+upstream_retries
+
+response_latency_distribution
+upstream_latency_distribution
+```
+
+All categorical sets must remain bounded and normalized. Unknown or unexpected values should fall into bounded `OTHER`/equivalent categories rather than creating unbounded metric cardinality.
+
+The bucket should store mergeable distribution state for latency rather than a long-lived vector of individual samples. From that state the API can calculate:
+
+- request rate / requests per minute
+- error rate
+- blocked rate
+- cache hit rate
+- upstream failure rate
+- upstream availability
+- response latency average and quantiles
+- upstream latency average and quantiles
+
+The primitive counts and distributions remain authoritative; displayed rates and percentages are derived.
+
+### 24-hour operational aggregate
+
+The current operational period should accumulate the same primitive classes needed for a complete period summary:
+
+```
+Traffic
+├── queries / responses
+├── blocked
+├── record-type counts
+└── transport counts
+
+Outcomes
+├── response-code counts
+├── resolution-outcome counts
+└── resolution-path counts
+
+Cache
+├── hits
+├── misses
+└── evictions
+
+Upstream
+├── requests
+├── successes
+├── failures
+├── timeouts
+└── retries
+
+Performance
+├── response latency distribution
+└── upstream latency distribution
+```
+
+At period finalization, the aggregate is persisted with its start/end timestamps. It must be sufficient to calculate the period's traffic volume, error/blocked rates, cache hit rate, upstream availability/failure rate, and response/upstream latency statistics without retaining individual request observations.
+
+If the operational period is calendar-based, its boundary uses the configured application timezone. If it is defined as a fixed elapsed 24-hour window, its boundary is timezone-independent.
+
+### Roll-up requirements
+
+Historical roll-ups must operate on mergeable primitives.
+
+Counters and categorical counts are summed:
+
+```
+combined_count = bucket_a.count + bucket_b.count
+```
+
+For averages, retain enough information to calculate a weighted result, such as count plus sum:
+
+```
+combined_average =
+    (sum_a + sum_b) / (count_a + count_b)
+```
+
+For p50/p95/p99 and other quantiles, merge the underlying distribution representation. Never calculate a higher-level percentile by averaging lower-level percentile values.
+
+This makes the following pipeline valid:
+
+```
+1-minute distribution
+        ↓
+merge
+1-hour distribution
+        ↓
+merge
+3/6-hour distribution
+        ↓
+merge
+12-hour distribution
+        ↓
+merge
+1-day distribution
+```
+
+### HTTP, database, and resource measurements
+
+The same aggregation model applies outside DNS.
+
+HTTP should measure request count, status class, bounded route/method dimensions, request/response sizes, request latency, active requests, and WebSocket connection state.
+
+Database instrumentation should measure bounded operation counts, outcomes, errors, busy events, and operation latency.
+
+Resource telemetry should measure current process/system state such as CPU, memory, open handles, storage, SQLite/WAL size, cache memory, and index memory. Resource gauges may optionally be sampled into historical buckets where dashboard trend analysis requires it.
+
+These measurements should use the same observation → accumulation → bucket → roll-up lifecycle rather than introducing a separate metrics architecture for each subsystem.
+
+### Measurement versus calculation
+
+The implementation should prefer storing facts that can be combined correctly:
+
+```
+MEASURE
+├── counts
+├── bounded categorical counts
+├── sums/counts for averages
+├── mergeable latency distributions
+└── current gauges
+
+CALCULATE
+├── rates
+├── percentages
+├── availability
+├── cache hit rate
+├── throughput
+└── percentile presentation values
+```
+
+This keeps the data model stable as dashboard calculations evolve and prevents multiple competing sources of truth.
