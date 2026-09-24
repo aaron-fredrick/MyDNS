@@ -365,9 +365,9 @@ impl MetricsAggregator {
         let state = self.state.lock().unwrap();
         let mut history: Vec<_> = state.history.recent.iter().cloned().collect();
 
-        if !state.history.current.is_empty() {
-            history.push(state.history.current.clone());
-        }
+        // Keep the current bucket even when it contains only zeroes so diagnostics can
+        // distinguish "observed zero activity" from "no bucket available".
+        history.push(state.history.current.clone());
 
         history
     }
@@ -517,6 +517,22 @@ mod tests {
         assert_eq!(periods[0].queries, 1);
         assert_eq!(periods[0].start_utc, at("2026-09-22T18:30:00Z"));
         assert_eq!(periods[0].end_utc, at("2026-09-23T18:30:00Z"));
+    }
+
+    #[test]
+    fn pending_bucket_backlog_evicts_oldest_bucket_at_limit() {
+        let metrics = MetricsAggregator::new_at(chrono_tz::UTC, at("2026-09-24T00:00:00Z"));
+
+        for minute in 0..=MAX_PENDING_BUCKETS {
+            let now = at("2026-09-24T00:00:00Z") + ChronoDuration::minutes(minute as i64);
+            metrics.finalize_completed_buckets(now);
+        }
+
+        assert_eq!(metrics.pending_buckets().len(), MAX_PENDING_BUCKETS);
+        assert_eq!(
+            metrics.pending_buckets().front().unwrap().timestamp,
+            at("2026-09-24T00:01:00Z")
+        );
     }
 
     #[test]
