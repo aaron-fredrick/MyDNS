@@ -19,6 +19,7 @@ pub struct MetricsAggregator {
     cache_hits: AtomicU64, cache_misses: AtomicU64, cache_evictions: AtomicU64,
     upstream_requests: AtomicU64, upstream_successes: AtomicU64, upstream_failures: AtomicU64,
     upstream_timeouts: AtomicU64, upstream_retries: AtomicU64,
+    blocked_reason_counts: Mutex<BoundedCounts>,
     record_type_counts: Mutex<BoundedCounts>, transport_counts: Mutex<BoundedCounts>,
     response_code_counts: Mutex<BoundedCounts>, resolution_outcome_counts: Mutex<BoundedCounts>,
     resolution_path_counts: Mutex<BoundedCounts>,
@@ -39,6 +40,7 @@ impl MetricsAggregator {
             cache_hits: AtomicU64::new(0), cache_misses: AtomicU64::new(0), cache_evictions: AtomicU64::new(0),
             upstream_requests: AtomicU64::new(0), upstream_successes: AtomicU64::new(0),
             upstream_failures: AtomicU64::new(0), upstream_timeouts: AtomicU64::new(0), upstream_retries: AtomicU64::new(0),
+            blocked_reason_counts: Mutex::new(BoundedCounts::default()),
             record_type_counts: Mutex::new(BoundedCounts::default()), transport_counts: Mutex::new(BoundedCounts::default()),
             response_code_counts: Mutex::new(BoundedCounts::default()), resolution_outcome_counts: Mutex::new(BoundedCounts::default()),
             resolution_path_counts: Mutex::new(BoundedCounts::default()),
@@ -71,10 +73,13 @@ impl MetricsAggregator {
         h.current.response_latency.record(latency_ms);
     }
 
-    pub fn record_blocked(&self, _reason: &str) {
+    pub fn record_blocked(&self, reason: &str) {
         self.roll_history_if_needed(Utc::now());
         self.blocked.fetch_add(1, Ordering::Relaxed);
-        self.history.lock().unwrap().current.blocked_count += 1;
+        self.blocked_reason_counts.lock().unwrap().record(reason);
+        let mut h = self.history.lock().unwrap();
+        h.current.blocked_count += 1;
+        h.current.blocked_reason_counts.record(reason);
     }
 
     pub fn record_resolution(&self, outcome: &str, path: &str) {
@@ -131,6 +136,7 @@ impl MetricsAggregator {
                 start_utc: start, end_utc: end,
                 queries: self.queries.swap(0, Ordering::Relaxed), responses: self.responses.swap(0, Ordering::Relaxed),
                 blocked: self.blocked.swap(0, Ordering::Relaxed),
+                blocked_reason_counts: std::mem::take(&mut *self.blocked_reason_counts.lock().unwrap()),
                 record_type_counts: std::mem::take(&mut *self.record_type_counts.lock().unwrap()),
                 transport_counts: std::mem::take(&mut *self.transport_counts.lock().unwrap()),
                 response_code_counts: std::mem::take(&mut *self.response_code_counts.lock().unwrap()),
