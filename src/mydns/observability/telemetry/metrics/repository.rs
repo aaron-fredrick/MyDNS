@@ -18,7 +18,7 @@ pub async fn persist(
                 upstream_retries, cache_hits, cache_misses, cache_evictions, record_types,
                 transports, response_codes, resolution_outcomes, resolution_paths,
                 response_latency, upstream_latency
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(start_utc, end_utc) DO NOTHING
         "#)
         .bind(snapshot.start_utc.to_rfc3339()).bind(snapshot.end_utc.to_rfc3339())
