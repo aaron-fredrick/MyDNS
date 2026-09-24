@@ -261,8 +261,7 @@ impl HistoryBucket {
         self.request_count += other.request_count;
         self.response_count += other.response_count;
         self.blocked_count += other.blocked_count;
-        self
-            .blocked_reason_counts
+        self.blocked_reason_counts
             .merge(&other.blocked_reason_counts);
         self.record_type_counts.merge(&other.record_type_counts);
         self.transport_counts.merge(&other.transport_counts);
