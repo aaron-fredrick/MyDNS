@@ -76,12 +76,12 @@ impl MergeableHistogram {
     }
 
     pub fn response() -> Self {
-        // 500ms+ is already operationally significant; 3000ms+ is critical for a DNS
-        // response path. 5000ms is intentionally the final finite bound: above ~5s,
+        // 500ms+ is a candidate warning threshold and 3000ms+ a candidate critical threshold
+        // for DNS response latency. 5000ms is intentionally the final finite bound: above ~5s,
         // finer tail resolution is not useful for MyDNS operational decisions.
         // * IMPORTANT: these thresholds are candidates for alert rules, not alerting itself.
-        // ? Confirm the warning/critical thresholds against real MyDNS workload after
-        // instrumentation before making them hard alerting policy.
+        // TODO: Wire suitable warning/critical latency thresholds into the alerting capability
+        // after instrumentation and real workload data establish appropriate policy.
         Self::new(&[
             1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 3000.0, 5000.0,
         ])
