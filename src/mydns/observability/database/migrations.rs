@@ -1,6 +1,6 @@
 use sqlx::{migrate::Migrator, SqlitePool};
 
-static MIGRATOR: Migrator = sqlx::migrate!("migrations");
+static MIGRATOR: Migrator = sqlx::migrate!();
 
 pub(super) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     MIGRATOR.run(pool).await.map_err(|error| {

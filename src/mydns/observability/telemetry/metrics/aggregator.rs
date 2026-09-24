@@ -191,7 +191,12 @@ impl MetricsAggregator {
         state.history.current.transport_counts.record(&transport);
     }
 
-    pub fn record_response_at(&self, now: DateTime<Utc>, response_code: &str, latency_ms: f64) {
+    pub fn record_response_at(
+        &self,
+        now: DateTime<Utc>,
+        response_code: &str,
+        latency_ms: f64,
+    ) {
         let mut state = self.state.lock().unwrap();
         advance(&mut state, now, self.timezone);
         let response_code = normalize_response_code(response_code);
@@ -382,7 +387,8 @@ fn advance_history(state: &mut AggregatorState, now: DateTime<Utc>) {
 
     while state.history.current.timestamp < target {
         let next = state.history.current.timestamp + ChronoDuration::seconds(BUCKET_SECONDS);
-        let completed = std::mem::replace(&mut state.history.current, HistoryBucket::new(next));
+        let completed =
+            std::mem::replace(&mut state.history.current, HistoryBucket::new(next));
         state.history.pending.push_back(completed.clone());
         state.history.recent.push_back(completed);
     }
