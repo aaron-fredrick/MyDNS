@@ -13,7 +13,7 @@ pub async fn persist(
     for snapshot in periods {
         sqlx::query(r#"
             INSERT INTO operational_periods (
-                start_utc, end_utc, timezone, queries, responses, blocked,
+                start_utc, end_utc, timezone, queries, responses, blocked, blocked_reasons,
                 upstream_requests, upstream_successes, upstream_failures, upstream_timeouts,
                 upstream_retries, cache_hits, cache_misses, cache_evictions, record_types,
                 transports, response_codes, resolution_outcomes, resolution_paths,
@@ -24,6 +24,7 @@ pub async fn persist(
         .bind(snapshot.start_utc.to_rfc3339()).bind(snapshot.end_utc.to_rfc3339())
         .bind(&snapshot.timezone)
         .bind(snapshot.queries as i64).bind(snapshot.responses as i64).bind(snapshot.blocked as i64)
+        .bind(serde_json::to_string(&snapshot.blocked_reason_counts).context("serialize blocked reasons")?)
         .bind(snapshot.upstream_requests as i64).bind(snapshot.upstream_successes as i64)
         .bind(snapshot.upstream_failures as i64).bind(snapshot.upstream_timeouts as i64)
         .bind(snapshot.upstream_retries as i64).bind(snapshot.cache_hits as i64).bind(snapshot.cache_misses as i64)
@@ -41,7 +42,7 @@ pub async fn persist(
     for bucket in buckets {
         sqlx::query(r#"
             INSERT INTO historical_buckets (
-                timestamp, resolution_seconds, request_count, response_count, blocked_count,
+                timestamp, resolution_seconds, request_count, response_count, blocked_count, blocked_reasons,
                 cache_hits, cache_misses, cache_evictions, upstream_requests, upstream_successes,
                 upstream_failures, upstream_timeouts, upstream_retries, record_types, transports,
                 response_codes, resolution_outcomes, resolution_paths, response_latency, upstream_latency
@@ -50,6 +51,7 @@ pub async fn persist(
         "#)
         .bind(bucket.timestamp.to_rfc3339()).bind(bucket.resolution_seconds as i64)
         .bind(bucket.request_count as i64).bind(bucket.response_count as i64).bind(bucket.blocked_count as i64)
+        .bind(serde_json::to_string(&bucket.blocked_reason_counts).context("serialize blocked reasons")?)
         .bind(bucket.cache_hits as i64).bind(bucket.cache_misses as i64).bind(bucket.cache_evictions as i64)
         .bind(bucket.upstream_requests as i64).bind(bucket.upstream_successes as i64)
         .bind(bucket.upstream_failures as i64).bind(bucket.upstream_timeouts as i64).bind(bucket.upstream_retries as i64)
