@@ -10,6 +10,10 @@ run_as_group = "nobody"
 
 [database]
 path = "mydns.db"
+observability_path = "observability.db"
+
+[system]
+timezone = "UTC"
 
 [auth]
 admin_username = "admin"
