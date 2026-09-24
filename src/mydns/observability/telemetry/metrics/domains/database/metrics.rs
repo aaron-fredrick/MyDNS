@@ -50,7 +50,7 @@ impl Default for DatabaseMetricsAggregator {
                 successes: 0,
                 failures: 0,
                 operation_counts: BoundedCounts::default(),
-                latency: MergeableHistogram::response(),
+                latency: MergeableHistogram::latency(),
             }),
         }
     }
