@@ -242,3 +242,20 @@ This preserves the distinction between:
 - **calculated metrics** — rates, percentages, throughput, and other derived values
 
 This retention model extends the existing dashboard history described above; it does not remove the existing metric groups, dashboard endpoint, histogram guidance, or correctness requirements.
+
+
+### Timezone and period boundaries
+
+Metrics use the global MyDNS application timezone for calendar-aware period semantics. The timezone is configured once at the application level and is not independently selected by the metrics subsystem.
+
+Use UTC internally for metric timestamps, bucket ordering, elapsed-time calculations, sliding windows, retention age, and cross-event correlation. Use the configured timezone when a metric operation depends on a calendar boundary.
+
+In particular:
+
+- **Sliding windows** such as "last 24 hours" are elapsed-time windows and are timezone-independent.
+- **Calendar-aware periods** such as a local operational day, calendar week, month, or year use the configured timezone.
+- **24-hour operational snapshots** use the configured timezone when their boundary is defined as a local operational-day boundary.
+- Historical storage remains timestamped in UTC even when the dashboard presents data in local time.
+- The host operating system's timezone must not implicitly change metric behavior.
+
+The configured timezone should be a canonical application setting, such as system.timezone, rather than a metrics-specific setting.
