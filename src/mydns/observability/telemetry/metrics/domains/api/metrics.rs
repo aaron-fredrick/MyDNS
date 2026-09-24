@@ -32,7 +32,7 @@ impl ApiMetricsAggregator {
                 method_counts: BoundedCounts::default(),
                 route_counts: BoundedCounts::default(),
                 status_counts: BoundedCounts::default(),
-                latency: MergeableHistogram::response(),
+                latency: MergeableHistogram::latency(),
             }),
         })
     }
