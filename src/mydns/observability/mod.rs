@@ -7,6 +7,7 @@ mod metrics;
 mod types;
 
 pub mod alerts;
+pub mod database;
 pub mod health;
 pub mod profiling;
 pub mod resources;
