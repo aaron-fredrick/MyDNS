@@ -94,3 +94,16 @@ This plan covers:
 - operational alerts
 
 It does not prescribe a specific hosted observability vendor. Export targets should remain replaceable.
+
+
+## Time and timezone policy
+
+Observability uses the application's configured local timezone as the canonical timezone for calendar-aware operational semantics. This setting is global to MyDNS rather than being independently configured by each observability subsystem.
+
+Conceptually, the application timezone feeds calendar boundaries, operational periods, dashboard/report presentation, and human-readable observability timestamps.
+
+Metric storage, trace timestamps, ordering, elapsed-time calculations, retention windows, and internal correlation remain UTC-based. A local timezone must not be inferred from the host operating system.
+
+The configured timezone affects calendar concepts such as "today", calendar week/month/year, and calendar-aware operational-period boundaries, while sliding windows such as "the last 24 hours" remain elapsed-time windows.
+
+All observability layers that need local calendar semantics should consume this single canonical application setting.
