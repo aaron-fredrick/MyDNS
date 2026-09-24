@@ -12,7 +12,7 @@ impl BoundedCounts {
         let value = value.trim();
         if value.is_empty() { return; }
         if let Some(count) = self.values.get_mut(value) { *count += 1; return; }
-        if self.values.len() < MAX_CATEGORIES {
+        if self.values.len() < MAX_CATEGORIES.saturating_sub(1) || self.values.contains_key("other") {
             self.values.insert(value.to_owned(), 1);
         } else {
             *self.values.entry("other".to_owned()).or_insert(0) += 1;
