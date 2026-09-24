@@ -59,6 +59,7 @@ pub struct OperationalPeriodSnapshot {
     pub timezone: String,
     pub start_utc: DateTime<Utc>, pub end_utc: DateTime<Utc>,
     pub queries: u64, pub responses: u64, pub blocked: u64,
+    pub blocked_reason_counts: BoundedCounts,
     pub record_type_counts: BoundedCounts, pub transport_counts: BoundedCounts,
     pub response_code_counts: BoundedCounts, pub resolution_outcome_counts: BoundedCounts,
     pub resolution_path_counts: BoundedCounts,
@@ -72,6 +73,7 @@ pub struct OperationalPeriodSnapshot {
 pub struct HistoryBucket {
     pub timestamp: DateTime<Utc>, pub resolution_seconds: u32,
     pub request_count: u64, pub response_count: u64, pub blocked_count: u64,
+    pub blocked_reason_counts: BoundedCounts,
     pub record_type_counts: BoundedCounts, pub transport_counts: BoundedCounts,
     pub response_code_counts: BoundedCounts, pub resolution_outcome_counts: BoundedCounts,
     pub resolution_path_counts: BoundedCounts,
@@ -85,6 +87,7 @@ impl HistoryBucket {
     pub fn new(timestamp: DateTime<Utc>) -> Self {
         Self {
             timestamp, resolution_seconds: 60, request_count: 0, response_count: 0, blocked_count: 0,
+            blocked_reason_counts: BoundedCounts::default(),
             record_type_counts: BoundedCounts::default(), transport_counts: BoundedCounts::default(),
             response_code_counts: BoundedCounts::default(), resolution_outcome_counts: BoundedCounts::default(),
             resolution_path_counts: BoundedCounts::default(), cache_hits: 0, cache_misses: 0,
