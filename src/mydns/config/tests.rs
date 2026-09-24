@@ -208,7 +208,6 @@ dns_port = 53
     assert!(AppConfig::from_toml_str(toml_str).is_err());
 }
 
-
 #[test]
 fn toml_rejects_invalid_timezone() {
     assert!(AppConfig::from_toml_str(

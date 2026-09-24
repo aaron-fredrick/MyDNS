@@ -1,10 +1,15 @@
 use anyhow::Context;
-use sqlx::{sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions}, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
+    SqlitePool,
+};
 use std::{str::FromStr, time::Duration};
 
 pub mod migrations;
 
-pub struct ObservabilityDatabase { pool: SqlitePool }
+pub struct ObservabilityDatabase {
+    pool: SqlitePool,
+}
 
 impl ObservabilityDatabase {
     pub async fn init(db_path: &str) -> anyhow::Result<Self> {
@@ -21,7 +26,11 @@ impl ObservabilityDatabase {
         Ok(Self { pool })
     }
 
-    pub fn pool(&self) -> &SqlitePool { &self.pool }
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
 
-    pub async fn close(self) { self.pool.close().await; }
+    pub async fn close(self) {
+        self.pool.close().await;
+    }
 }

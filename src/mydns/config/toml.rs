@@ -91,9 +91,9 @@ impl AppConfig {
 
         let system = parsed.system.unwrap_or_default();
         let timezone = system.timezone.unwrap_or_else(|| "UTC".to_string());
-        timezone.parse::<chrono_tz::Tz>().map_err(|e| {
-            anyhow::anyhow!("Invalid system.timezone '{}': {}", timezone, e)
-        })?;
+        timezone
+            .parse::<chrono_tz::Tz>()
+            .map_err(|e| anyhow::anyhow!("Invalid system.timezone '{}': {}", timezone, e))?;
         let server = parsed.server.unwrap_or_default();
         let database = parsed.database.unwrap_or_default();
         let resolver = parsed.resolver.unwrap_or_default();
@@ -126,7 +126,9 @@ impl AppConfig {
                 .dashboard_domain
                 .unwrap_or_else(|| "mydns.local".to_string()),
             db_path: database.path.unwrap_or_else(|| "mydns.db".to_string()),
-            observability_db_path: database.observability_path.unwrap_or_else(|| "observability.db".to_string()),
+            observability_db_path: database
+                .observability_path
+                .unwrap_or_else(|| "observability.db".to_string()),
             timezone,
             jwt_secret: auth.jwt_secret.unwrap_or_default(),
             admin_username,

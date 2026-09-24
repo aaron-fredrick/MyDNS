@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-use crate::observability::database::ObservabilityDatabase;
 use super::aggregator::MetricsAggregator;
 use super::repository;
+use crate::observability::database::ObservabilityDatabase;
 
 pub fn spawn_persistence(
     metrics: Arc<MetricsAggregator>,
@@ -31,14 +31,19 @@ pub fn spawn_persistence(
     });
 }
 
-async fn persist_once(metrics: &MetricsAggregator, database: &ObservabilityDatabase) -> anyhow::Result<()> {
+async fn persist_once(
+    metrics: &MetricsAggregator,
+    database: &ObservabilityDatabase,
+) -> anyhow::Result<()> {
     let now = chrono::Utc::now();
     metrics.finalize_due_periods(now);
     metrics.finalize_completed_buckets(now);
 
     let periods = metrics.pending_periods();
     let buckets = metrics.pending_buckets();
-    if periods.is_empty() && buckets.is_empty() { return Ok(()); }
+    if periods.is_empty() && buckets.is_empty() {
+        return Ok(());
+    }
 
     repository::persist(database, &periods, &buckets).await?;
     metrics.acknowledge_periods(&periods);
