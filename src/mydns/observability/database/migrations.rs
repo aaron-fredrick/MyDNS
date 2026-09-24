@@ -10,8 +10,6 @@ pub(super) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[tokio::test]
     async fn migrations_create_metrics_schema() {
         let file = tempfile::NamedTempFile::new().unwrap();

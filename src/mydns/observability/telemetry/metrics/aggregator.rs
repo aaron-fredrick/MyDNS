@@ -458,7 +458,6 @@ fn next_local_midnight(start_utc: DateTime<Utc>, timezone: Tz) -> DateTime<Utc> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
     use chrono_tz::Asia::Colombo;
 
     fn at(value: &str) -> DateTime<Utc> {
