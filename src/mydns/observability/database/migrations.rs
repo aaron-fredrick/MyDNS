@@ -3,10 +3,9 @@ use sqlx::{migrate::Migrator, SqlitePool};
 static MIGRATOR: Migrator = sqlx::migrate!("migrations");
 
 pub(super) async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
-    MIGRATOR
-        .run(pool)
-        .await
-        .map_err(|error| anyhow::anyhow!("Failed to run observability database migrations: {error}"))
+    MIGRATOR.run(pool).await.map_err(|error| {
+        anyhow::anyhow!("Failed to run observability database migrations: {error}")
+    })
 }
 
 #[cfg(test)]

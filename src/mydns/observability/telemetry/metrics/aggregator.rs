@@ -59,7 +59,11 @@ impl OperationalState {
         }
     }
 
-    fn snapshot_and_reset(&mut self, end: DateTime<Utc>, timezone: Tz) -> OperationalPeriodSnapshot {
+    fn snapshot_and_reset(
+        &mut self,
+        end: DateTime<Utc>,
+        timezone: Tz,
+    ) -> OperationalPeriodSnapshot {
         let snapshot = OperationalPeriodSnapshot {
             timezone: timezone.to_string(),
             start_utc: self.period_start,
@@ -97,8 +101,7 @@ impl OperationalState {
         self.upstream_failures = 0;
         self.upstream_timeouts = 0;
         self.upstream_retries = 0;
-        self
-            .response_latency = MergeableHistogram::response();
+        self.response_latency = MergeableHistogram::response();
         self.upstream_latency = MergeableHistogram::upstream();
 
         snapshot
@@ -171,12 +174,7 @@ impl MetricsAggregator {
         self.record_upstream_at(Utc::now(), latency_ms, success, timeout, retry);
     }
 
-    pub fn record_query_at(
-        &self,
-        now: DateTime<Utc>,
-        record_type: &str,
-        transport: &str,
-    ) {
+    pub fn record_query_at(&self, now: DateTime<Utc>, record_type: &str, transport: &str) {
         let mut state = self.state.lock().unwrap();
         advance(&mut state, now, self.timezone);
         let record_type = normalize_record_type(record_type);
@@ -185,7 +183,11 @@ impl MetricsAggregator {
         state.operational.record_type_counts.record(&record_type);
         state.operational.transport_counts.record(&transport);
         state.history.current.request_count += 1;
-        state.history.current.record_type_counts.record(&record_type);
+        state
+            .history
+            .current
+            .record_type_counts
+            .record(&record_type);
         state.history.current.transport_counts.record(&transport);
     }
 
@@ -199,10 +201,17 @@ impl MetricsAggregator {
         advance(&mut state, now, self.timezone);
         let response_code = normalize_response_code(response_code);
         state.operational.responses += 1;
-        state.operational.response_code_counts.record(&response_code);
+        state
+            .operational
+            .response_code_counts
+            .record(&response_code);
         state.operational.response_latency.record(latency_ms);
         state.history.current.response_count += 1;
-        state.history.current.response_code_counts.record(&response_code);
+        state
+            .history
+            .current
+            .response_code_counts
+            .record(&response_code);
         state.history.current.response_latency.record(latency_ms);
     }
 
@@ -223,7 +232,11 @@ impl MetricsAggregator {
         let path = normalize_dimension(path);
         state.operational.resolution_outcome_counts.record(&outcome);
         state.operational.resolution_path_counts.record(&path);
-        state.history.current.resolution_outcome_counts.record(&outcome);
+        state
+            .history
+            .current
+            .resolution_outcome_counts
+            .record(&outcome);
         state.history.current.resolution_path_counts.record(&path);
     }
 
@@ -374,10 +387,8 @@ fn advance_history(state: &mut AggregatorState, now: DateTime<Utc>) {
 
     while state.history.current.timestamp < target {
         let next = state.history.current.timestamp + ChronoDuration::seconds(BUCKET_SECONDS);
-        let completed = std::mem::replace(
-            &mut state.history.current,
-            HistoryBucket::new(next),
-        );
+        let completed =
+            std::mem::replace(&mut state.history.current, HistoryBucket::new(next));
         state.history.pending.push_back(completed.clone());
         state.history.recent.push_back(completed);
     }

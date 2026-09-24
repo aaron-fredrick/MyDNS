@@ -50,7 +50,10 @@ async fn insert_operational_period(
     .bind(snapshot.queries as i64)
     .bind(snapshot.responses as i64)
     .bind(snapshot.blocked as i64)
-    .bind(serialize(&snapshot.blocked_reason_counts, "blocked reasons")?)
+    .bind(serialize(
+        &snapshot.blocked_reason_counts,
+        "blocked reasons",
+    )?)
     .bind(snapshot.upstream_requests as i64)
     .bind(snapshot.upstream_successes as i64)
     .bind(snapshot.upstream_failures as i64)
@@ -296,10 +299,7 @@ fn decode_bucket(row: &sqlx::sqlite::SqliteRow) -> anyhow::Result<HistoryBucket>
             row.try_get("resolution_outcomes")?,
             "resolution outcomes",
         )?,
-        resolution_path_counts: deserialize(
-            row.try_get("resolution_paths")?,
-            "resolution paths",
-        )?,
+        resolution_path_counts: deserialize(row.try_get("resolution_paths")?, "resolution paths")?,
         cache_hits: row.try_get::<i64, _>("cache_hits")? as u64,
         cache_misses: row.try_get::<i64, _>("cache_misses")? as u64,
         cache_evictions: row.try_get::<i64, _>("cache_evictions")? as u64,

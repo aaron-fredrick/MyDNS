@@ -123,8 +123,7 @@ allowed = ["home.arpa"]
                 .await
                 .unwrap(),
         );
-        let telemetry_metrics =
-            MetricsAggregator::new(test_config().timezone.parse().unwrap());
+        let telemetry_metrics = MetricsAggregator::new(test_config().timezone.parse().unwrap());
 
         let (log_tx, mut log_rx) = broadcast::channel(4);
         let cancel = CancellationToken::new();
