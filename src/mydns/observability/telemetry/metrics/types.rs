@@ -56,6 +56,7 @@ impl Default for MergeableHistogram { fn default() -> Self { Self::response() } 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationalPeriodSnapshot {
+    pub timezone: String,
     pub start_utc: DateTime<Utc>, pub end_utc: DateTime<Utc>,
     pub queries: u64, pub responses: u64, pub blocked: u64,
     pub record_type_counts: BoundedCounts, pub transport_counts: BoundedCounts,
