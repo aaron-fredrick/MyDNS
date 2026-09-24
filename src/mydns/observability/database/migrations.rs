@@ -15,12 +15,11 @@ mod tests {
     #[tokio::test]
     async fn migrations_create_metrics_schema() {
         let file = tempfile::NamedTempFile::new().unwrap();
-        let database =
-            crate::observability::database::ObservabilityDatabase::init(
-                file.path().to_str().unwrap(),
-            )
-            .await
-            .unwrap();
+        let database = crate::observability::database::ObservabilityDatabase::init(
+            file.path().to_str().unwrap(),
+        )
+        .await
+        .unwrap();
 
         let table_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'historical_buckets'",
