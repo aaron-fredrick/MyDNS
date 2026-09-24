@@ -172,3 +172,14 @@ Internal modules may emit signals, but only the appropriate observability compon
 - **Alerts** owns alert definitions and evaluation policy.
 
 Feature modules should emit observations through these canonical boundaries rather than implementing competing telemetry systems.
+
+
+## Global time and timezone context
+
+Observability does not independently determine the machine's local timezone. MyDNS has one application-level configured timezone shared by observability components requiring calendar-aware semantics.
+
+The configured timezone is application configuration consumed by Metrics for operational/calendar periods, dashboard/API presentation, Alerts for calendar-aware evaluation where required, and Logging for human-readable presentation where configured.
+
+Internal metric and trace timestamps remain UTC. Elapsed-time calculations and sliding retention/evaluation windows use absolute time and are not changed by the configured local timezone.
+
+The host OS timezone must not silently become MyDNS's observability timezone. Windows and Linux therefore use the same application-level behavior.
