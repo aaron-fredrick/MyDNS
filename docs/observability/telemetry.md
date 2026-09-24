@@ -193,3 +193,16 @@ Telemetry must be:
 - resilient to exporter failure
 
 Telemetry failure must never take down DNS service.
+
+
+## Time and timezone context
+
+Telemetry components share the application's canonical configured timezone when they need calendar-aware or human-facing time semantics.
+
+The timezone is an application-level configuration value, not a telemetry-subsystem setting. It must not be inferred independently from the Windows/Linux host timezone.
+
+Use UTC for metric and trace timestamps, event ordering and correlation, elapsed durations, sliding windows, and retention age calculations.
+
+Use the configured local timezone for calendar boundaries, calendar-aware operational periods, dashboard/report presentation, and human-readable timestamps where local time is useful.
+
+This keeps telemetry storage and correlation deterministic across operating systems while still allowing MyDNS to present operational information in the administrator's intended local timezone.
