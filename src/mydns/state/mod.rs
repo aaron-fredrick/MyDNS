@@ -50,7 +50,7 @@ impl AppState {
         record_index: RecordIndex,
         zone_trie: ZoneTrie,
         blocklist_index: BlocklistIndex,
-        telemetry_metrics: Arc<MetricsAggregator>,
+        telemetry_metrics: Arc<DnsMetricsAggregator>,
         observability_db: Arc<ObservabilityDatabase>,
     ) -> Arc<Self> {
         Arc::new(Self {
