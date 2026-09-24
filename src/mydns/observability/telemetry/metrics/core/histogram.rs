@@ -1,5 +1,7 @@
 //! Generic mergeable latency/distribution support.
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MergeableHistogram {
     pub bounds_ms: Vec<f64>,
