@@ -50,6 +50,7 @@ impl MetricsAggregator {
     }
 
     pub fn record_query(&self, record_type: &str, transport: &str) {
+        self.roll_history_if_needed(Utc::now());
         self.queries.fetch_add(1, Ordering::Relaxed);
         self.record_type_counts.lock().unwrap().record(record_type);
         self.transport_counts.lock().unwrap().record(transport);
@@ -60,6 +61,7 @@ impl MetricsAggregator {
     }
 
     pub fn record_response(&self, response_code: &str, latency_ms: f64) {
+        self.roll_history_if_needed(Utc::now());
         self.responses.fetch_add(1, Ordering::Relaxed);
         self.response_code_counts.lock().unwrap().record(response_code);
         self.response_latency.lock().unwrap().record(latency_ms);
@@ -70,11 +72,13 @@ impl MetricsAggregator {
     }
 
     pub fn record_blocked(&self, _reason: &str) {
+        self.roll_history_if_needed(Utc::now());
         self.blocked.fetch_add(1, Ordering::Relaxed);
         self.history.lock().unwrap().current.blocked_count += 1;
     }
 
     pub fn record_resolution(&self, outcome: &str, path: &str) {
+        self.roll_history_if_needed(Utc::now());
         self.resolution_outcome_counts.lock().unwrap().record(outcome);
         self.resolution_path_counts.lock().unwrap().record(path);
         let mut h = self.history.lock().unwrap();
@@ -83,6 +87,7 @@ impl MetricsAggregator {
     }
 
     pub fn record_cache(&self, hit: bool) {
+        self.roll_history_if_needed(Utc::now());
         if hit {
             self.cache_hits.fetch_add(1, Ordering::Relaxed);
             self.history.lock().unwrap().current.cache_hits += 1;
@@ -93,11 +98,13 @@ impl MetricsAggregator {
     }
 
     pub fn record_cache_eviction(&self) {
+        self.roll_history_if_needed(Utc::now());
         self.cache_evictions.fetch_add(1, Ordering::Relaxed);
         self.history.lock().unwrap().current.cache_evictions += 1;
     }
 
     pub fn record_upstream(&self, latency_ms: f64, success: bool, timeout: bool, retry: bool) {
+        self.roll_history_if_needed(Utc::now());
         self.upstream_requests.fetch_add(1, Ordering::Relaxed);
         if success { self.upstream_successes.fetch_add(1, Ordering::Relaxed); }
         else { self.upstream_failures.fetch_add(1, Ordering::Relaxed); }
@@ -120,6 +127,7 @@ impl MetricsAggregator {
             if now < end { break; }
 
             let snapshot = OperationalPeriodSnapshot {
+                timezone: self.timezone.to_string(),
                 start_utc: start, end_utc: end,
                 queries: self.queries.swap(0, Ordering::Relaxed), responses: self.responses.swap(0, Ordering::Relaxed),
                 blocked: self.blocked.swap(0, Ordering::Relaxed),
@@ -152,7 +160,7 @@ impl MetricsAggregator {
         self.pending_periods.lock().unwrap().retain(|p| !keys.contains(&(p.start_utc, p.end_utc)));
     }
 
-    pub fn finalize_completed_buckets(&self, now: DateTime<Utc>) {
+    fn roll_history_if_needed(&self, now: DateTime<Utc>) {
         let target = minute_start(now);
         let mut h = self.history.lock().unwrap();
         while h.current.timestamp < target {
@@ -162,7 +170,13 @@ impl MetricsAggregator {
             h.recent.push_back(completed);
         }
         let cutoff = target - ChronoDuration::seconds(RECENT_HISTORY_SECONDS);
-        while h.recent.front().is_some_and(|b| b.timestamp < cutoff) { h.recent.pop_front(); }
+        while h.recent.front().is_some_and(|b| b.timestamp < cutoff) {
+            h.recent.pop_front();
+        }
+    }
+
+    pub fn finalize_completed_buckets(&self, now: DateTime<Utc>) {
+        self.roll_history_if_needed(now);
     }
 
     pub fn pending_buckets(&self) -> Vec<HistoryBucket> {
