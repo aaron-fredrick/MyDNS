@@ -120,3 +120,14 @@ Every alert should define:
 - severity
 - operational owner
 - dashboard link/context where available
+
+
+## Time and timezone handling
+
+Alert evaluation should distinguish elapsed-time windows from calendar-aware periods.
+
+Use absolute/UTC time for sustained evaluation windows, cooldowns and recovery windows, sliding windows such as "last 15 minutes" or "last 24 hours", and alert event timestamps/correlation.
+
+Use the global MyDNS application timezone only when an alert or report explicitly depends on a calendar boundary, such as a local day/week/month or a calendar-aware operational period.
+
+The alerting layer must consume the canonical application timezone rather than infer the Windows/Linux host timezone independently.
