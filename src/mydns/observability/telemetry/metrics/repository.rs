@@ -22,7 +22,7 @@ pub async fn persist(
             ON CONFLICT(start_utc, end_utc) DO NOTHING
         "#)
         .bind(snapshot.start_utc.to_rfc3339()).bind(snapshot.end_utc.to_rfc3339())
-        .bind(snapshot.start_utc.timezone().to_string())
+        .bind(&snapshot.timezone)
         .bind(snapshot.queries as i64).bind(snapshot.responses as i64).bind(snapshot.blocked as i64)
         .bind(snapshot.upstream_requests as i64).bind(snapshot.upstream_successes as i64)
         .bind(snapshot.upstream_failures as i64).bind(snapshot.upstream_timeouts as i64)
