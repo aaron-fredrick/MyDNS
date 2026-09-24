@@ -9,6 +9,11 @@ use super::types::{BoundedCounts, HistoryBucket, MergeableHistogram, Operational
 
 const BUCKET_SECONDS: i64 = 60;
 const RECENT_HISTORY_SECONDS: i64 = 60 * 60;
+// Keep enough backlog for a prolonged observability-database outage without allowing
+// an unbounded in-memory queue. At 10,000 minute buckets this represents ~6.9 days.
+// * IMPORTANT: this threshold should be wired into the alerting system so a growing
+// backlog is visible before eviction occurs. A warning threshold around 80% is useful.
+const MAX_PENDING_BUCKETS: usize = 10_000;
 
 struct OperationalState {
     period_start: DateTime<Utc>,
@@ -171,6 +176,13 @@ impl MetricsAggregator {
     }
 
     pub fn record_upstream(&self, latency_ms: f64, success: bool, timeout: bool, retry: bool) {
+        // ? Semantics should remain explicit before DNS instrumentation: this records one
+        // upstream attempt, not one logical DNS request. retry=true means this attempt is
+        // itself a retry (the first attempt should therefore use retry=false).
+        // * IMPORTANT: timeout is a failure subtype, so timeout=true should imply success=false.
+        // TODO: Revisit these semantics against the resolver's actual retry/error model before
+        // migrating legacy metrics, and document any cases where one DNS request can produce
+        // multiple upstream attempts or multiple resolution outcomes.
         self.record_upstream_at(Utc::now(), latency_ms, success, timeout, retry);
     }
 
@@ -264,6 +276,8 @@ impl MetricsAggregator {
     ) {
         let mut state = self.state.lock().unwrap();
         advance(&mut state, now, self.timezone);
+
+        debug_assert!(!(success && timeout), "upstream attempt cannot be both success and timeout");
 
         state.operational.upstream_requests += 1;
         if success {
@@ -373,6 +387,9 @@ fn advance_periods(state: &mut AggregatorState, now: DateTime<Utc>, timezone: Tz
         }
 
         let snapshot = state.operational.snapshot_and_reset(end, timezone);
+        // TODO: Operational-period retention is intentionally unresolved. Research the project's
+        // long-term observability scope and decide whether daily summaries should be retained
+        // indefinitely or receive their own retention/downsampling policy.
         state.pending_periods.push_back(snapshot);
     }
 }
@@ -383,7 +400,14 @@ fn advance_history(state: &mut AggregatorState, now: DateTime<Utc>) {
     while state.history.current.timestamp < target {
         let next = state.history.current.timestamp + ChronoDuration::seconds(BUCKET_SECONDS);
         let completed = std::mem::replace(&mut state.history.current, HistoryBucket::new(next));
+        // Explicit zero buckets are intentional: absence of traffic must remain distinguishable
+        // from a missing/unrecorded bucket for diagnostics and auditability.
         state.history.pending.push_back(completed.clone());
+        if state.history.pending.len() > MAX_PENDING_BUCKETS {
+            // * IMPORTANT: eviction is deliberate data loss protection for memory, not a
+            // substitute for persistence. Wire this condition to alerts before relying on it.
+            state.history.pending.pop_front();
+        }
         state.history.recent.push_back(completed);
     }
 
