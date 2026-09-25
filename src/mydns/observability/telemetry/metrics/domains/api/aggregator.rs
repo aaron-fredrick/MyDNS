@@ -11,6 +11,7 @@ use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ApiAggregationSnapshot {
+    // Operational
     pub requests: u64,
     pub responses: u64,
     pub authentication_successes: u64,
@@ -20,6 +21,8 @@ pub struct ApiAggregationSnapshot {
     pub route_counts: BoundedCounts,
     pub status_counts: BoundedCounts,
     pub error_category_counts: BoundedCounts,
+
+    // Performance
     pub request_latency: MergeableHistogram,
     pub handler_latency: MergeableHistogram,
 }
@@ -82,6 +85,7 @@ impl Default for ApiAggregator {
     fn default() -> Self {
         Self {
             state: Mutex::new(ApiAggregationSnapshot {
+                // Operational
                 requests: 0,
                 responses: 0,
                 authentication_successes: 0,
@@ -91,6 +95,8 @@ impl Default for ApiAggregator {
                 route_counts: BoundedCounts::default(),
                 status_counts: BoundedCounts::default(),
                 error_category_counts: BoundedCounts::default(),
+
+                // Performance
                 request_latency: MergeableHistogram::latency(),
                 handler_latency: MergeableHistogram::latency(),
             }),
