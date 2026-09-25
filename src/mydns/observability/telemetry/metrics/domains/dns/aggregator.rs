@@ -1,552 +1,146 @@
-use std::collections::VecDeque;
+//! Domain-level aggregation for DNS measurements.
+//!
+//! This module maps DNS measurements into aggregated DNS metric state.
+//! Time buckets, retention, and persistence remain outside the domain aggregator.
+
 use std::sync::{Arc, Mutex};
 
-use chrono::TimeZone;
-use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, Utc};
-use chrono_tz::Tz;
-
-use super::types::{HistoryBucket, OperationalPeriodSnapshot};
 use crate::observability::telemetry::metrics::core::{BoundedCounts, MergeableHistogram};
 
-const BUCKET_SECONDS: i64 = 60;
-const RECENT_HISTORY_SECONDS: i64 = 60 * 60;
+use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
-// Keep enough backlog for a prolonged observability-database outage without allowing
-// an unbounded in-memory queue. At 10,000 minute buckets this represents ~6.9 days.
-// * IMPORTANT: this threshold should be wired into the alerting system so a growing
-// backlog is visible before eviction occurs. A warning threshold around 80% is useful.
-const MAX_PENDING_BUCKETS: usize = 10_000;
-
-struct OperationalState {
-    period_start: DateTime<Utc>,
-    queries: u64,
-    responses: u64,
-    blocked: u64,
-    cache_hits: u64,
-    cache_misses: u64,
-    cache_evictions: u64,
-    upstream_requests: u64,
-    upstream_successes: u64,
-    upstream_failures: u64,
-    upstream_timeouts: u64,
-    upstream_retries: u64,
-    blocked_reason_counts: BoundedCounts,
-    record_type_counts: BoundedCounts,
-    transport_counts: BoundedCounts,
-    response_code_counts: BoundedCounts,
-    resolution_outcome_counts: BoundedCounts,
-    resolution_path_counts: BoundedCounts,
-    response_latency: MergeableHistogram,
-    upstream_latency: MergeableHistogram,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DnsAggregationSnapshot {
+    pub queries: u64,
+    pub responses: u64,
+    pub blocked: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub cache_evictions: u64,
+    pub upstream_requests: u64,
+    pub upstream_successes: u64,
+    pub upstream_failures: u64,
+    pub upstream_timeouts: u64,
+    pub upstream_retries: u64,
+    pub blocked_reason_counts: BoundedCounts,
+    pub record_type_counts: BoundedCounts,
+    pub transport_counts: BoundedCounts,
+    pub response_code_counts: BoundedCounts,
+    pub resolution_outcome_counts: BoundedCounts,
+    pub resolution_path_counts: BoundedCounts,
+    pub response_latency: MergeableHistogram,
+    pub upstream_latency: MergeableHistogram,
 }
 
-impl OperationalState {
-    fn new(period_start: DateTime<Utc>) -> Self {
+pub struct DnsAggregator {
+    state: Mutex<DnsAggregationSnapshot>,
+}
+
+impl DnsAggregator {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn record_operational(&self, measurement: OperationalMeasurement<'_>) {
+        let mut state = self.state.lock().unwrap();
+
+        match measurement {
+            OperationalMeasurement::Query {
+                record_type,
+                transport,
+            } => {
+                state.queries += 1;
+                state.record_type_counts.record(&record_type.trim().to_ascii_uppercase());
+                state.transport_counts.record(&transport.trim().to_ascii_lowercase());
+            }
+            OperationalMeasurement::Response { response_code } => {
+                state.responses += 1;
+                state.response_code_counts.record(&response_code.trim().to_ascii_uppercase());
+            }
+            OperationalMeasurement::Blocked { reason } => {
+                state.blocked += 1;
+                state.blocked_reason_counts.record(reason);
+            }
+            OperationalMeasurement::Resolution { outcome, path } => {
+                state.resolution_outcome_counts.record(outcome);
+                state.resolution_path_counts.record(path);
+            }
+            OperationalMeasurement::Cache { hit } => {
+                if hit {
+                    state.cache_hits += 1;
+                } else {
+                    state.cache_misses += 1;
+                }
+            }
+            OperationalMeasurement::CacheEviction => {
+                state.cache_evictions += 1;
+            }
+            OperationalMeasurement::Upstream {
+                successful,
+                timeout,
+                retry,
+            } => {
+                state.upstream_requests += 1;
+
+                if successful {
+                    state.upstream_successes += 1;
+                } else {
+                    state.upstream_failures += 1;
+                }
+
+                if timeout {
+                    state.upstream_timeouts += 1;
+                }
+
+                if retry {
+                    state.upstream_retries += 1;
+                }
+            }
+        }
+    }
+
+    pub fn record_performance(&self, measurement: PerformanceMeasurement) {
+        let mut state = self.state.lock().unwrap();
+
+        match measurement {
+            PerformanceMeasurement::ResponseLatency { latency_ms } => {
+                state.response_latency.record(latency_ms);
+            }
+            PerformanceMeasurement::UpstreamLatency { latency_ms } => {
+                state.upstream_latency.record(latency_ms);
+            }
+        }
+    }
+
+    pub fn snapshot(&self) -> DnsAggregationSnapshot {
+        self.state.lock().unwrap().clone()
+    }
+}
+
+impl Default for DnsAggregator {
+    fn default() -> Self {
         Self {
-            period_start,
-            queries: 0,
-            responses: 0,
-            blocked: 0,
-            cache_hits: 0,
-            cache_misses: 0,
-            cache_evictions: 0,
-            upstream_requests: 0,
-            upstream_successes: 0,
-            upstream_failures: 0,
-            upstream_timeouts: 0,
-            upstream_retries: 0,
-            blocked_reason_counts: BoundedCounts::default(),
-            record_type_counts: BoundedCounts::default(),
-            transport_counts: BoundedCounts::default(),
-            response_code_counts: BoundedCounts::default(),
-            resolution_outcome_counts: BoundedCounts::default(),
-            resolution_path_counts: BoundedCounts::default(),
-            response_latency: MergeableHistogram::response(),
-            upstream_latency: MergeableHistogram::upstream(),
-        }
-    }
-
-    fn snapshot_and_reset(
-        &mut self,
-        end: DateTime<Utc>,
-        timezone: Tz,
-    ) -> OperationalPeriodSnapshot {
-        let snapshot = OperationalPeriodSnapshot {
-            timezone: timezone.to_string(),
-            start_utc: self.period_start,
-            end_utc: end,
-            queries: self.queries,
-            responses: self.responses,
-            blocked: self.blocked,
-            blocked_reason_counts: std::mem::take(&mut self.blocked_reason_counts),
-            record_type_counts: std::mem::take(&mut self.record_type_counts),
-            transport_counts: std::mem::take(&mut self.transport_counts),
-            response_code_counts: std::mem::take(&mut self.response_code_counts),
-            resolution_outcome_counts: std::mem::take(&mut self.resolution_outcome_counts),
-            resolution_path_counts: std::mem::take(&mut self.resolution_path_counts),
-            cache_hits: self.cache_hits,
-            cache_misses: self.cache_misses,
-            cache_evictions: self.cache_evictions,
-            upstream_requests: self.upstream_requests,
-            upstream_successes: self.upstream_successes,
-            upstream_failures: self.upstream_failures,
-            upstream_timeouts: self.upstream_timeouts,
-            upstream_retries: self.upstream_retries,
-            response_latency: std::mem::take(&mut self.response_latency),
-            upstream_latency: std::mem::take(&mut self.upstream_latency),
-        };
-
-        self.period_start = end;
-        self.queries = 0;
-        self.responses = 0;
-        self.blocked = 0;
-        self.cache_hits = 0;
-        self.cache_misses = 0;
-        self.cache_evictions = 0;
-        self.upstream_requests = 0;
-        self.upstream_successes = 0;
-        self.upstream_failures = 0;
-        self.upstream_timeouts = 0;
-        self.upstream_retries = 0;
-        self.response_latency = MergeableHistogram::response();
-        self.upstream_latency = MergeableHistogram::upstream();
-
-        snapshot
-    }
-}
-
-struct HistoryState {
-    current: HistoryBucket,
-    recent: VecDeque<HistoryBucket>,
-    pending: VecDeque<HistoryBucket>,
-}
-
-pub struct MetricsAggregator {
-    timezone: Tz,
-    state: Mutex<AggregatorState>,
-}
-
-struct AggregatorState {
-    operational: OperationalState,
-    pending_periods: VecDeque<OperationalPeriodSnapshot>,
-    history: HistoryState,
-}
-
-impl MetricsAggregator {
-    pub fn new(timezone: Tz) -> Arc<Self> {
-        let now = Utc::now();
-        Self::new_at(timezone, now)
-    }
-
-    fn new_at(timezone: Tz, now: DateTime<Utc>) -> Arc<Self> {
-        Arc::new(Self {
-            timezone,
-            state: Mutex::new(AggregatorState {
-                operational: OperationalState::new(local_midnight_utc(now, timezone)),
-                pending_periods: VecDeque::new(),
-                history: HistoryState {
-                    current: HistoryBucket::new(minute_start(now)),
-                    recent: VecDeque::new(),
-                    pending: VecDeque::new(),
-                },
+            state: Mutex::new(DnsAggregationSnapshot {
+                queries: 0,
+                responses: 0,
+                blocked: 0,
+                cache_hits: 0,
+                cache_misses: 0,
+                cache_evictions: 0,
+                upstream_requests: 0,
+                upstream_successes: 0,
+                upstream_failures: 0,
+                upstream_timeouts: 0,
+                upstream_retries: 0,
+                blocked_reason_counts: BoundedCounts::default(),
+                record_type_counts: BoundedCounts::default(),
+                transport_counts: BoundedCounts::default(),
+                response_code_counts: BoundedCounts::default(),
+                resolution_outcome_counts: BoundedCounts::default(),
+                resolution_path_counts: BoundedCounts::default(),
+                response_latency: MergeableHistogram::response(),
+                upstream_latency: MergeableHistogram::upstream(),
             }),
-        })
-    }
-
-    pub fn record_query(&self, record_type: &str, transport: &str) {
-        self.record_query_at(Utc::now(), record_type, transport);
-    }
-
-    pub fn record_response(&self, response_code: &str, latency_ms: f64) {
-        self.record_response_at(Utc::now(), response_code, latency_ms);
-    }
-
-    pub fn record_blocked(&self, reason: &str) {
-        self.record_blocked_at(Utc::now(), reason);
-    }
-
-    pub fn record_resolution(&self, outcome: &str, path: &str) {
-        self.record_resolution_at(Utc::now(), outcome, path);
-    }
-
-    pub fn record_cache(&self, hit: bool) {
-        self.record_cache_at(Utc::now(), hit);
-    }
-
-    pub fn record_cache_eviction(&self) {
-        self.record_cache_eviction_at(Utc::now());
-    }
-
-    pub fn record_upstream(&self, latency_ms: f64, success: bool, timeout: bool, retry: bool) {
-        // ? Semantics should remain explicit before DNS instrumentation: this records one
-        // upstream attempt, not one logical DNS request. retry=true means this attempt is
-        // itself a retry (the first attempt should therefore use retry=false).
-        // * IMPORTANT: timeout is a failure subtype, so timeout=true should imply success=false.
-        // TODO: Revisit these semantics against the resolver's actual retry/error model before
-        // migrating legacy metrics, and document any cases where one DNS request can produce
-        // multiple upstream attempts or multiple resolution outcomes.
-        self.record_upstream_at(Utc::now(), latency_ms, success, timeout, retry);
-    }
-
-    pub fn record_query_at(&self, now: DateTime<Utc>, record_type: &str, transport: &str) {
-        let mut state = self.state.lock().unwrap();
-        advance(&mut state, now, self.timezone);
-        let record_type = normalize_record_type(record_type);
-        let transport = normalize_transport(transport);
-        state.operational.queries += 1;
-        state.operational.record_type_counts.record(&record_type);
-        state.operational.transport_counts.record(&transport);
-        state.history.current.request_count += 1;
-        state
-            .history
-            .current
-            .record_type_counts
-            .record(&record_type);
-        state.history.current.transport_counts.record(&transport);
-    }
-
-    pub fn record_response_at(&self, now: DateTime<Utc>, response_code: &str, latency_ms: f64) {
-        let mut state = self.state.lock().unwrap();
-        advance(&mut state, now, self.timezone);
-        let response_code = normalize_response_code(response_code);
-        state.operational.responses += 1;
-        state
-            .operational
-            .response_code_counts
-            .record(&response_code);
-        state.operational.response_latency.record(latency_ms);
-        state.history.current.response_count += 1;
-        state
-            .history
-            .current
-            .response_code_counts
-            .record(&response_code);
-        state.history.current.response_latency.record(latency_ms);
-    }
-
-    pub fn record_blocked_at(&self, now: DateTime<Utc>, reason: &str) {
-        let mut state = self.state.lock().unwrap();
-        advance(&mut state, now, self.timezone);
-        let reason = normalize_reason(reason);
-        state.operational.blocked += 1;
-        state.operational.blocked_reason_counts.record(&reason);
-        state.history.current.blocked_count += 1;
-        state.history.current.blocked_reason_counts.record(&reason);
-    }
-
-    pub fn record_resolution_at(&self, now: DateTime<Utc>, outcome: &str, path: &str) {
-        let mut state = self.state.lock().unwrap();
-        advance(&mut state, now, self.timezone);
-        let outcome = normalize_dimension(outcome);
-        let path = normalize_dimension(path);
-        state.operational.resolution_outcome_counts.record(&outcome);
-        state.operational.resolution_path_counts.record(&path);
-        state
-            .history
-            .current
-            .resolution_outcome_counts
-            .record(&outcome);
-        state.history.current.resolution_path_counts.record(&path);
-    }
-
-    pub fn record_cache_at(&self, now: DateTime<Utc>, hit: bool) {
-        let mut state = self.state.lock().unwrap();
-        advance(&mut state, now, self.timezone);
-        if hit {
-            state.operational.cache_hits += 1;
-            state.history.current.cache_hits += 1;
-        } else {
-            state.operational.cache_misses += 1;
-            state.history.current.cache_misses += 1;
         }
-    }
-
-    pub fn record_cache_eviction_at(&self, now: DateTime<Utc>) {
-        let mut state = self.state.lock().unwrap();
-        advance(&mut state, now, self.timezone);
-        state.operational.cache_evictions += 1;
-        state.history.current.cache_evictions += 1;
-    }
-
-    pub fn record_upstream_at(
-        &self,
-        now: DateTime<Utc>,
-        latency_ms: f64,
-        success: bool,
-        timeout: bool,
-        retry: bool,
-    ) {
-        let mut state = self.state.lock().unwrap();
-        advance(&mut state, now, self.timezone);
-
-        debug_assert!(!(success && timeout), "upstream attempt cannot be both success and timeout");
-
-        state.operational.upstream_requests += 1;
-        if success {
-            state.operational.upstream_successes += 1;
-        } else {
-            state.operational.upstream_failures += 1;
-        }
-        if timeout {
-            state.operational.upstream_timeouts += 1;
-        }
-        if retry {
-            state.operational.upstream_retries += 1;
-        }
-        state.operational.upstream_latency.record(latency_ms);
-
-        state.history.current.upstream_requests += 1;
-        if success {
-            state.history.current.upstream_successes += 1;
-        } else {
-            state.history.current.upstream_failures += 1;
-        }
-        if timeout {
-            state.history.current.upstream_timeouts += 1;
-        }
-        if retry {
-            state.history.current.upstream_retries += 1;
-        }
-        state.history.current.upstream_latency.record(latency_ms);
-    }
-
-    pub fn finalize_due_periods(&self, now: DateTime<Utc>) {
-        let mut state = self.state.lock().unwrap();
-        advance_periods(&mut state, now, self.timezone);
-    }
-
-    pub fn pending_periods(&self) -> Vec<OperationalPeriodSnapshot> {
-        self.state
-            .lock()
-            .unwrap()
-            .pending_periods
-            .iter()
-            .cloned()
-            .collect()
-    }
-
-    pub fn acknowledge_periods(&self, periods: &[OperationalPeriodSnapshot]) {
-        let keys: Vec<_> = periods.iter().map(|p| (p.start_utc, p.end_utc)).collect();
-        self.state
-            .lock()
-            .unwrap()
-            .pending_periods
-            .retain(|p| !keys.contains(&(p.start_utc, p.end_utc)));
-    }
-
-    pub fn finalize_completed_buckets(&self, now: DateTime<Utc>) {
-        let mut state = self.state.lock().unwrap();
-        advance_history(&mut state, now);
-    }
-
-    pub fn pending_buckets(&self) -> Vec<HistoryBucket> {
-        self.state
-            .lock()
-            .unwrap()
-            .history
-            .pending
-            .iter()
-            .cloned()
-            .collect()
-    }
-
-    pub fn acknowledge_buckets(&self, buckets: &[HistoryBucket]) {
-        let keys: Vec<_> = buckets
-            .iter()
-            .map(|b| (b.timestamp, b.resolution_seconds))
-            .collect();
-        self.state
-            .lock()
-            .unwrap()
-            .history
-            .pending
-            .retain(|b| !keys.contains(&(b.timestamp, b.resolution_seconds)));
-    }
-
-    pub fn get_in_memory_history(&self) -> Vec<HistoryBucket> {
-        let state = self.state.lock().unwrap();
-        let mut history: Vec<_> = state.history.recent.iter().cloned().collect();
-
-        // Keep the current bucket even when it contains only zeroes so diagnostics can
-        // distinguish "observed zero activity" from "no bucket available".
-        history.push(state.history.current.clone());
-
-        history
-    }
-}
-
-fn advance(state: &mut AggregatorState, now: DateTime<Utc>, timezone: Tz) {
-    advance_periods(state, now, timezone);
-    advance_history(state, now);
-}
-
-fn advance_periods(state: &mut AggregatorState, now: DateTime<Utc>, timezone: Tz) {
-    loop {
-        let start = state.operational.period_start;
-        let end = next_local_midnight(start, timezone);
-        if now < end {
-            break;
-        }
-
-        let snapshot = state.operational.snapshot_and_reset(end, timezone);
-        // TODO: Operational-period retention is intentionally unresolved. Research the project's
-        // long-term observability scope and decide whether daily summaries should be retained
-        // indefinitely or receive their own retention/downsampling policy.
-        state.pending_periods.push_back(snapshot);
-    }
-}
-
-fn advance_history(state: &mut AggregatorState, now: DateTime<Utc>) {
-    let target = minute_start(now);
-
-    while state.history.current.timestamp < target {
-        let next = state.history.current.timestamp + ChronoDuration::seconds(BUCKET_SECONDS);
-        let completed = std::mem::replace(&mut state.history.current, HistoryBucket::new(next));
-        // Explicit zero buckets are intentional: absence of traffic must remain distinguishable
-        // from a missing/unrecorded bucket for diagnostics and auditability.
-        state.history.pending.push_back(completed.clone());
-        if state.history.pending.len() > MAX_PENDING_BUCKETS {
-            // * IMPORTANT: eviction is deliberate data loss protection for memory, not a
-            // substitute for persistence. Wire this condition to alerts before relying on it.
-            state.history.pending.pop_front();
-        }
-        state.history.recent.push_back(completed);
-    }
-
-    let cutoff = target - ChronoDuration::seconds(RECENT_HISTORY_SECONDS);
-    while state
-        .history
-        .recent
-        .front()
-        .is_some_and(|bucket| bucket.timestamp < cutoff)
-    {
-        state.history.recent.pop_front();
-    }
-}
-
-fn normalize_record_type(value: &str) -> String {
-    value.trim().to_ascii_uppercase()
-}
-
-fn normalize_response_code(value: &str) -> String {
-    value.trim().to_ascii_uppercase()
-}
-
-fn normalize_transport(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
-}
-
-fn normalize_reason(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
-}
-
-fn normalize_dimension(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
-}
-
-fn minute_start(timestamp: DateTime<Utc>) -> DateTime<Utc> {
-    let seconds = timestamp.timestamp();
-    DateTime::<Utc>::from_timestamp(seconds - seconds.rem_euclid(BUCKET_SECONDS), 0)
-        .expect("valid minute timestamp")
-}
-
-fn local_midnight_utc(now: DateTime<Utc>, timezone: Tz) -> DateTime<Utc> {
-    let local = now.with_timezone(&timezone);
-    let midnight = local
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .expect("valid local midnight");
-
-    timezone
-        .from_local_datetime(&midnight)
-        .single()
-        .expect("valid local midnight")
-        .with_timezone(&Utc)
-}
-
-fn next_local_midnight(start_utc: DateTime<Utc>, timezone: Tz) -> DateTime<Utc> {
-    let next_date: NaiveDate = start_utc
-        .with_timezone(&timezone)
-        .date_naive()
-        .succ_opt()
-        .expect("valid next date");
-    let midnight = next_date
-        .and_hms_opt(0, 0, 0)
-        .expect("valid local midnight");
-
-    timezone
-        .from_local_datetime(&midnight)
-        .single()
-        .expect("valid local midnight")
-        .with_timezone(&Utc)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use chrono_tz::Asia::Colombo;
-
-    fn at(value: &str) -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339(value)
-            .unwrap()
-            .with_timezone(&Utc)
-    }
-
-    #[test]
-    fn records_stay_in_the_correct_minute_bucket() {
-        let metrics = MetricsAggregator::new_at(Colombo, at("2026-09-24T00:00:00Z"));
-
-        metrics.record_query_at(at("2026-09-24T00:00:59Z"), "a", "UDP");
-        metrics.record_query_at(at("2026-09-24T00:01:01Z"), "aaaa", "UDP");
-
-        let history = metrics.get_in_memory_history();
-        assert_eq!(history.len(), 2);
-        assert_eq!(history[0].request_count, 1);
-        assert_eq!(history[1].request_count, 1);
-        assert_eq!(history[0].record_type_counts.get("A"), 1);
-        assert_eq!(history[1].record_type_counts.get("AAAA"), 1);
-    }
-
-    #[test]
-    fn operational_period_uses_configured_local_midnight() {
-        let metrics = MetricsAggregator::new_at(Colombo, at("2026-09-23T18:29:00Z"));
-        metrics.record_query_at(at("2026-09-23T18:29:30Z"), "A", "udp");
-
-        metrics.finalize_due_periods(at("2026-09-23T18:30:00Z"));
-
-        let periods = metrics.pending_periods();
-        assert_eq!(periods.len(), 1);
-        assert_eq!(periods[0].queries, 1);
-        assert_eq!(periods[0].start_utc, at("2026-09-22T18:30:00Z"));
-        assert_eq!(periods[0].end_utc, at("2026-09-23T18:30:00Z"));
-    }
-
-    #[test]
-    fn pending_bucket_backlog_evicts_oldest_bucket_at_limit() {
-        let metrics = MetricsAggregator::new_at(chrono_tz::UTC, at("2026-09-24T00:00:00Z"));
-
-        for minute in 0..=MAX_PENDING_BUCKETS {
-            let now = at("2026-09-24T00:00:00Z") + ChronoDuration::minutes(minute as i64);
-            metrics.finalize_completed_buckets(now);
-        }
-
-        assert_eq!(metrics.pending_buckets().len(), MAX_PENDING_BUCKETS);
-        assert_eq!(
-            metrics.pending_buckets().front().unwrap().timestamp,
-            at("2026-09-24T00:01:00Z")
-        );
-    }
-
-    #[test]
-    fn failed_persistence_keeps_pending_data_until_acknowledged() {
-        let metrics = MetricsAggregator::new_at(chrono_tz::UTC, at("2026-09-24T00:00:00Z"));
-        metrics.record_query_at(at("2026-09-24T00:00:10Z"), "A", "udp");
-        metrics.finalize_completed_buckets(at("2026-09-24T00:01:00Z"));
-
-        assert_eq!(metrics.pending_buckets().len(), 1);
-        assert_eq!(metrics.pending_buckets()[0].request_count, 1);
-
-        metrics.acknowledge_buckets(&metrics.pending_buckets());
-        assert!(metrics.pending_buckets().is_empty());
     }
 }
