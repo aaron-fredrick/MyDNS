@@ -4,14 +4,14 @@ use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::observability::telemetry::metrics::domains::dns::DnsMetricsAggregator;
+use crate::observability::telemetry::metrics::domains::dns::DnsAggregator;
 use super::repository;
 use crate::observability::database::ObservabilityDatabase;
 
 const PERSIST_INTERVAL: Duration = Duration::from_secs(60);
 
 pub fn spawn_persistence(
-    metrics: Arc<DnsMetricsAggregator>,
+    metrics: Arc<DnsAggregator>,
     database: Arc<ObservabilityDatabase>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -37,7 +37,7 @@ pub fn spawn_persistence(
 }
 
 async fn persist_once(
-    metrics: &DnsMetricsAggregator,
+    metrics: &DnsAggregator,
     database: &ObservabilityDatabase,
 ) -> anyhow::Result<()> {
     let now = chrono::Utc::now();
