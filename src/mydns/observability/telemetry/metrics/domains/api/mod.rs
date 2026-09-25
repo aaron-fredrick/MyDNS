@@ -1,11 +1,6 @@
 //! API metric domain.
-//!
-//! The initial implementation records request volume, status classes, dimensions,
-//! and latency. The detailed measurement contract can be expanded after API
-//! instrumentation semantics are finalized.
 
-pub mod metrics;
-pub mod observations;
+pub mod aggregator;
+pub mod measurements;
 
-pub use metrics::{ApiMetricsAggregator, ApiMetricsSnapshot};
-pub use observations::ApiRequestObservation;
+pub use aggregator::{ApiAggregationSnapshot, ApiAggregator};
