@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::observability::telemetry::metrics::core::{BoundedCounts, MergeableHistogram};
+use crate::observability::telemetry::metrics::types::{BoundedCounts, MergeableHistogram};
 
 use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
