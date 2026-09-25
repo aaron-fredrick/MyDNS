@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::observability::telemetry::metrics::types::{BoundedCounts, MergeableHistogram};
+use crate::observability::telemetry::metrics::types::{BoundedCounter, MergeableHistogram};
 
 use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
@@ -31,12 +31,12 @@ pub struct DnsAggregationSnapshot {
     pub upstream_failures: u64,
     pub upstream_timeouts: u64,
     pub upstream_retries: u64,
-    pub blocked_reason_counts: BoundedCounts,
-    pub record_type_counts: BoundedCounts,
-    pub transport_counts: BoundedCounts,
-    pub response_code_counts: BoundedCounts,
-    pub resolution_outcome_counts: BoundedCounts,
-    pub resolution_path_counts: BoundedCounts,
+    pub blocked_reason_counts: BoundedCounter,
+    pub record_type_counts: BoundedCounter,
+    pub transport_counts: BoundedCounter,
+    pub response_code_counts: BoundedCounter,
+    pub resolution_outcome_counts: BoundedCounter,
+    pub resolution_path_counts: BoundedCounter,
 
     // Performance
     pub response_latency: MergeableHistogram,
@@ -61,12 +61,18 @@ impl DnsAggregator {
                 transport,
             } => {
                 state.queries += 1;
-                state.record_type_counts.record(&record_type.trim().to_ascii_uppercase());
-                state.transport_counts.record(&transport.trim().to_ascii_lowercase());
+                state
+                    .record_type_counts
+                    .record(&record_type.trim().to_ascii_uppercase());
+                state
+                    .transport_counts
+                    .record(&transport.trim().to_ascii_lowercase());
             }
             OperationalMeasurement::Response { response_code } => {
                 state.responses += 1;
-                state.response_code_counts.record(&response_code.trim().to_ascii_uppercase());
+                state
+                    .response_code_counts
+                    .record(&response_code.trim().to_ascii_uppercase());
             }
             OperationalMeasurement::Blocked { reason } => {
                 state.blocked += 1;
@@ -144,12 +150,12 @@ impl Default for DnsAggregator {
                 upstream_failures: 0,
                 upstream_timeouts: 0,
                 upstream_retries: 0,
-                blocked_reason_counts: BoundedCounts::default(),
-                record_type_counts: BoundedCounts::default(),
-                transport_counts: BoundedCounts::default(),
-                response_code_counts: BoundedCounts::default(),
-                resolution_outcome_counts: BoundedCounts::default(),
-                resolution_path_counts: BoundedCounts::default(),
+                blocked_reason_counts: BoundedCounter::default(),
+                record_type_counts: BoundedCounter::default(),
+                transport_counts: BoundedCounter::default(),
+                response_code_counts: BoundedCounter::default(),
+                resolution_outcome_counts: BoundedCounter::default(),
+                resolution_path_counts: BoundedCounter::default(),
 
                 // Performance
                 response_latency: MergeableHistogram::new(RESPONSE_LATENCY_BOUNDS_MS),

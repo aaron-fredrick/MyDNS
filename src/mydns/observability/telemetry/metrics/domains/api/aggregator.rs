@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::observability::telemetry::metrics::types::{BoundedCounts, MergeableHistogram};
+use crate::observability::telemetry::metrics::types::{BoundedCounter, MergeableHistogram};
 
 use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
@@ -21,10 +21,10 @@ pub struct ApiAggregationSnapshot {
     pub authentication_successes: u64,
     pub authentication_failures: u64,
     pub errors: u64,
-    pub method_counts: BoundedCounts,
-    pub route_counts: BoundedCounts,
-    pub status_counts: BoundedCounts,
-    pub error_category_counts: BoundedCounts,
+    pub method_counts: BoundedCounter,
+    pub route_counts: BoundedCounter,
+    pub status_counts: BoundedCounter,
+    pub error_category_counts: BoundedCounter,
 
     // Performance
     pub request_latency: MergeableHistogram,
@@ -46,7 +46,9 @@ impl ApiAggregator {
         match measurement {
             OperationalMeasurement::Request { method, route } => {
                 state.requests += 1;
-                state.method_counts.record(&method.trim().to_ascii_uppercase());
+                state
+                    .method_counts
+                    .record(&method.trim().to_ascii_uppercase());
                 state.route_counts.record(route.trim());
             }
             OperationalMeasurement::Response { status_code } => {
@@ -95,10 +97,10 @@ impl Default for ApiAggregator {
                 authentication_successes: 0,
                 authentication_failures: 0,
                 errors: 0,
-                method_counts: BoundedCounts::default(),
-                route_counts: BoundedCounts::default(),
-                status_counts: BoundedCounts::default(),
-                error_category_counts: BoundedCounts::default(),
+                method_counts: BoundedCounter::default(),
+                route_counts: BoundedCounter::default(),
+                status_counts: BoundedCounter::default(),
+                error_category_counts: BoundedCounter::default(),
 
                 // Performance
                 request_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),

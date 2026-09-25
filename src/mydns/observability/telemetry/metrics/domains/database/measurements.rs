@@ -17,10 +17,6 @@ pub enum OperationalMeasurement<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PerformanceMeasurement {
-    OperationLatency {
-        latency_ms: f64,
-    },
-    ConnectionLatency {
-        latency_ms: f64,
-    },
+    OperationLatency { latency_ms: f64 },
+    ConnectionLatency { latency_ms: f64 },
 }

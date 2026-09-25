@@ -11,7 +11,10 @@ pub struct MetricBucket {
 impl MetricBucket {
     pub fn new(start: DateTime<Utc>, resolution_seconds: u32) -> Self {
         assert!(resolution_seconds > 0, "bucket resolution must be positive");
-        Self { start, resolution_seconds }
+        Self {
+            start,
+            resolution_seconds,
+        }
     }
 
     pub fn end(&self) -> DateTime<Utc> {

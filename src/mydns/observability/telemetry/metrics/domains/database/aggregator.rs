@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::observability::telemetry::metrics::types::{BoundedCounts, MergeableHistogram};
+use crate::observability::telemetry::metrics::types::{BoundedCounter, MergeableHistogram};
 
 use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
@@ -22,7 +22,7 @@ pub struct DatabaseAggregationSnapshot {
     pub connections: u64,
     pub connection_successes: u64,
     pub connection_failures: u64,
-    pub operation_counts: BoundedCounts,
+    pub operation_counts: BoundedCounter,
 
     // Performance
     pub operation_latency: MergeableHistogram,
@@ -47,7 +47,9 @@ impl DatabaseAggregator {
                 successful,
             } => {
                 state.operations += 1;
-                state.operation_counts.record(&operation.trim().to_ascii_lowercase());
+                state
+                    .operation_counts
+                    .record(&operation.trim().to_ascii_lowercase());
 
                 if successful {
                     state.operation_successes += 1;
@@ -96,7 +98,7 @@ impl Default for DatabaseAggregator {
                 connections: 0,
                 connection_successes: 0,
                 connection_failures: 0,
-                operation_counts: BoundedCounts::default(),
+                operation_counts: BoundedCounter::default(),
 
                 // Performance
                 operation_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),
