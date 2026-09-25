@@ -6,11 +6,11 @@ const MAX_CATEGORIES: usize = 32;
 const OTHER_CATEGORY: &str = "other";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-pub struct BoundedCounts {
+pub struct BoundedCounter {
     values: BTreeMap<String, u64>,
 }
 
-impl BoundedCounts {
+impl BoundedCounter {
     pub fn record(&mut self, value: &str) { self.record_n(value, 1); }
     pub fn record_n(&mut self, value: &str, count: u64) {
         let value = value.trim();
