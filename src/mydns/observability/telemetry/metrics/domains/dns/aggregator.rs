@@ -11,6 +11,7 @@ use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DnsAggregationSnapshot {
+    // Operational
     pub queries: u64,
     pub responses: u64,
     pub blocked: u64,
@@ -28,6 +29,8 @@ pub struct DnsAggregationSnapshot {
     pub response_code_counts: BoundedCounts,
     pub resolution_outcome_counts: BoundedCounts,
     pub resolution_path_counts: BoundedCounts,
+
+    // Performance
     pub response_latency: MergeableHistogram,
     pub upstream_latency: MergeableHistogram,
 }
@@ -121,6 +124,7 @@ impl Default for DnsAggregator {
     fn default() -> Self {
         Self {
             state: Mutex::new(DnsAggregationSnapshot {
+                // Operational
                 queries: 0,
                 responses: 0,
                 blocked: 0,
@@ -138,6 +142,8 @@ impl Default for DnsAggregator {
                 response_code_counts: BoundedCounts::default(),
                 resolution_outcome_counts: BoundedCounts::default(),
                 resolution_path_counts: BoundedCounts::default(),
+
+                // Performance
                 response_latency: MergeableHistogram::response(),
                 upstream_latency: MergeableHistogram::upstream(),
             }),
