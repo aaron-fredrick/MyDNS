@@ -9,6 +9,10 @@ use crate::observability::telemetry::metrics::core::{BoundedCounts, MergeableHis
 
 use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
+const LATENCY_BOUNDS_MS: &[f64] = &[
+    1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 3000.0, 5000.0,
+];
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DatabaseAggregationSnapshot {
     // Operational
@@ -95,8 +99,8 @@ impl Default for DatabaseAggregator {
                 operation_counts: BoundedCounts::default(),
 
                 // Performance
-                operation_latency: MergeableHistogram::latency(),
-                connection_latency: MergeableHistogram::latency(),
+                operation_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),
+                connection_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),
             }),
         }
     }
