@@ -9,6 +9,14 @@ use crate::observability::telemetry::metrics::core::{BoundedCounts, MergeableHis
 
 use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
+const RESPONSE_LATENCY_BOUNDS_MS: &[f64] = &[
+    1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 3000.0, 5000.0,
+];
+
+const UPSTREAM_LATENCY_BOUNDS_MS: &[f64] = &[
+    1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2000.0, 3000.0, 5000.0,
+];
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DnsAggregationSnapshot {
     // Operational
@@ -144,8 +152,8 @@ impl Default for DnsAggregator {
                 resolution_path_counts: BoundedCounts::default(),
 
                 // Performance
-                response_latency: MergeableHistogram::response(),
-                upstream_latency: MergeableHistogram::upstream(),
+                response_latency: MergeableHistogram::new(RESPONSE_LATENCY_BOUNDS_MS),
+                upstream_latency: MergeableHistogram::new(UPSTREAM_LATENCY_BOUNDS_MS),
             }),
         }
     }
