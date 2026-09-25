@@ -62,12 +62,8 @@ impl BoundedCounts {
         if self.values.len() < MAX_CATEGORIES.saturating_sub(1) {
             self.values.insert(value.to_owned(), count);
         } else {
-            *self.values.entry(OTHER_CATEGORY.to_owned()).or_insert(0) =
-                self.values
-                    .get(OTHER_CATEGORY)
-                    .copied()
-                    .unwrap_or(0)
-                    .saturating_add(count);
+            let other = self.values.entry(OTHER_CATEGORY.to_owned()).or_insert(0);
+            *other = other.saturating_add(count);
         }
     }
 
