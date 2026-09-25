@@ -11,6 +11,7 @@ use super::measurements::{OperationalMeasurement, PerformanceMeasurement};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DatabaseAggregationSnapshot {
+    // Operational
     pub operations: u64,
     pub operation_successes: u64,
     pub operation_failures: u64,
@@ -18,6 +19,8 @@ pub struct DatabaseAggregationSnapshot {
     pub connection_successes: u64,
     pub connection_failures: u64,
     pub operation_counts: BoundedCounts,
+
+    // Performance
     pub operation_latency: MergeableHistogram,
     pub connection_latency: MergeableHistogram,
 }
@@ -82,6 +85,7 @@ impl Default for DatabaseAggregator {
     fn default() -> Self {
         Self {
             state: Mutex::new(DatabaseAggregationSnapshot {
+                // Operational
                 operations: 0,
                 operation_successes: 0,
                 operation_failures: 0,
@@ -89,6 +93,8 @@ impl Default for DatabaseAggregator {
                 connection_successes: 0,
                 connection_failures: 0,
                 operation_counts: BoundedCounts::default(),
+
+                // Performance
                 operation_latency: MergeableHistogram::latency(),
                 connection_latency: MergeableHistogram::latency(),
             }),
