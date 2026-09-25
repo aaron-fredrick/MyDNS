@@ -2,5 +2,5 @@
 pub mod bounded;
 pub mod scalar;
 
-pub use bounded::BoundedCounts;
+pub use bounded::BoundedCounter;
 pub use scalar::ScalarCounter;
