@@ -23,3 +23,25 @@ pub struct ApiOperationalAggregator {
     pub status_counts: Mutex<BoundedCounter>,
     pub error_category_counts: Mutex<BoundedCounter>,
 }
+
+impl ApiOperationalAggregator {
+    pub fn new() -> Self {
+        Self {
+            requests: Mutex::new(ScalarCounter::new()),
+            responses: Mutex::new(ScalarCounter::new()),
+
+            request_size_bytes: Mutex::new(ScalarCounter::new()),
+            response_size_bytes: Mutex::new(ScalarCounter::new()),
+
+            authentication_successes: Mutex::new(ScalarCounter::new()),
+            authentication_failures: Mutex::new(ScalarCounter::new()),
+
+            errors: Mutex::new(ScalarCounter::new()),
+
+            method_counts: Mutex::new(BoundedCounter::default()),
+            route_counts: Mutex::new(BoundedCounter::default()),
+            status_counts: Mutex::new(BoundedCounter::default()),
+            error_category_counts: Mutex::new(BoundedCounter::default()),
+        }
+    }
+}
