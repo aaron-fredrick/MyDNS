@@ -1,3 +1,3 @@
 //! Summary metric types.
 pub mod basic;
-pub use basic::Summary;
+pub use basic::TDigestSummary;
