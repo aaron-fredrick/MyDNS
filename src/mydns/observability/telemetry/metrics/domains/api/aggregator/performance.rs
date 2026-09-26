@@ -43,8 +43,11 @@ impl ApiPerformanceAggregator {
         Self {
             request_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
             handler_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
+
             request_frequency: Mutex::new(ScalarCounter::new()),
+
             request_concurrency: Mutex::new(Gauge::default()),
+            
             request_size: Mutex::new(DistributionMetrics::new(SIZE_BOUNDS_BYTES)),
             response_size: Mutex::new(DistributionMetrics::new(SIZE_BOUNDS_BYTES)),
         }
