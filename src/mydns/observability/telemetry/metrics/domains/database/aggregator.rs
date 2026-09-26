@@ -1,7 +1,4 @@
 //! Domain-level aggregation for database measurements.
-//!
-//! This module maps database measurements into aggregated database metric state.
-//! Time buckets, retention, and persistence remain outside the domain aggregator.
 
 use std::sync::{Arc, Mutex};
 
@@ -14,8 +11,7 @@ const LATENCY_BOUNDS_MS: &[f64] = &[
 ];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct DatabaseAggregationSnapshot {
-    // Operational
+pub struct DatabaseOperationalSnapshot {
     pub operations: u64,
     pub operation_successes: u64,
     pub operation_failures: u64,
@@ -23,53 +19,73 @@ pub struct DatabaseAggregationSnapshot {
     pub connection_successes: u64,
     pub connection_failures: u64,
     pub operation_counts: BoundedCounter,
-
-    // Performance
-    pub operation_latency: MergeableHistogram,
-    pub connection_latency: MergeableHistogram,
 }
 
-pub struct DatabaseAggregator {
-    state: Mutex<DatabaseAggregationSnapshot>,
+pub struct DatabaseOperationalAggregator {
+    state: Mutex<DatabaseOperationalSnapshot>,
 }
 
-impl DatabaseAggregator {
+impl DatabaseOperationalAggregator {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
 
-    pub fn record_operational(&self, measurement: OperationalMeasurement<'_>) {
+    pub fn record(&self, measurement: OperationalMeasurement<'_>) {
         let mut state = self.state.lock().unwrap();
 
         match measurement {
-            OperationalMeasurement::Operation {
-                operation,
-                successful,
-            } => {
+            OperationalMeasurement::Operation { operation, successful } => {
                 state.operations += 1;
-                state
-                    .operation_counts
-                    .record(&operation.trim().to_ascii_lowercase());
+                state.operation_counts.record(&operation.trim().to_ascii_lowercase());
 
-                if successful {
-                    state.operation_successes += 1;
-                } else {
-                    state.operation_failures += 1;
-                }
+                if successful { state.operation_successes += 1; }
+                else { state.operation_failures += 1; }
             }
             OperationalMeasurement::Connection { successful } => {
                 state.connections += 1;
-
-                if successful {
-                    state.connection_successes += 1;
-                } else {
-                    state.connection_failures += 1;
-                }
+                if successful { state.connection_successes += 1; }
+                else { state.connection_failures += 1; }
             }
         }
     }
 
-    pub fn record_performance(&self, measurement: PerformanceMeasurement) {
+    pub fn snapshot(&self) -> DatabaseOperationalSnapshot {
+        self.state.lock().unwrap().clone()
+    }
+}
+
+impl Default for DatabaseOperationalAggregator {
+    fn default() -> Self {
+        Self {
+            state: Mutex::new(DatabaseOperationalSnapshot {
+                operations: 0,
+                operation_successes: 0,
+                operation_failures: 0,
+                connections: 0,
+                connection_successes: 0,
+                connection_failures: 0,
+                operation_counts: BoundedCounter::default(),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DatabasePerformanceSnapshot {
+    pub operation_latency: MergeableHistogram,
+    pub connection_latency: MergeableHistogram,
+}
+
+pub struct DatabasePerformanceAggregator {
+    state: Mutex<DatabasePerformanceSnapshot>,
+}
+
+impl DatabasePerformanceAggregator {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn record(&self, measurement: PerformanceMeasurement) {
         let mut state = self.state.lock().unwrap();
 
         match measurement {
@@ -82,25 +98,15 @@ impl DatabaseAggregator {
         }
     }
 
-    pub fn snapshot(&self) -> DatabaseAggregationSnapshot {
+    pub fn snapshot(&self) -> DatabasePerformanceSnapshot {
         self.state.lock().unwrap().clone()
     }
 }
 
-impl Default for DatabaseAggregator {
+impl Default for DatabasePerformanceAggregator {
     fn default() -> Self {
         Self {
-            state: Mutex::new(DatabaseAggregationSnapshot {
-                // Operational
-                operations: 0,
-                operation_successes: 0,
-                operation_failures: 0,
-                connections: 0,
-                connection_successes: 0,
-                connection_failures: 0,
-                operation_counts: BoundedCounter::default(),
-
-                // Performance
+            state: Mutex::new(DatabasePerformanceSnapshot {
                 operation_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),
                 connection_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),
             }),
