@@ -1,5 +1,7 @@
 //! Performance aggregation for API measurements.
 
+use std::sync::Mutex;
+
 use crate::observability::telemetry::metrics::types::{
     DistributionMetrics, Gauge, ScalarCounter,
 };
@@ -22,29 +24,39 @@ const SIZE_BOUNDS_BYTES: &[f64] = &[
 ];
 
 pub struct ApiPerformanceAggregator {
-    pub request_latency: DistributionMetrics,
-    pub handler_latency: DistributionMetrics,
+    pub request_latency: Mutex<DistributionMetrics>,
+    pub handler_latency: Mutex<DistributionMetrics>,
 
-    pub request_frequency: ScalarCounter,
+    // AtomicU64 is a better fit for this scalar counter; Mutex is used here
+    // until the aggregator's atomic synchronization strategy is introduced.
+    pub request_frequency: Mutex<ScalarCounter>,
 
-    pub request_concurrency: Gauge,
+    pub request_concurrency: Mutex<Gauge>,
 
-    pub request_size: DistributionMetrics,
-    pub response_size: DistributionMetrics,
+    pub request_size: Mutex<DistributionMetrics>,
+    pub response_size: Mutex<DistributionMetrics>,
 }
 
 impl ApiPerformanceAggregator {
     pub fn new() -> Self {
         Self {
-            request_latency: DistributionMetrics::new(LATENCY_BOUNDS_MS),
-            handler_latency: DistributionMetrics::new(LATENCY_BOUNDS_MS),
+            request_latency: Mutex::new(
+                DistributionMetrics::new(LATENCY_BOUNDS_MS),
+            ),
+            handler_latency: Mutex::new(
+                DistributionMetrics::new(LATENCY_BOUNDS_MS),
+            ),
 
-            request_frequency: ScalarCounter::new(),
+            request_frequency: Mutex::new(ScalarCounter::new()),
 
-            request_concurrency: Gauge::default(),
+            request_concurrency: Mutex::new(Gauge::default()),
 
-            request_size: DistributionMetrics::new(SIZE_BOUNDS_BYTES),
-            response_size: DistributionMetrics::new(SIZE_BOUNDS_BYTES),
+            request_size: Mutex::new(
+                DistributionMetrics::new(SIZE_BOUNDS_BYTES),
+            ),
+            response_size: Mutex::new(
+                DistributionMetrics::new(SIZE_BOUNDS_BYTES),
+            ),
         }
     }
 }
