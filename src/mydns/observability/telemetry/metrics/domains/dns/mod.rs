@@ -3,4 +3,9 @@
 pub mod aggregator;
 pub mod measurements;
 
-pub use aggregator::{DnsAggregationSnapshot, DnsAggregator};
+pub use aggregator::{
+    DnsOperationalAggregator,
+    DnsOperationalSnapshot,
+    DnsPerformanceAggregator,
+    DnsPerformanceSnapshot,
+};
