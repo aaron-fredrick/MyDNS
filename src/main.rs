@@ -95,10 +95,6 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(count = enabled_domains.len(), "Blocklist loaded from DB");
     let blocklist_index = BlocklistIndex::from_domains(&enabled_domains);
 
-    let timezone = cfg.timezone.parse::<chrono_tz::Tz>().map_err(|error| {
-        anyhow::anyhow!("Invalid configured timezone '{}': {error}", cfg.timezone)
-    })?;
-
     let observability_db = Arc::new(
         observability::database::ObservabilityDatabase::init(&cfg.observability_db_path).await?,
     );
@@ -115,7 +111,6 @@ async fn main() -> anyhow::Result<()> {
         record_index,
         zone_trie,
         blocklist_index,
-        Arc::clone(&telemetry_metrics),
         Arc::clone(&observability_db),
     );
 
