@@ -6,4 +6,4 @@ pub use gauge::Gauge;
 pub mod histogram;
 pub use histogram::MergeableHistogram;
 pub mod summary;
-pub use summary::Summary;
+pub use summary::TDigestSummary;
