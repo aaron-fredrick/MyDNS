@@ -4,7 +4,7 @@
 //! independent from aggregation, time buckets, retention, and persistence.
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum PerformanceMeasurement {
+pub enum ApiPerformanceMeasurement {
     RequestLatency { latency_ms: f64 },
     HandlerLatency { latency_ms: f64 },
 
@@ -17,7 +17,7 @@ pub enum PerformanceMeasurement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum OperationalMeasurement<'a> {
+pub enum ApiOperationalMeasurement<'a> {
     Request { method: &'a str, route: &'a str },
     Response { status_code: u16 },
 
