@@ -15,4 +15,8 @@ pub enum OperationalMeasurement<'a> {
 pub enum PerformanceMeasurement {
     RequestLatency { latency_ms: f64 },
     HandlerLatency { latency_ms: f64 },
+    RequestFrequency,
+    RequestConcurrency { active_requests: u64 },
+    RequestSize { bytes: u64 },
+    ResponseSize { bytes: u64 },
 }
