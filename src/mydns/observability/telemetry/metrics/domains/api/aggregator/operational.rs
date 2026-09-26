@@ -40,7 +40,7 @@ impl ApiOperationalAggregator {
             authentication_failures: Mutex::new(ScalarCounter::new()),
 
             errors: Mutex::new(ScalarCounter::new()),
-            
+
             method_counts: Mutex::new(BoundedCounter::default()),
             route_counts: Mutex::new(BoundedCounter::default()),
             status_counts: Mutex::new(BoundedCounter::default()),
