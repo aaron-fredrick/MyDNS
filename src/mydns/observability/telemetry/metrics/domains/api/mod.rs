@@ -3,7 +3,4 @@
 pub mod aggregator;
 pub mod measurements;
 
-pub use aggregator::{
-    ApiOperationalAggregator,
-    ApiPerformanceAggregator,
-};
+pub use aggregator::{ApiOperationalAggregator, ApiPerformanceAggregator};

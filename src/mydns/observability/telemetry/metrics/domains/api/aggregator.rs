@@ -48,14 +48,16 @@ pub struct ApiOperationalAggregator {
     pub error_category_counts: BoundedCounter,
 }
 
-
 impl ApiPerformanceAggregator {
     pub fn new() -> Self {
         Self {
             request_latency: DistributionMetrics::new(LATENCY_BOUNDS_MS),
             handler_latency: DistributionMetrics::new(LATENCY_BOUNDS_MS),
+
             request_frequency: ScalarCounter::new(),
+
             request_concurrency: Gauge::default(),
+
             request_size: DistributionMetrics::new(SIZE_BOUNDS_BYTES),
             response_size: DistributionMetrics::new(SIZE_BOUNDS_BYTES),
         }

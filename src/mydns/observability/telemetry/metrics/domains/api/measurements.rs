@@ -11,11 +11,10 @@ pub enum PerformanceMeasurement {
     RequestFrequency,
 
     RequestConcurrency { active_requests: u64 },
-    
+
     RequestSize { bytes: u64 },
     ResponseSize { bytes: u64 },
 }
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OperationalMeasurement<'a> {
