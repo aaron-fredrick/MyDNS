@@ -25,4 +25,13 @@ impl Gauge {
     pub fn value(&self) -> f64 {
         self.value
     }
+
+    /// Merges another gauge snapshot by replacing this value with the other value.
+    ///
+    /// A gauge represents current state rather than an accumulative quantity, so
+    /// it cannot be meaningfully summed like a counter or histogram. The caller
+    /// is responsible for supplying the snapshot that should take precedence.
+    pub fn merge(&mut self, other: &Self) {
+        self.value = other.value;
+    }
 }
