@@ -6,7 +6,7 @@ use tdigest::TDigest;
 const DEFAULT_TDIGEST_SIZE: usize = 100;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Summary {
+pub struct TDigestSummary {
     count: u64,
     sum: f64,
     min: Option<f64>,
@@ -26,7 +26,7 @@ impl Default for Summary {
     }
 }
 
-impl Summary {
+impl TDigestSummary {
     pub fn new() -> Self {
         Self::default()
     }
