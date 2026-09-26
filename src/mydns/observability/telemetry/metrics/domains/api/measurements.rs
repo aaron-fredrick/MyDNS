@@ -20,6 +20,10 @@ pub enum PerformanceMeasurement {
 pub enum OperationalMeasurement<'a> {
     Request { method: &'a str, route: &'a str },
     Response { status_code: u16 },
+
+    RequestSize { bytes: u64 },
+    ResponseSize { bytes: u64 },
+
     Authentication { successful: bool },
     Error { category: &'a str },
 }
