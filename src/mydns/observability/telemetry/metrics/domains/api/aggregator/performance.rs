@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use crate::observability::telemetry::metrics::{
-    domains::api::measurements::PerformanceMeasurement,
+    domains::api::measurements::ApiPerformanceMeasurement,
     types::{DistributionMetrics, Gauge, ScalarCounter},
 };
 
@@ -50,24 +50,24 @@ impl ApiPerformanceAggregator {
         }
     }
 
-    pub fn record(&self, measurement: PerformanceMeasurement) {
+    pub fn record(&self, measurement: ApiPerformanceMeasurement) {
         match measurement {
-            PerformanceMeasurement::RequestLatency { latency_ms } => {
+            ApiPerformanceMeasurement::RequestLatency { latency_ms } => {
                 self.record_request_latency(latency_ms);
             }
-            PerformanceMeasurement::HandlerLatency { latency_ms } => {
+            ApiPerformanceMeasurement::HandlerLatency { latency_ms } => {
                 self.record_handler_latency(latency_ms);
             }
-            PerformanceMeasurement::RequestFrequency => {
+            ApiPerformanceMeasurement::RequestFrequency => {
                 self.record_request_frequency();
             }
-            PerformanceMeasurement::RequestConcurrency { active_requests } => {
+            ApiPerformanceMeasurement::RequestConcurrency { active_requests } => {
                 self.record_request_concurrency(active_requests);
             }
-            PerformanceMeasurement::RequestSize { bytes } => {
+            ApiPerformanceMeasurement::RequestSize { bytes } => {
                 self.record_request_size(bytes);
             }
-            PerformanceMeasurement::ResponseSize { bytes } => {
+            ApiPerformanceMeasurement::ResponseSize { bytes } => {
                 self.record_response_size(bytes);
             }
         }
