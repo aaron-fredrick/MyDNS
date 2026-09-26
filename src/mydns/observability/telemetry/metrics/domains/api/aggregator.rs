@@ -24,8 +24,11 @@ const SIZE_BOUNDS_BYTES: &[f64] = &[
 pub struct ApiPerformanceAggregator {
     pub request_latency: DistributionMetrics,
     pub handler_latency: DistributionMetrics,
+
     pub request_frequency: ScalarCounter,
+
     pub request_concurrency: Gauge,
+
     pub request_size: DistributionMetrics,
     pub response_size: DistributionMetrics,
 }
@@ -33,8 +36,10 @@ pub struct ApiPerformanceAggregator {
 pub struct ApiOperationalAggregator {
     pub requests: ScalarCounter,
     pub responses: ScalarCounter,
+
     pub authentication_successes: ScalarCounter,
     pub authentication_failures: ScalarCounter,
+
     pub errors: ScalarCounter,
 
     pub method_counts: BoundedCounter,
@@ -42,6 +47,7 @@ pub struct ApiOperationalAggregator {
     pub status_counts: BoundedCounter,
     pub error_category_counts: BoundedCounter,
 }
+
 
 impl ApiPerformanceAggregator {
     pub fn new() -> Self {
