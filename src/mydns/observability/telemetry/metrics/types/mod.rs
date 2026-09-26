@@ -4,6 +4,6 @@ pub use counter::{BoundedCounter, ScalarCounter};
 pub mod gauge;
 pub use gauge::Gauge;
 pub mod histogram;
-pub use histogram::MergeableHistogram;
+pub use histogram::Histogram;
 pub mod summary;
 pub use summary::TDigestSummary;

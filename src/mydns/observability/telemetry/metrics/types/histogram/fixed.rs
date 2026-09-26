@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct MergeableHistogram {
+pub struct Histogram {
     pub bounds: Vec<f64>,
     pub counts: Vec<u64>,
     pub count: u64,
     pub sum: f64,
 }
 
-impl MergeableHistogram {
+impl Histogram {
     pub fn new(bounds: &[f64]) -> Self {
         assert!(!bounds.is_empty(), "histogram bounds must not be empty");
         assert!(

@@ -1,3 +1,3 @@
 //! Histogram metric types.
-pub mod mergeable;
-pub use mergeable::MergeableHistogram;
+pub mod fixed;
+pub use fixed::Histogram;
