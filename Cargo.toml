@@ -79,6 +79,7 @@ mime_guess = "2.0.5"
 colored = "3.1.1"
 libc = "0.2"
 chrono-tz = "0.10.4"
+tdigest = { version = "0.2.3", features = ["use_serde"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["securitybaseapi", "processthreadsapi", "winnt", "handleapi", "mswsock", "winsock2"] }
