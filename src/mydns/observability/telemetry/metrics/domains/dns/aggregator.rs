@@ -1,7 +1,4 @@
 //! Domain-level aggregation for DNS measurements.
-//!
-//! This module maps DNS measurements into aggregated DNS metric state.
-//! Time buckets, retention, and persistence remain outside the domain aggregator.
 
 use std::sync::{Arc, Mutex};
 
@@ -18,8 +15,7 @@ const UPSTREAM_LATENCY_BOUNDS_MS: &[f64] = &[
 ];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct DnsAggregationSnapshot {
-    // Operational
+pub struct DnsOperationalSnapshot {
     pub queries: u64,
     pub responses: u64,
     pub blocked: u64,
@@ -37,42 +33,29 @@ pub struct DnsAggregationSnapshot {
     pub response_code_counts: BoundedCounter,
     pub resolution_outcome_counts: BoundedCounter,
     pub resolution_path_counts: BoundedCounter,
-
-    // Performance
-    pub response_latency: MergeableHistogram,
-    pub upstream_latency: MergeableHistogram,
 }
 
-pub struct DnsAggregator {
-    state: Mutex<DnsAggregationSnapshot>,
+pub struct DnsOperationalAggregator {
+    state: Mutex<DnsOperationalSnapshot>,
 }
 
-impl DnsAggregator {
+impl DnsOperationalAggregator {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
 
-    pub fn record_operational(&self, measurement: OperationalMeasurement<'_>) {
+    pub fn record(&self, measurement: OperationalMeasurement<'_>) {
         let mut state = self.state.lock().unwrap();
 
         match measurement {
-            OperationalMeasurement::Query {
-                record_type,
-                transport,
-            } => {
+            OperationalMeasurement::Query { record_type, transport } => {
                 state.queries += 1;
-                state
-                    .record_type_counts
-                    .record(&record_type.trim().to_ascii_uppercase());
-                state
-                    .transport_counts
-                    .record(&transport.trim().to_ascii_lowercase());
+                state.record_type_counts.record(&record_type.trim().to_ascii_uppercase());
+                state.transport_counts.record(&transport.trim().to_ascii_lowercase());
             }
             OperationalMeasurement::Response { response_code } => {
                 state.responses += 1;
-                state
-                    .response_code_counts
-                    .record(&response_code.trim().to_ascii_uppercase());
+                state.response_code_counts.record(&response_code.trim().to_ascii_uppercase());
             }
             OperationalMeasurement::Blocked { reason } => {
                 state.blocked += 1;
@@ -83,62 +66,27 @@ impl DnsAggregator {
                 state.resolution_path_counts.record(path);
             }
             OperationalMeasurement::Cache { hit } => {
-                if hit {
-                    state.cache_hits += 1;
-                } else {
-                    state.cache_misses += 1;
-                }
+                if hit { state.cache_hits += 1; } else { state.cache_misses += 1; }
             }
-            OperationalMeasurement::CacheEviction => {
-                state.cache_evictions += 1;
-            }
-            OperationalMeasurement::Upstream {
-                successful,
-                timeout,
-                retry,
-            } => {
+            OperationalMeasurement::CacheEviction => state.cache_evictions += 1,
+            OperationalMeasurement::Upstream { successful, timeout, retry } => {
                 state.upstream_requests += 1;
-
-                if successful {
-                    state.upstream_successes += 1;
-                } else {
-                    state.upstream_failures += 1;
-                }
-
-                if timeout {
-                    state.upstream_timeouts += 1;
-                }
-
-                if retry {
-                    state.upstream_retries += 1;
-                }
+                if successful { state.upstream_successes += 1; } else { state.upstream_failures += 1; }
+                if timeout { state.upstream_timeouts += 1; }
+                if retry { state.upstream_retries += 1; }
             }
         }
     }
 
-    pub fn record_performance(&self, measurement: PerformanceMeasurement) {
-        let mut state = self.state.lock().unwrap();
-
-        match measurement {
-            PerformanceMeasurement::ResponseLatency { latency_ms } => {
-                state.response_latency.record(latency_ms);
-            }
-            PerformanceMeasurement::UpstreamLatency { latency_ms } => {
-                state.upstream_latency.record(latency_ms);
-            }
-        }
-    }
-
-    pub fn snapshot(&self) -> DnsAggregationSnapshot {
+    pub fn snapshot(&self) -> DnsOperationalSnapshot {
         self.state.lock().unwrap().clone()
     }
 }
 
-impl Default for DnsAggregator {
+impl Default for DnsOperationalAggregator {
     fn default() -> Self {
         Self {
-            state: Mutex::new(DnsAggregationSnapshot {
-                // Operational
+            state: Mutex::new(DnsOperationalSnapshot {
                 queries: 0,
                 responses: 0,
                 blocked: 0,
@@ -156,8 +104,48 @@ impl Default for DnsAggregator {
                 response_code_counts: BoundedCounter::default(),
                 resolution_outcome_counts: BoundedCounter::default(),
                 resolution_path_counts: BoundedCounter::default(),
+            }),
+        }
+    }
+}
 
-                // Performance
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DnsPerformanceSnapshot {
+    pub response_latency: MergeableHistogram,
+    pub upstream_latency: MergeableHistogram,
+}
+
+pub struct DnsPerformanceAggregator {
+    state: Mutex<DnsPerformanceSnapshot>,
+}
+
+impl DnsPerformanceAggregator {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn record(&self, measurement: PerformanceMeasurement) {
+        let mut state = self.state.lock().unwrap();
+
+        match measurement {
+            PerformanceMeasurement::ResponseLatency { latency_ms } => {
+                state.response_latency.record(latency_ms);
+            }
+            PerformanceMeasurement::UpstreamLatency { latency_ms } => {
+                state.upstream_latency.record(latency_ms);
+            }
+        }
+    }
+
+    pub fn snapshot(&self) -> DnsPerformanceSnapshot {
+        self.state.lock().unwrap().clone()
+    }
+}
+
+impl Default for DnsPerformanceAggregator {
+    fn default() -> Self {
+        Self {
+            state: Mutex::new(DnsPerformanceSnapshot {
                 response_latency: MergeableHistogram::new(RESPONSE_LATENCY_BOUNDS_MS),
                 upstream_latency: MergeableHistogram::new(UPSTREAM_LATENCY_BOUNDS_MS),
             }),
