@@ -1721,6 +1721,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tdigest",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
@@ -1921,6 +1922,16 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "ordered-float"
+version = "2.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
+dependencies = [
+ "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -2953,6 +2964,16 @@ name = "tagptr"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
+
+[[package]]
+name = "tdigest"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c45d225a08ebccf0e0c7d46db4066ea8ab05b29d3750ecc1a04f1675978bf3c8"
+dependencies = [
+ "ordered-float",
+ "serde",
+]
 
 [[package]]
 name = "tempfile"

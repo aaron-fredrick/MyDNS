@@ -14,7 +14,7 @@ pub struct TDigestSummary {
     digest: TDigest,
 }
 
-impl Default for Summary {
+impl Default for TDigestSummary {
     fn default() -> Self {
         Self {
             count: 0,
