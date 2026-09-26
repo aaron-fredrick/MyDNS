@@ -5,7 +5,5 @@ pub mod measurements;
 
 pub use aggregator::{
     DatabaseOperationalAggregator,
-    DatabaseOperationalSnapshot,
     DatabasePerformanceAggregator,
-    DatabasePerformanceSnapshot,
 };

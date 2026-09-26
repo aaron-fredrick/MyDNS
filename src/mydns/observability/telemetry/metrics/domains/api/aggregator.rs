@@ -1,7 +1,7 @@
 //! Domain-level aggregation for API measurements.
 
 use crate::observability::telemetry::metrics::types::{
-    BoundedCounter, MergeableHistogram, ScalarCounter,
+    BoundedCounter, Histogram, ScalarCounter,
 };
 
 const LATENCY_BOUNDS_MS: &[f64] = &[
@@ -9,8 +9,8 @@ const LATENCY_BOUNDS_MS: &[f64] = &[
 ];
 
 pub struct ApiPerformanceAggregator {
-    pub request_latency: MergeableHistogram,
-    pub handler_latency: MergeableHistogram,
+    pub request_latency: Histogram,
+    pub handler_latency: Histogram,
 }
 
 pub struct ApiOperationalAggregator {

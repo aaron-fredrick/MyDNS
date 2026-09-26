@@ -5,7 +5,5 @@ pub mod measurements;
 
 pub use aggregator::{
     ApiOperationalAggregator,
-    ApiOperationalSnapshot,
     ApiPerformanceAggregator,
-    ApiPerformanceSnapshot,
 };
