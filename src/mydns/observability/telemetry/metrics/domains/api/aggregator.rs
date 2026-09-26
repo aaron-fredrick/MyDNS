@@ -1,7 +1,4 @@
 //! Domain-level aggregation for API measurements.
-//!
-//! This module maps API measurements into aggregated API metric state.
-//! Time buckets, retention, and persistence remain outside the domain aggregator.
 
 use std::sync::{Arc, Mutex};
 
@@ -14,8 +11,7 @@ const LATENCY_BOUNDS_MS: &[f64] = &[
 ];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ApiAggregationSnapshot {
-    // Operational
+pub struct ApiOperationalSnapshot {
     pub requests: u64,
     pub responses: u64,
     pub authentication_successes: u64,
@@ -25,30 +21,24 @@ pub struct ApiAggregationSnapshot {
     pub route_counts: BoundedCounter,
     pub status_counts: BoundedCounter,
     pub error_category_counts: BoundedCounter,
-
-    // Performance
-    pub request_latency: MergeableHistogram,
-    pub handler_latency: MergeableHistogram,
 }
 
-pub struct ApiAggregator {
-    state: Mutex<ApiAggregationSnapshot>,
+pub struct ApiOperationalAggregator {
+    state: Mutex<ApiOperationalSnapshot>,
 }
 
-impl ApiAggregator {
+impl ApiOperationalAggregator {
     pub fn new() -> Arc<Self> {
         Arc::new(Self::default())
     }
 
-    pub fn record_operational(&self, measurement: OperationalMeasurement<'_>) {
+    pub fn record(&self, measurement: OperationalMeasurement<'_>) {
         let mut state = self.state.lock().unwrap();
 
         match measurement {
             OperationalMeasurement::Request { method, route } => {
                 state.requests += 1;
-                state
-                    .method_counts
-                    .record(&method.trim().to_ascii_uppercase());
+                state.method_counts.record(&method.trim().to_ascii_uppercase());
                 state.route_counts.record(route.trim());
             }
             OperationalMeasurement::Response { status_code } => {
@@ -56,11 +46,8 @@ impl ApiAggregator {
                 state.status_counts.record(&status_code.to_string());
             }
             OperationalMeasurement::Authentication { successful } => {
-                if successful {
-                    state.authentication_successes += 1;
-                } else {
-                    state.authentication_failures += 1;
-                }
+                if successful { state.authentication_successes += 1; }
+                else { state.authentication_failures += 1; }
             }
             OperationalMeasurement::Error { category } => {
                 state.errors += 1;
@@ -69,7 +56,45 @@ impl ApiAggregator {
         }
     }
 
-    pub fn record_performance(&self, measurement: PerformanceMeasurement) {
+    pub fn snapshot(&self) -> ApiOperationalSnapshot {
+        self.state.lock().unwrap().clone()
+    }
+}
+
+impl Default for ApiOperationalAggregator {
+    fn default() -> Self {
+        Self {
+            state: Mutex::new(ApiOperationalSnapshot {
+                requests: 0,
+                responses: 0,
+                authentication_successes: 0,
+                authentication_failures: 0,
+                errors: 0,
+                method_counts: BoundedCounter::default(),
+                route_counts: BoundedCounter::default(),
+                status_counts: BoundedCounter::default(),
+                error_category_counts: BoundedCounter::default(),
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ApiPerformanceSnapshot {
+    pub request_latency: MergeableHistogram,
+    pub handler_latency: MergeableHistogram,
+}
+
+pub struct ApiPerformanceAggregator {
+    state: Mutex<ApiPerformanceSnapshot>,
+}
+
+impl ApiPerformanceAggregator {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn record(&self, measurement: PerformanceMeasurement) {
         let mut state = self.state.lock().unwrap();
 
         match measurement {
@@ -82,27 +107,15 @@ impl ApiAggregator {
         }
     }
 
-    pub fn snapshot(&self) -> ApiAggregationSnapshot {
+    pub fn snapshot(&self) -> ApiPerformanceSnapshot {
         self.state.lock().unwrap().clone()
     }
 }
 
-impl Default for ApiAggregator {
+impl Default for ApiPerformanceAggregator {
     fn default() -> Self {
         Self {
-            state: Mutex::new(ApiAggregationSnapshot {
-                // Operational
-                requests: 0,
-                responses: 0,
-                authentication_successes: 0,
-                authentication_failures: 0,
-                errors: 0,
-                method_counts: BoundedCounter::default(),
-                route_counts: BoundedCounter::default(),
-                status_counts: BoundedCounter::default(),
-                error_category_counts: BoundedCounter::default(),
-
-                // Performance
+            state: Mutex::new(ApiPerformanceSnapshot {
                 request_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),
                 handler_latency: MergeableHistogram::new(LATENCY_BOUNDS_MS),
             }),
