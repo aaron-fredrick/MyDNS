@@ -12,7 +12,6 @@ use crate::dns::record_index::RecordIndex;
 use crate::dns::upstream::UpstreamResolver;
 use crate::dns::zone_trie::ZoneTrie;
 use crate::observability::database::ObservabilityDatabase;
-use crate::observability::telemetry::metrics::domains::dns::DnsMetricsAggregator;
 use crate::observability::Metrics;
 use crate::web::auth::LoginRateLimiter;
 
@@ -22,9 +21,6 @@ pub struct AppState {
     pub cache_stats: Arc<CacheStats>,
     /// Backend-owned operational telemetry shared by DNS and management surfaces.
     pub metrics: Arc<Metrics>,
-    /// New telemetry metrics aggregator. The legacy dashboard metrics remain
-    /// separate until their consumers are migrated.
-    pub telemetry_metrics: Arc<DnsMetricsAggregator>,
     /// Shared SQLite store for observability data.
     pub observability_db: Arc<ObservabilityDatabase>,
     pub log_tx: broadcast::Sender<String>,
@@ -50,7 +46,6 @@ impl AppState {
         record_index: RecordIndex,
         zone_trie: ZoneTrie,
         blocklist_index: BlocklistIndex,
-        telemetry_metrics: Arc<DnsMetricsAggregator>,
         observability_db: Arc<ObservabilityDatabase>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -58,7 +53,6 @@ impl AppState {
             cache: Arc::new(RwLock::new(DnsCache::new())),
             cache_stats: CacheStats::new(),
             metrics: Metrics::new(),
-            telemetry_metrics,
             observability_db,
             log_tx,
             start_time: Instant::now(),
@@ -123,8 +117,6 @@ allowed = ["home.arpa"]
                 .await
                 .unwrap(),
         );
-        let telemetry_metrics = DnsMetricsAggregator::new(test_config().timezone.parse().unwrap());
-
         let (log_tx, mut log_rx) = broadcast::channel(4);
         let cancel = CancellationToken::new();
         let upstream = UpstreamResolver::from_config(
@@ -145,7 +137,6 @@ allowed = ["home.arpa"]
             RecordIndex::default(),
             ZoneTrie::from_zones(&["home.arpa".to_string()]),
             BlocklistIndex::from_domains(&["blocked.example".to_string()]),
-            telemetry_metrics,
             observability_db,
         );
 
@@ -154,7 +145,6 @@ allowed = ["home.arpa"]
         assert_eq!(state.cache_stats.snapshot(), (0, 0));
         assert_eq!(state.metrics.snapshot().queries_total, 0);
         assert_eq!(state.metrics.snapshot().queries_blocked, 0);
-        assert!(state.telemetry_metrics.get_in_memory_history().is_empty());
         assert!(state.start_time.elapsed().as_secs() < 1);
 
         let config = state.config.read().await;
