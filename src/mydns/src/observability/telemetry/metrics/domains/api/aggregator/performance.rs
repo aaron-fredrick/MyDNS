@@ -72,7 +72,8 @@ impl Default for ApiPerformanceAggregator {
 }
 
 impl CategoryAggregatorTrait for ApiPerformanceAggregator {
-    type Measurement<'a> = ApiPerformanceMeasurement
+    type Measurement<'a>
+        = ApiPerformanceMeasurement
     where
         Self: 'a;
     type Snapshot = ApiPerformanceSnapshot;

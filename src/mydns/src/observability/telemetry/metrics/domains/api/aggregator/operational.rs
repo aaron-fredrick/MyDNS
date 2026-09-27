@@ -79,7 +79,8 @@ impl Default for ApiOperationalAggregator {
 }
 
 impl CategoryAggregatorTrait for ApiOperationalAggregator {
-    type Measurement<'a> = ApiOperationalMeasurement<'a>
+    type Measurement<'a>
+        = ApiOperationalMeasurement<'a>
     where
         Self: 'a;
     type Snapshot = ApiOperationalSnapshot;
