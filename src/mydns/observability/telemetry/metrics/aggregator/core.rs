@@ -1,6 +1,6 @@
 //! Shared contract for metric collection aggregators.
 
-pub trait MetricAggregatorTrait {
+pub trait CategoryAggregatorTrait {
     type Measurement<'a>
     where
         Self: 'a;

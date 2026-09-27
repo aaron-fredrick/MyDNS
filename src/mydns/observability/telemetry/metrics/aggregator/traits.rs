@@ -1,4 +1,4 @@
-pub trait MetricAggregatorTrait  {
+pub trait CategoryAggregatorTrait  {
     type Measurement;
     type Snapshot;
 

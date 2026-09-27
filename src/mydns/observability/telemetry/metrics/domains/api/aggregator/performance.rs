@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use crate::observability::telemetry::metrics::{
-    aggregator::MetricAggregatorTrait,
+    aggregator::CategoryAggregatorTrait,
     domains::api::{measurements::ApiPerformanceMeasurement, snapshot::ApiPerformanceSnapshot},
     types::{DistributionMetrics, Gauge, ScalarCounter},
 };
@@ -71,7 +71,7 @@ impl Default for ApiPerformanceAggregator {
     }
 }
 
-impl MetricAggregatorTrait for ApiPerformanceAggregator {
+impl CategoryAggregatorTrait for ApiPerformanceAggregator {
     type Measurement<'a> = ApiPerformanceMeasurement
     where
         Self: 'a;

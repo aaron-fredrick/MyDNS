@@ -1,7 +1,7 @@
 //! Metric aggregation primitives.
 
 mod core;
-pub use core::MetricAggregatorTrait;
+pub use core::CategoryAggregatorTrait;
 
 pub mod bucket;
 pub use bucket::MetricBucket;
