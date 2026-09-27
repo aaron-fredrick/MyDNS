@@ -8,4 +8,5 @@ pub trait CategoryAggregatorTrait {
 
     fn record(&self, measurement: Self::Measurement<'_>);
     fn snapshot(&self) -> Self::Snapshot;
+    fn reset(&mut self);
 }
