@@ -3,28 +3,28 @@
 use std::sync::Mutex;
 
 use crate::observability::telemetry::metrics::{
-    domains::api::measurements::ApiOperationalMeasurement,
+    domains::api::{measurements::ApiOperationalMeasurement, snapshot::ApiOperationalSnapshot},
     types::{BoundedCounter, ScalarCounter},
 };
 
 pub struct ApiOperationalAggregator {
     // AtomicU64 is a better fit for these scalar counters; Mutex is used here
     // until the aggregator's atomic synchronization strategy is introduced.
-    pub requests: Mutex<ScalarCounter>,
-    pub responses: Mutex<ScalarCounter>,
+    requests: Mutex<ScalarCounter>,
+    responses: Mutex<ScalarCounter>,
 
-    pub request_size_bytes: Mutex<ScalarCounter>,
-    pub response_size_bytes: Mutex<ScalarCounter>,
+    request_size_bytes: Mutex<ScalarCounter>,
+    response_size_bytes: Mutex<ScalarCounter>,
 
-    pub authentication_successes: Mutex<ScalarCounter>,
-    pub authentication_failures: Mutex<ScalarCounter>,
+    authentication_successes: Mutex<ScalarCounter>,
+    authentication_failures: Mutex<ScalarCounter>,
 
-    pub errors: Mutex<ScalarCounter>,
+    errors: Mutex<ScalarCounter>,
 
-    pub method_counts: Mutex<BoundedCounter>,
-    pub route_counts: Mutex<BoundedCounter>,
-    pub status_counts: Mutex<BoundedCounter>,
-    pub error_category_counts: Mutex<BoundedCounter>,
+    method_counts: Mutex<BoundedCounter>,
+    route_counts: Mutex<BoundedCounter>,
+    status_counts: Mutex<BoundedCounter>,
+    error_category_counts: Mutex<BoundedCounter>,
 }
 
 impl ApiOperationalAggregator {
@@ -71,6 +71,22 @@ impl ApiOperationalAggregator {
         }
     }
 
+    pub fn snapshot(&self) -> ApiOperationalSnapshot {
+        ApiOperationalSnapshot {
+            requests: self.requests.lock().unwrap().value(),
+            responses: self.responses.lock().unwrap().value(),
+            request_size_bytes: self.request_size_bytes.lock().unwrap().value(),
+            response_size_bytes: self.response_size_bytes.lock().unwrap().value(),
+            authentication_successes: self.authentication_successes.lock().unwrap().value(),
+            authentication_failures: self.authentication_failures.lock().unwrap().value(),
+            errors: self.errors.lock().unwrap().value(),
+            method_counts: self.method_counts.lock().unwrap().as_map().clone(),
+            route_counts: self.route_counts.lock().unwrap().as_map().clone(),
+            status_counts: self.status_counts.lock().unwrap().as_map().clone(),
+            error_category_counts: self.error_category_counts.lock().unwrap().as_map().clone(),
+        }
+    }
+
     fn record_request(&self, method: &str, route: &str) {
         self.requests.lock().unwrap().increment();
 
@@ -78,6 +94,9 @@ impl ApiOperationalAggregator {
         // concrete storage semantics remain isolated from measurement dispatch.
         self.method_counts.lock().unwrap().increment(method);
         self.route_counts.lock().unwrap().increment(route);
+
+        // TODO: Ensure the instrumentation layer provides a canonical route
+        // template rather than a raw/request-specific path.
     }
 
     fn record_response(&self, status_code: u16) {
