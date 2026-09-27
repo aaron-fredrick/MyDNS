@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::HistogramSnapshot;
+use crate::observability::telemetry::metrics::types::Reset;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Histogram {
@@ -68,6 +69,14 @@ impl Histogram {
             }
         }
         self.bounds.last().copied()
+    }
+}
+
+impl Reset for Histogram {
+    fn reset(&mut self) {
+        self.counts.fill(0);
+        self.count = 0;
+        self.sum = 0.0;
     }
 }
 
