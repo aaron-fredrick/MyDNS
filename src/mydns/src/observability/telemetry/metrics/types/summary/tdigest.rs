@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use tdigest::TDigest;
 
 use super::TDigestSummarySnapshot;
+use crate::observability::telemetry::metrics::types::Reset;
 
 const DEFAULT_TDIGEST_SIZE: usize = 100;
 
@@ -61,6 +62,12 @@ impl TDigestSummary {
             return None;
         }
         Some(self.digest.estimate_quantile(q))
+    }
+}
+
+impl Reset for TDigestSummary {
+    fn reset(&mut self) {
+        *self = Self::default();
     }
 }
 
