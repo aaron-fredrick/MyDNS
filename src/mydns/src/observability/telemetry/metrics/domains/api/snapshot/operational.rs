@@ -1,13 +1,20 @@
 //! Detached operational snapshots produced by the API operational aggregator.
 
+use chrono::{DateTime, Utc};
+use mydns_macros::metric_category_snapshot;
+
 use crate::observability::telemetry::metrics::{
     traits::CategorySnapshotTrait,
     types::{BoundedCounterSnapshot, ScalarCounterSnapshot},
 };
+
 use serde::{Deserialize, Serialize};
 
+#[metric_category_snapshot]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiOperationalSnapshot {
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
     pub requests: ScalarCounterSnapshot,
     pub responses: ScalarCounterSnapshot,
     pub request_size_bytes: ScalarCounterSnapshot,
@@ -23,6 +30,8 @@ pub struct ApiOperationalSnapshot {
 
 impl CategorySnapshotTrait for ApiOperationalSnapshot {
     fn merge(&mut self, other: &Self) {
+        self.start_time = self.start_time.min(other.start_time);
+        self.end_time = self.end_time.max(other.end_time);
         self.requests.merge(&other.requests);
         self.responses.merge(&other.responses);
         self.request_size_bytes.merge(&other.request_size_bytes);
