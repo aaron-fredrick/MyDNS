@@ -109,7 +109,11 @@ impl CategoryAggregatorTrait for ApiOperationalAggregator {
     }
 
     fn snapshot(&self) -> Self::Snapshot {
+        let end_time = Utc::now();
+
         ApiOperationalSnapshot {
+            start_time: self.start_time,
+            end_time,
             requests: (&*self.requests.lock().unwrap()).into(),
             responses: (&*self.responses.lock().unwrap()).into(),
             request_size_bytes: (&*self.request_size_bytes.lock().unwrap()).into(),
