@@ -10,3 +10,4 @@ pub trait CategoryAggregatorTrait {
     fn snapshot(&self) -> Self::Snapshot;
     fn reset(&mut self);
 }
+
