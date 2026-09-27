@@ -8,7 +8,7 @@ pub enum ApiPerformanceMeasurement {
     RequestLatency { latency_ms: f64 },
     HandlerLatency { latency_ms: f64 },
 
-    RequestFrequency,
+    RequestCount,
 
     RequestConcurrency { active_requests: u64 },
 
@@ -27,3 +27,7 @@ pub enum ApiOperationalMeasurement<'a> {
     Authentication { successful: bool },
     Error { category: &'a str },
 }
+
+// TODO: Revisit measurement ownership/lifetimes when the asynchronous metric
+// collection pipeline is implemented. Borrowed values are appropriate while
+// measurements are consumed synchronously by the aggregators.
