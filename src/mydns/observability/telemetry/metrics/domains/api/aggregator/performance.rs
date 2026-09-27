@@ -106,3 +106,9 @@ impl ApiPerformanceAggregator {
         metric.record(bytes as f64);
     }
 }
+
+impl Default for ApiPerformanceAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}

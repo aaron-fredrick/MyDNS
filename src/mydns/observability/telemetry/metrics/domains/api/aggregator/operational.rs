@@ -112,3 +112,9 @@ impl ApiOperationalAggregator {
             .increment(category);
     }
 }
+
+impl Default for ApiOperationalAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
