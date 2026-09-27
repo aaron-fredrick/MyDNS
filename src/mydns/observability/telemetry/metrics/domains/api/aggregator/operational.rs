@@ -1,9 +1,13 @@
 //! Operational aggregation for API measurements.
+
+use std::sync::Mutex;
+
 use crate::observability::telemetry::metrics::{
+    aggregator::MetricAggregatorTrait,
     domains::api::{measurements::ApiOperationalMeasurement, snapshot::ApiOperationalSnapshot},
     types::{BoundedCounter, ScalarCounter},
 };
-use std::sync::Mutex;
+
 pub struct ApiOperationalAggregator {
     requests: Mutex<ScalarCounter>,
     responses: Mutex<ScalarCounter>,
@@ -17,6 +21,7 @@ pub struct ApiOperationalAggregator {
     status_counts: Mutex<BoundedCounter>,
     error_category_counts: Mutex<BoundedCounter>,
 }
+
 impl ApiOperationalAggregator {
     pub fn new() -> Self {
         Self {
@@ -33,8 +38,54 @@ impl ApiOperationalAggregator {
             error_category_counts: Mutex::new(BoundedCounter::default()),
         }
     }
-    pub fn record(&self, m: ApiOperationalMeasurement<'_>) {
-        match m {
+
+    fn record_request(&self, m: &str, r: &str) {
+        self.requests.lock().unwrap().increment();
+        self.method_counts.lock().unwrap().increment(m);
+        self.route_counts.lock().unwrap().increment(r); /* TODO: instrumentation should provide a canonical route template. */
+    }
+
+    fn record_response(&self, s: u16) {
+        self.responses.lock().unwrap().increment();
+        self.status_counts.lock().unwrap().increment(&s.to_string())
+    }
+
+    fn record_request_size(&self, b: u64) {
+        self.request_size_bytes.lock().unwrap().increment_by(b)
+    }
+
+    fn record_response_size(&self, b: u64) {
+        self.response_size_bytes.lock().unwrap().increment_by(b)
+    }
+
+    fn record_authentication(&self, s: bool) {
+        if s {
+            self.authentication_successes.lock().unwrap().increment()
+        } else {
+            self.authentication_failures.lock().unwrap().increment()
+        }
+    }
+
+    fn record_error(&self, c: &str) {
+        self.errors.lock().unwrap().increment();
+        self.error_category_counts.lock().unwrap().increment(c)
+    }
+}
+
+impl Default for ApiOperationalAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetricAggregatorTrait for ApiOperationalAggregator {
+    type Measurement<'a> = ApiOperationalMeasurement<'a>
+    where
+        Self: 'a;
+    type Snapshot = ApiOperationalSnapshot;
+
+    fn record(&self, measurement: Self::Measurement<'_>) {
+        match measurement {
             ApiOperationalMeasurement::Request { method, route } => {
                 self.record_request(method, route)
             }
@@ -49,7 +100,8 @@ impl ApiOperationalAggregator {
             ApiOperationalMeasurement::Error { category } => self.record_error(category),
         }
     }
-    pub fn snapshot(&self) -> ApiOperationalSnapshot {
+
+    fn snapshot(&self) -> Self::Snapshot {
         ApiOperationalSnapshot {
             requests: (&*self.requests.lock().unwrap()).into(),
             responses: (&*self.responses.lock().unwrap()).into(),
@@ -63,36 +115,5 @@ impl ApiOperationalAggregator {
             status_counts: (&*self.status_counts.lock().unwrap()).into(),
             error_category_counts: (&*self.error_category_counts.lock().unwrap()).into(),
         }
-    }
-    fn record_request(&self, m: &str, r: &str) {
-        self.requests.lock().unwrap().increment();
-        self.method_counts.lock().unwrap().increment(m);
-        self.route_counts.lock().unwrap().increment(r); /* TODO: instrumentation should provide a canonical route template. */
-    }
-    fn record_response(&self, s: u16) {
-        self.responses.lock().unwrap().increment();
-        self.status_counts.lock().unwrap().increment(&s.to_string())
-    }
-    fn record_request_size(&self, b: u64) {
-        self.request_size_bytes.lock().unwrap().increment_by(b)
-    }
-    fn record_response_size(&self, b: u64) {
-        self.response_size_bytes.lock().unwrap().increment_by(b)
-    }
-    fn record_authentication(&self, s: bool) {
-        if s {
-            self.authentication_successes.lock().unwrap().increment()
-        } else {
-            self.authentication_failures.lock().unwrap().increment()
-        }
-    }
-    fn record_error(&self, c: &str) {
-        self.errors.lock().unwrap().increment();
-        self.error_category_counts.lock().unwrap().increment(c)
-    }
-}
-impl Default for ApiOperationalAggregator {
-    fn default() -> Self {
-        Self::new()
     }
 }
