@@ -72,10 +72,12 @@ impl Default for ApiPerformanceAggregator {
 }
 
 impl MetricAggregatorTrait for ApiPerformanceAggregator {
-    type Measurement = ApiPerformanceMeasurement;
+    type Measurement<'a> = ApiPerformanceMeasurement
+    where
+        Self: 'a;
     type Snapshot = ApiPerformanceSnapshot;
 
-    fn record(&self, measurement: Self::Measurement) {
+    fn record(&self, measurement: Self::Measurement<'_>) {
         match measurement {
             ApiPerformanceMeasurement::RequestLatency { latency_ms } => {
                 self.record_request_latency(latency_ms)
