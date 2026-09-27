@@ -126,6 +126,7 @@ async fn start_dns_server(upstream_addr: SocketAddr) -> TestUpstreamServerContex
         .await
         .expect("Failed to load blocklist domains");
     let blocklist_index = mydns::dns::blocklist::BlocklistIndex::from_domains(&domains);
+    let observability_db = common::init_observability_db(&db).await;
     let state = AppState::new(
         pool,
         cfg,
@@ -135,6 +136,7 @@ async fn start_dns_server(upstream_addr: SocketAddr) -> TestUpstreamServerContex
         record_index,
         zone_trie,
         blocklist_index,
+        observability_db,
     );
     let server_state = Arc::clone(&state);
     let server_cancel = cancel.clone();
