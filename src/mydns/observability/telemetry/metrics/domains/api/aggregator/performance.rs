@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 
 use crate::observability::telemetry::metrics::{
-    domains::api::measurements::ApiPerformanceMeasurement,
+    domains::api::{measurements::ApiPerformanceMeasurement, snapshot::ApiPerformanceSnapshot},
     types::{DistributionMetrics, Gauge, ScalarCounter},
 };
 
@@ -25,17 +25,17 @@ const SIZE_BOUNDS_BYTES: &[f64] = &[
 ];
 
 pub struct ApiPerformanceAggregator {
-    pub request_latency: Mutex<DistributionMetrics>,
-    pub handler_latency: Mutex<DistributionMetrics>,
+    request_latency: Mutex<DistributionMetrics>,
+    handler_latency: Mutex<DistributionMetrics>,
 
     // AtomicU64 is a better fit for this scalar counter; Mutex is used here
     // until the aggregator's atomic synchronization strategy is introduced.
-    pub request_frequency: Mutex<ScalarCounter>,
+    request_count: Mutex<ScalarCounter>,
 
-    pub request_concurrency: Mutex<Gauge>,
+    request_concurrency: Mutex<Gauge>,
 
-    pub request_size: Mutex<DistributionMetrics>,
-    pub response_size: Mutex<DistributionMetrics>,
+    request_size: Mutex<DistributionMetrics>,
+    response_size: Mutex<DistributionMetrics>,
 }
 
 impl ApiPerformanceAggregator {
@@ -44,7 +44,7 @@ impl ApiPerformanceAggregator {
             request_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
             handler_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
 
-            request_frequency: Mutex::new(ScalarCounter::new()),
+            request_count: Mutex::new(ScalarCounter::new()),
 
             request_concurrency: Mutex::new(Gauge::default()),
 
@@ -61,8 +61,8 @@ impl ApiPerformanceAggregator {
             ApiPerformanceMeasurement::HandlerLatency { latency_ms } => {
                 self.record_handler_latency(latency_ms);
             }
-            ApiPerformanceMeasurement::RequestFrequency => {
-                self.record_request_frequency();
+            ApiPerformanceMeasurement::RequestCount => {
+                self.record_request_count();
             }
             ApiPerformanceMeasurement::RequestConcurrency { active_requests } => {
                 self.record_request_concurrency(active_requests);
@@ -76,6 +76,17 @@ impl ApiPerformanceAggregator {
         }
     }
 
+    pub fn snapshot(&self) -> ApiPerformanceSnapshot {
+        ApiPerformanceSnapshot {
+            request_latency: self.request_latency.lock().unwrap().clone().into(),
+            handler_latency: self.handler_latency.lock().unwrap().clone().into(),
+            request_count: self.request_count.lock().unwrap().value(),
+            request_concurrency: self.request_concurrency.lock().unwrap().value(),
+            request_size: self.request_size.lock().unwrap().clone().into(),
+            response_size: self.response_size.lock().unwrap().clone().into(),
+        }
+    }
+
     fn record_request_latency(&self, latency_ms: f64) {
         let mut metric = self.request_latency.lock().unwrap();
         metric.record(latency_ms);
@@ -86,8 +97,8 @@ impl ApiPerformanceAggregator {
         metric.record(latency_ms);
     }
 
-    fn record_request_frequency(&self) {
-        let mut metric = self.request_frequency.lock().unwrap();
+    fn record_request_count(&self) {
+        let mut metric = self.request_count.lock().unwrap();
         metric.increment();
     }
 
