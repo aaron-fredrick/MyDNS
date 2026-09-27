@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Histogram, TDigestSummary};
+use super::super::{Histogram, TDigestSummary};
 use super::basic_snapshot::DistributionSnapshot;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

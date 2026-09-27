@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::super::{histogram::fixed_snapshot::HistogramSnapshot, summary::tdigest_snapshot::TDigestSummarySnapshot};
+use super::super::{HistogramSnapshot, TDigestSummarySnapshot};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DistributionSnapshot {

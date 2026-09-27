@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::ops::AddAssign;
 
-use super::scalar_snapshot::ScalarCounterSnapshot;
+use super::ScalarCounterSnapshot;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ScalarCounter {

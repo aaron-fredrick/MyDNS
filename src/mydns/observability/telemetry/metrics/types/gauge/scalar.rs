@@ -1,7 +1,7 @@
 //! Scalar gauge metric type.
 use serde::{Deserialize, Serialize};
 
-use super::scalar_snapshot::GaugeSnapshot;
+use super::GaugeSnapshot;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Gauge {

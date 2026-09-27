@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::fixed_snapshot::HistogramSnapshot;
+use super::HistogramSnapshot;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Histogram {

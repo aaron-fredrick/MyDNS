@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use tdigest::TDigest;
 
-use super::tdigest_snapshot::TDigestSummarySnapshot;
+use super::TDigestSummarySnapshot;
 
 const DEFAULT_TDIGEST_SIZE: usize = 100;
 

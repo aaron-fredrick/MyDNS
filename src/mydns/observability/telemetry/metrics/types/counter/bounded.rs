@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use super::bounded_snapshot::BoundedCounterSnapshot;
+use super::BoundedCounterSnapshot;
 
 const MAX_CATEGORIES: usize = 32;
 const OTHER_CATEGORY: &str = "other";
