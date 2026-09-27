@@ -2,6 +2,9 @@
 
 use std::sync::Mutex;
 
+use chrono::{DateTime, Utc};
+use mydns_macros::metric_category_aggregator;
+
 use crate::observability::telemetry::metrics::{
     aggregator::CategoryAggregatorTrait,
     domains::api::{measurements::ApiPerformanceMeasurement, snapshot::ApiPerformanceSnapshot},
@@ -24,7 +27,9 @@ const SIZE_BOUNDS_BYTES: &[f64] = &[
     16_777_216.0,
 ];
 
+#[metric_category_aggregator]
 pub struct ApiPerformanceAggregator {
+    start_time: DateTime<Utc>,
     request_latency: Mutex<DistributionMetrics>,
     handler_latency: Mutex<DistributionMetrics>,
     request_count: Mutex<ScalarCounter>,
@@ -36,6 +41,7 @@ pub struct ApiPerformanceAggregator {
 impl ApiPerformanceAggregator {
     pub fn new() -> Self {
         Self {
+            start_time: Utc::now(),
             request_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
             handler_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
             request_count: Mutex::new(ScalarCounter::new()),
