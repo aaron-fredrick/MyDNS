@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use mydns_macros::metric_category_aggregator;
 
 use crate::observability::telemetry::metrics::{
-    aggregator::CategoryAggregatorTrait,
+    CategoryAggregatorTrait,
     domains::api::{measurements::ApiOperationalMeasurement, snapshot::ApiOperationalSnapshot},
     types::{BoundedCounter, Reset, ScalarCounter},
 };
