@@ -1,4 +1,7 @@
-//! Temporal aggregation primitives used by metric storage and rollups.
+//! Metric aggregation primitives.
+
+mod core;
+pub use core::MetricAggregatorTrait;
 
 pub mod bucket;
 pub use bucket::MetricBucket;
