@@ -10,6 +10,7 @@ use mydns::db;
 use mydns::dns;
 use mydns::dns::record_index::RecordIndex;
 use mydns::dns::zone_trie::ZoneTrie;
+use mydns::observability::database::ObservabilityDatabase;
 use mydns::state::AppState;
 use mydns::web;
 use mydns::web::auth::hash_password;
@@ -48,6 +49,23 @@ impl Default for TestDb {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Initializes the observability database used by AppState.
+///
+/// The runtime still uses the existing AppState::metrics implementation.
+/// This database is only required because AppState owns the observability
+/// storage dependency; the new telemetry metric aggregators are not wired
+/// into these integration fixtures.
+async fn init_observability_db(
+    db: &TestDb,
+) -> Arc<ObservabilityDatabase> {
+    let path = db.temp_dir.path().join("observability.db");
+    Arc::new(
+        ObservabilityDatabase::init(&path.to_string_lossy())
+            .await
+            .expect("Failed to initialize observability database"),
+    )
 }
 
 /// A running in-process test HTTP server.
@@ -128,6 +146,7 @@ impl TestServer {
             .await
             .expect("Failed to load blocklist domains");
         let blocklist_index = mydns::dns::blocklist::BlocklistIndex::from_domains(&domains);
+        let observability_db = init_observability_db(&db).await;
         let state = AppState::new(
             pool.clone(),
             cfg.clone(),
@@ -137,6 +156,7 @@ impl TestServer {
             record_index,
             zone_trie,
             blocklist_index,
+            observability_db,
         );
 
         let server_state = Arc::clone(&state);
@@ -275,6 +295,7 @@ impl TestDnsServer {
             .await
             .expect("Failed to load blocklist domains");
         let blocklist_index = mydns::dns::blocklist::BlocklistIndex::from_domains(&domains);
+        let observability_db = init_observability_db(&db).await;
         let state = AppState::new(
             pool.clone(),
             cfg,
@@ -284,6 +305,7 @@ impl TestDnsServer {
             record_index,
             zone_trie,
             blocklist_index,
+            observability_db,
         );
 
         let server_state = Arc::clone(&state);
@@ -389,6 +411,7 @@ impl TestDnsServer {
             .await
             .expect("Failed to load blocklist domains");
         let blocklist_index = mydns::dns::blocklist::BlocklistIndex::from_domains(&domains);
+        let observability_db = init_observability_db(&self.db).await;
         let state = AppState::new(
             pool.clone(),
             cfg,
@@ -398,6 +421,7 @@ impl TestDnsServer {
             record_index,
             zone_trie,
             blocklist_index,
+            observability_db,
         );
 
         let server_state = Arc::clone(&state);
