@@ -102,7 +102,11 @@ impl CategoryAggregatorTrait for ApiPerformanceAggregator {
     }
 
     fn snapshot(&self) -> Self::Snapshot {
+        let end_time = Utc::now();
+
         ApiPerformanceSnapshot {
+            start_time: self.start_time,
+            end_time,
             request_latency: (&*self.request_latency.lock().unwrap()).into(),
             handler_latency: (&*self.handler_latency.lock().unwrap()).into(),
             request_count: (&*self.request_count.lock().unwrap()).into(),
