@@ -11,3 +11,6 @@ pub trait CategoryAggregatorTrait {
     fn reset(&mut self);
 }
 
+pub trait CategorySnapshotTrait {
+    fn merge(&mut self, other: &Self);
+}
