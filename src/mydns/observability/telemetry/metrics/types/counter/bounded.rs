@@ -11,10 +11,11 @@ pub struct BoundedCounter {
 }
 
 impl BoundedCounter {
-    pub fn record(&mut self, value: &str) {
-        self.record_n(value, 1);
+    pub fn increment(&mut self, value: &str) {
+        self.increment_by(value, 1);
     }
-    pub fn record_n(&mut self, value: &str, count: u64) {
+
+    pub fn increment_by(&mut self, value: &str, count: u64) {
         let value = value.trim();
         if value.is_empty() || count == 0 {
             return;
@@ -30,17 +31,21 @@ impl BoundedCounter {
             *other = other.saturating_add(count);
         }
     }
+
     pub fn merge(&mut self, other: &Self) {
         for (value, count) in &other.values {
-            self.record_n(value, *count);
+            self.increment_by(value, *count);
         }
     }
+
     pub fn get(&self, value: &str) -> u64 {
         self.values.get(value).copied().unwrap_or(0)
     }
+
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
+
     pub fn as_map(&self) -> &BTreeMap<String, u64> {
         &self.values
     }

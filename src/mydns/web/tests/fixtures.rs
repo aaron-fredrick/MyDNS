@@ -63,18 +63,12 @@ allowed = ["example.com"]
         )
         .expect("upstream resolver");
 
-        let timezone = config
-            .timezone
-            .parse::<chrono_tz::Tz>()
-            .expect("valid test timezone");
         let observability_path = temp_dir.path().join("observability.db");
         let observability_db = crate::observability::database::ObservabilityDatabase::init(
             &observability_path.to_string_lossy(),
         )
         .await
         .expect("failed to initialize observability database");
-        let telemetry_metrics =
-            crate::observability::telemetry::metrics::MetricsAggregator::new(timezone);
 
         let (log_tx, _) = broadcast::channel(64);
         let cancel = CancellationToken::new();
@@ -88,7 +82,6 @@ allowed = ["example.com"]
             RecordIndex::default(),
             ZoneTrie::from_zones(&["example.com".to_string()]),
             BlocklistIndex::from_domains(&["blocked.com".to_string()]),
-            telemetry_metrics,
             Arc::new(observability_db),
         );
 
