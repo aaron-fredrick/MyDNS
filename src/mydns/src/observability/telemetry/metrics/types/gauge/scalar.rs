@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::GaugeSnapshot;
+use crate::observability::telemetry::metrics::types::Reset;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Gauge {
@@ -26,6 +27,12 @@ impl Gauge {
     }
     pub fn value(&self) -> f64 {
         self.value
+    }
+}
+
+impl Reset for Gauge {
+    fn reset(&mut self) {
+        self.value = 0.0;
     }
 }
 
