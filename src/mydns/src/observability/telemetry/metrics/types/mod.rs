@@ -1,4 +1,10 @@
 //! Reusable metric type implementations.
+
+/// Resets a metric to its initial empty state.
+pub trait Reset {
+    fn reset(&mut self);
+}
+
 pub mod counter;
 pub use counter::{BoundedCounter, BoundedCounterSnapshot, ScalarCounter, ScalarCounterSnapshot};
 pub mod distribution;
