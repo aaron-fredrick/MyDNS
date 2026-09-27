@@ -2,13 +2,18 @@
 
 use std::sync::Mutex;
 
+use chrono::{DateTime, Utc};
+use mydns_macros::metric_category_aggregator;
+
 use crate::observability::telemetry::metrics::{
     aggregator::CategoryAggregatorTrait,
     domains::api::{measurements::ApiOperationalMeasurement, snapshot::ApiOperationalSnapshot},
     types::{BoundedCounter, ScalarCounter},
 };
 
+#[metric_category_aggregator]
 pub struct ApiOperationalAggregator {
+    start_time: DateTime<Utc>,
     requests: Mutex<ScalarCounter>,
     responses: Mutex<ScalarCounter>,
     request_size_bytes: Mutex<ScalarCounter>,
@@ -25,6 +30,7 @@ pub struct ApiOperationalAggregator {
 impl ApiOperationalAggregator {
     pub fn new() -> Self {
         Self {
+            start_time: Utc::now(),
             requests: Mutex::new(ScalarCounter::new()),
             responses: Mutex::new(ScalarCounter::new()),
             request_size_bytes: Mutex::new(ScalarCounter::new()),
