@@ -2,13 +2,13 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Error, Fields, GenericArgument, ItemStruct, PathArguments, Type};
 
-/// Enforces the structural contract for a metric category aggregator.
+/// Expands the `metric_category_aggregator` attribute after validating its
+/// structural contract.
 ///
 /// A category aggregator must be a struct containing a named
 /// `start_time: DateTime<Utc>` field. The input struct is returned
 /// unchanged when the contract is satisfied.
-#[proc_macro_attribute]
-pub fn metric_category_aggregator(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn expand(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(item as ItemStruct);
 
     match validate_start_time(&input) {
