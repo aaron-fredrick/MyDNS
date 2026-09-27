@@ -12,9 +12,12 @@ members = [
 ]
 resolver = "2"
 
+[lib]
+path = "src/mydns/lib.rs"
+
 [[bin]]
 name = "mydns"
-path = "src/main.rs"
+path = "src/mydns/main.rs"
 
 [[test]]
 name = "auth_coverage"

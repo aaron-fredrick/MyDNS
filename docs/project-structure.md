@@ -56,13 +56,13 @@ Do not create placeholder directories simply to match this diagram. The tree may
 
 ## Rust backend
 
-`src/` is the production application crate and follows normal Cargo/module conventions.
+`src/mydns/` is the production application source tree for the root `mydns` Cargo package. `src/mydns/src/` contains the application module hierarchy; it is a logical source boundary, not a separate Cargo package.
 
-- `main.rs` — process entry point, configuration loading, dependency construction, listener startup, lifecycle and shutdown coordination. Business logic should not accumulate here.
-- `lib.rs` — reusable crate/module boundary used by the binary and integration tests.
-- `config.rs` — configuration parsing, defaults, validation and configuration types.
-- `state.rs` — shared application state and subsystem handles.
-- `privileges.rs` — platform-specific privilege handling.
+- `src/mydns/main.rs` — process entry point, configuration loading, dependency construction, listener startup, lifecycle and shutdown coordination. Business logic should not accumulate here.
+- `src/mydns/lib.rs` — reusable crate/module boundary used by the binary and integration tests.
+- `src/mydns/src/config/` — configuration parsing, defaults, validation and configuration types.
+- `src/mydns/src/state/` — shared application state and subsystem handles.
+- `src/mydns/src/privileges/` — platform-specific privilege handling.
 
 ### `cache/`
 
@@ -207,13 +207,13 @@ Temporary task lists, duplicate implementation plans, generated metadata and per
 ## Abstraction rule
 
 ```text
-DNS protocol/transport -> src/dns/
-HTTP/WebSocket        -> src/web/
-Application state     -> src/state.rs + domain modules
-Persistence           -> src/db/
-Caching               -> src/cache/
-Configuration         -> src/config.rs
-OS privileges         -> src/privileges.rs
+DNS protocol/transport -> src/mydns/src/dns/
+HTTP/WebSocket        -> src/mydns/src/web/
+Application state     -> src/mydns/src/state/ + domain modules
+Persistence           -> src/mydns/src/db/
+Caching               -> src/mydns/src/cache/
+Configuration         -> src/mydns/src/config/
+OS privileges         -> src/mydns/src/privileges/
 Presentation          -> frontend/
 Verification          -> tests/ + stress-tests/
 Documentation         -> docs/
