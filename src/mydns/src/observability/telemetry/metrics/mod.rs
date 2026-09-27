@@ -4,4 +4,4 @@ pub mod persistence;
 pub mod traits;
 pub mod types;
 
-pub use traits::CategoryAggregatorTrait;
+pub use traits::{CategoryAggregatorTrait, CategorySnapshotTrait};
