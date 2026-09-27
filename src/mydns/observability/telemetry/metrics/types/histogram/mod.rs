@@ -1,5 +1,5 @@
 //! Histogram metric types.
 pub mod fixed;
-pub mod snapshot;
+pub mod fixed_snapshot;
 pub use fixed::Histogram;
-pub use snapshot::HistogramSnapshot;
+pub use fixed_snapshot::HistogramSnapshot;

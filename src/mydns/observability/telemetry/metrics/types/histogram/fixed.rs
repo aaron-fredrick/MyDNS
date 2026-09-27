@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use super::snapshot::HistogramSnapshot;
+use super::fixed_snapshot::HistogramSnapshot;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Histogram {
-    pub bounds: Vec<f64>,
-    pub counts: Vec<u64>,
-    pub count: u64,
-    pub sum: f64,
+    bounds: Vec<f64>,
+    counts: Vec<u64>,
+    count: u64,
+    sum: f64,
 }
 
 impl Histogram {

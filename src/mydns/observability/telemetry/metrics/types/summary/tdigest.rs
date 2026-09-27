@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use tdigest::TDigest;
 
-use super::snapshot::TDigestSummarySnapshot;
+use super::tdigest_snapshot::TDigestSummarySnapshot;
 
 const DEFAULT_TDIGEST_SIZE: usize = 100;
 
@@ -12,7 +12,7 @@ pub struct TDigestSummary {
     sum: f64,
     min: Option<f64>,
     max: Option<f64>,
-    pub(crate) digest: TDigest,
+    digest: TDigest,
 }
 
 impl Default for TDigestSummary {

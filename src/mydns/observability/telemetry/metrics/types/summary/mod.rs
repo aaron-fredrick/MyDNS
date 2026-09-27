@@ -1,5 +1,5 @@
 //! Summary metric types.
-pub mod snapshot;
 pub mod tdigest;
-pub use snapshot::TDigestSummarySnapshot;
+pub mod tdigest_snapshot;
 pub use tdigest::TDigestSummary;
+pub use tdigest_snapshot::TDigestSummarySnapshot;
