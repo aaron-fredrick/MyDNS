@@ -3,6 +3,7 @@
 use std::sync::Mutex;
 
 use crate::observability::telemetry::metrics::{
+    aggregator::MetricAggregatorTrait,
     domains::api::{measurements::ApiPerformanceMeasurement, snapshot::ApiPerformanceSnapshot},
     types::{DistributionMetrics, Gauge, ScalarCounter},
 };
@@ -44,34 +45,6 @@ impl ApiPerformanceAggregator {
         }
     }
 
-    pub fn record(&self, measurement: ApiPerformanceMeasurement) {
-        match measurement {
-            ApiPerformanceMeasurement::RequestLatency { latency_ms } => {
-                self.record_request_latency(latency_ms)
-            }
-            ApiPerformanceMeasurement::HandlerLatency { latency_ms } => {
-                self.record_handler_latency(latency_ms)
-            }
-            ApiPerformanceMeasurement::RequestCount => self.record_request_count(),
-            ApiPerformanceMeasurement::RequestConcurrency { active_requests } => {
-                self.record_request_concurrency(active_requests)
-            }
-            ApiPerformanceMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
-            ApiPerformanceMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
-        }
-    }
-
-    pub fn snapshot(&self) -> ApiPerformanceSnapshot {
-        ApiPerformanceSnapshot {
-            request_latency: (&*self.request_latency.lock().unwrap()).into(),
-            handler_latency: (&*self.handler_latency.lock().unwrap()).into(),
-            request_count: (&*self.request_count.lock().unwrap()).into(),
-            request_concurrency: (&*self.request_concurrency.lock().unwrap()).into(),
-            request_size: (&*self.request_size.lock().unwrap()).into(),
-            response_size: (&*self.response_size.lock().unwrap()).into(),
-        }
-    }
-
     fn record_request_latency(&self, value: f64) {
         self.request_latency.lock().unwrap().record(value);
     }
@@ -95,5 +68,38 @@ impl ApiPerformanceAggregator {
 impl Default for ApiPerformanceAggregator {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl MetricAggregatorTrait for ApiPerformanceAggregator {
+    type Measurement = ApiPerformanceMeasurement;
+    type Snapshot = ApiPerformanceSnapshot;
+
+    fn record(&self, measurement: Self::Measurement) {
+        match measurement {
+            ApiPerformanceMeasurement::RequestLatency { latency_ms } => {
+                self.record_request_latency(latency_ms)
+            }
+            ApiPerformanceMeasurement::HandlerLatency { latency_ms } => {
+                self.record_handler_latency(latency_ms)
+            }
+            ApiPerformanceMeasurement::RequestCount => self.record_request_count(),
+            ApiPerformanceMeasurement::RequestConcurrency { active_requests } => {
+                self.record_request_concurrency(active_requests)
+            }
+            ApiPerformanceMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
+            ApiPerformanceMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
+        }
+    }
+
+    fn snapshot(&self) -> Self::Snapshot {
+        ApiPerformanceSnapshot {
+            request_latency: (&*self.request_latency.lock().unwrap()).into(),
+            handler_latency: (&*self.handler_latency.lock().unwrap()).into(),
+            request_count: (&*self.request_count.lock().unwrap()).into(),
+            request_concurrency: (&*self.request_concurrency.lock().unwrap()).into(),
+            request_size: (&*self.request_size.lock().unwrap()).into(),
+            response_size: (&*self.response_size.lock().unwrap()).into(),
+        }
     }
 }
