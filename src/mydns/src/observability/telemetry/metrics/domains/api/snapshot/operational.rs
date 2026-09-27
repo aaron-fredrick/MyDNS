@@ -1,10 +1,8 @@
 //! Detached operational snapshots produced by the API operational aggregator.
 
 use crate::observability::telemetry::metrics::{
-    CategorySnapshotTrait,
-    types::{
-    BoundedCounterSnapshot, ScalarCounterSnapshot,
-},
+    traits::CategorySnapshotTrait,
+    types::{BoundedCounterSnapshot, ScalarCounterSnapshot},
 };
 use serde::{Deserialize, Serialize};
 
@@ -24,7 +22,7 @@ pub struct ApiOperationalSnapshot {
 }
 
 impl CategorySnapshotTrait for ApiOperationalSnapshot {
-    pub fn merge(&mut self, other: &Self) {
+    fn merge(&mut self, other: &Self) {
         self.requests.merge(&other.requests);
         self.responses.merge(&other.responses);
         self.request_size_bytes.merge(&other.request_size_bytes);

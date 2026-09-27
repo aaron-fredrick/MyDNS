@@ -1,10 +1,8 @@
 //! Detached performance snapshots produced by the API performance aggregator.
 
 use crate::observability::telemetry::metrics::{
-    CategorySnapshotTrait,
-    types::{
-    DistributionSnapshot, GaugeSnapshot, ScalarCounterSnapshot,
-},
+    traits::CategorySnapshotTrait,
+    types::{DistributionSnapshot, GaugeSnapshot, ScalarCounterSnapshot},
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +17,7 @@ pub struct ApiPerformanceSnapshot {
 }
 
 impl CategorySnapshotTrait for ApiPerformanceSnapshot {
-    pub fn merge(&mut self, other: &Self) {
+    fn merge(&mut self, other: &Self) {
         self.request_latency.merge(&other.request_latency);
         self.handler_latency.merge(&other.handler_latency);
         self.request_count.merge(&other.request_count);
