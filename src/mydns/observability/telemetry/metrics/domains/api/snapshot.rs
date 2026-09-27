@@ -6,9 +6,11 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::observability::telemetry::metrics::types::DistributionSnapshot;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiPerformanceSnapshot {
     pub request_latency: DistributionSnapshot,
     pub handler_latency: DistributionSnapshot,
@@ -18,7 +20,7 @@ pub struct ApiPerformanceSnapshot {
     pub response_size: DistributionSnapshot,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ApiOperationalSnapshot {
     pub requests: u64,
     pub responses: u64,
