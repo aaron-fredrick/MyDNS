@@ -98,10 +98,9 @@ async fn main() -> anyhow::Result<()> {
     let observability_db = Arc::new(
         observability::database::ObservabilityDatabase::init(&cfg.observability_db_path).await?,
     );
-    let telemetry_metrics =
-        observability::telemetry::metrics::domains::dns::DnsMetricsAggregator::new(timezone);
-
     let cancel = CancellationToken::new();
+    // New telemetry metric aggregators remain infrastructure-only for now.
+    // Runtime metric collection continues to use the existing AppState::metrics.
     let state = state::AppState::new(
         pool.clone(),
         cfg,
@@ -112,12 +111,6 @@ async fn main() -> anyhow::Result<()> {
         zone_trie,
         blocklist_index,
         Arc::clone(&observability_db),
-    );
-
-    let metrics_persistence = observability::telemetry::metrics::persistence::spawn_persistence(
-        Arc::clone(&telemetry_metrics),
-        Arc::clone(&observability_db),
-        cancel.clone(),
     );
 
     {
@@ -155,7 +148,6 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let _ = tokio::join!(dns_handle, http_handle);
-    let _ = metrics_persistence.await;
     tracing::info!("MyDNS shutdown complete");
     Ok(())
 }
