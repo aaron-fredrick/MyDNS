@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::BoundedCounterSnapshot;
+use crate::observability::telemetry::metrics::types::Reset;
 
 const MAX_CATEGORIES: usize = 32;
 const OTHER_CATEGORY: &str = "other";
@@ -43,6 +44,12 @@ impl BoundedCounter {
     }
     pub fn as_map(&self) -> &BTreeMap<String, u64> {
         &self.values
+    }
+}
+
+impl Reset for BoundedCounter {
+    fn reset(&mut self) {
+        self.values.clear();
     }
 }
 
