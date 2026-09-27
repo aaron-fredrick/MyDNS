@@ -12,7 +12,7 @@ pub struct TDigestSummary {
     sum: f64,
     min: Option<f64>,
     max: Option<f64>,
-    digest: TDigest,
+    pub(crate) digest: TDigest,
 }
 
 impl Default for TDigestSummary {
