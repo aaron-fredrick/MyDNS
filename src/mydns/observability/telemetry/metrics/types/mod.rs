@@ -2,7 +2,7 @@
 pub mod counter;
 pub use counter::{BoundedCounter, ScalarCounter};
 pub mod distribution;
-pub use distribution::DistributionMetrics;
+pub use distribution::{DistributionMetrics, DistributionSnapshot};
 pub mod gauge;
 pub use gauge::Gauge;
 pub mod histogram;
