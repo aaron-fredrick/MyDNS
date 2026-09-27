@@ -13,7 +13,11 @@ pub struct HistogramSnapshot {
 impl HistogramSnapshot {
     pub fn merge(&mut self, other: &Self) {
         assert_eq!(self.bounds, other.bounds, "histogram bounds must match");
-        assert_eq!(self.counts.len(), other.counts.len(), "histogram bucket counts must match");
+        assert_eq!(
+            self.counts.len(),
+            other.counts.len(),
+            "histogram bucket counts must match"
+        );
 
         self.count = self.count.saturating_add(other.count);
         self.sum += other.sum;

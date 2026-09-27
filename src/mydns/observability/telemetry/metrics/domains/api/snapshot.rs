@@ -1,7 +1,8 @@
 //! Detached snapshots produced by API aggregators.
-use std::collections::BTreeMap;
+use crate::observability::telemetry::metrics::types::{
+    BoundedCounterSnapshot, DistributionSnapshot, GaugeSnapshot, ScalarCounterSnapshot,
+};
 use serde::{Deserialize, Serialize};
-use crate::observability::telemetry::metrics::types::{BoundedCounterSnapshot, DistributionSnapshot, GaugeSnapshot, ScalarCounterSnapshot};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ApiPerformanceSnapshot {
@@ -43,12 +44,15 @@ impl ApiOperationalSnapshot {
         self.responses.merge(&other.responses);
         self.request_size_bytes.merge(&other.request_size_bytes);
         self.response_size_bytes.merge(&other.response_size_bytes);
-        self.authentication_successes.merge(&other.authentication_successes);
-        self.authentication_failures.merge(&other.authentication_failures);
+        self.authentication_successes
+            .merge(&other.authentication_successes);
+        self.authentication_failures
+            .merge(&other.authentication_failures);
         self.errors.merge(&other.errors);
         self.method_counts.merge(&other.method_counts);
         self.route_counts.merge(&other.route_counts);
         self.status_counts.merge(&other.status_counts);
-        self.error_category_counts.merge(&other.error_category_counts);
+        self.error_category_counts
+            .merge(&other.error_category_counts);
     }
 }
