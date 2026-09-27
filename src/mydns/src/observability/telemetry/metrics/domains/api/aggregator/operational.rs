@@ -8,7 +8,7 @@ use mydns_macros::metric_category_aggregator;
 use crate::observability::telemetry::metrics::{
     aggregator::CategoryAggregatorTrait,
     domains::api::{measurements::ApiOperationalMeasurement, snapshot::ApiOperationalSnapshot},
-    types::{BoundedCounter, ScalarCounter},
+    types::{BoundedCounter, Reset, ScalarCounter},
 };
 
 #[metric_category_aggregator]
@@ -122,5 +122,20 @@ impl CategoryAggregatorTrait for ApiOperationalAggregator {
             status_counts: (&*self.status_counts.lock().unwrap()).into(),
             error_category_counts: (&*self.error_category_counts.lock().unwrap()).into(),
         }
+    }
+
+    fn reset(&mut self) {
+        self.start_time = Utc::now();
+        self.requests.get_mut().unwrap().reset();
+        self.responses.get_mut().unwrap().reset();
+        self.request_size_bytes.get_mut().unwrap().reset();
+        self.response_size_bytes.get_mut().unwrap().reset();
+        self.authentication_successes.get_mut().unwrap().reset();
+        self.authentication_failures.get_mut().unwrap().reset();
+        self.errors.get_mut().unwrap().reset();
+        self.method_counts.get_mut().unwrap().reset();
+        self.route_counts.get_mut().unwrap().reset();
+        self.status_counts.get_mut().unwrap().reset();
+        self.error_category_counts.get_mut().unwrap().reset();
     }
 }
