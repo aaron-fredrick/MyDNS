@@ -8,7 +8,7 @@ use mydns_macros::metric_category_aggregator;
 use crate::observability::telemetry::metrics::{
     aggregator::CategoryAggregatorTrait,
     domains::api::{measurements::ApiPerformanceMeasurement, snapshot::ApiPerformanceSnapshot},
-    types::{DistributionMetrics, Gauge, ScalarCounter},
+    types::{DistributionMetrics, Gauge, Reset, ScalarCounter},
 };
 
 const LATENCY_BOUNDS_MS: &[f64] = &[
@@ -110,5 +110,15 @@ impl CategoryAggregatorTrait for ApiPerformanceAggregator {
             request_size: (&*self.request_size.lock().unwrap()).into(),
             response_size: (&*self.response_size.lock().unwrap()).into(),
         }
+    }
+
+    fn reset(&mut self) {
+        self.start_time = Utc::now();
+        self.request_latency.get_mut().unwrap().reset();
+        self.handler_latency.get_mut().unwrap().reset();
+        self.request_count.get_mut().unwrap().reset();
+        self.request_concurrency.get_mut().unwrap().reset();
+        self.request_size.get_mut().unwrap().reset();
+        self.response_size.get_mut().unwrap().reset();
     }
 }
