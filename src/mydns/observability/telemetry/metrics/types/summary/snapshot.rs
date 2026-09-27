@@ -9,7 +9,7 @@ pub struct TDigestSummarySnapshot {
     pub sum: f64,
     pub min: Option<f64>,
     pub max: Option<f64>,
-    digest: TDigest,
+    pub(crate) digest: TDigest,
 }
 
 impl TDigestSummarySnapshot {
