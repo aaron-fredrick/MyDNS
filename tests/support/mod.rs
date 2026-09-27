@@ -57,9 +57,7 @@ impl Default for TestDb {
 /// This database is only required because AppState owns the observability
 /// storage dependency; the new telemetry metric aggregators are not wired
 /// into these integration fixtures.
-pub async fn init_observability_db(
-    db: &TestDb,
-) -> Arc<ObservabilityDatabase> {
+pub async fn init_observability_db(db: &TestDb) -> Arc<ObservabilityDatabase> {
     let path = db.temp_dir.path().join("observability.db");
     Arc::new(
         ObservabilityDatabase::init(&path.to_string_lossy())
