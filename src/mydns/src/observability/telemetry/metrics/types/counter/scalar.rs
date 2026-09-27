@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::AddAssign;
 
 use super::ScalarCounterSnapshot;
+use crate::observability::telemetry::metrics::types::Reset;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ScalarCounter {
@@ -21,6 +22,12 @@ impl ScalarCounter {
     }
     pub fn value(&self) -> u64 {
         self.value
+    }
+}
+
+impl Reset for ScalarCounter {
+    fn reset(&mut self) {
+        self.value = 0;
     }
 }
 
