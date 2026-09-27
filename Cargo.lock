@@ -1712,6 +1712,7 @@ dependencies = [
  "libc",
  "local-ip-address",
  "mime_guess",
+ "mydns-macros",
  "nix",
  "once_cell",
  "rand 0.8.8",
@@ -1736,6 +1737,15 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "winapi",
+]
+
+[[package]]
+name = "mydns-macros"
+version = "0.1.1-dev"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
