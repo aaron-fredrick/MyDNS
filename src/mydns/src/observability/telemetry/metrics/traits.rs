@@ -1,12 +1,22 @@
 //! Shared contracts for metric collection.
 
-pub trait CategoryAggregatorTrait {
-    type Measurement<'a>
+/// Defines the measurement type family owned by a metric domain.
+///
+/// Rust cannot pass a lifetime-parameterized type directly as a generic type
+/// parameter, so domains expose that family through this GAT.
+pub trait MeasurementFamily {
+    type Measurement<'a>: Clone
     where
         Self: 'a;
+}
+
+pub trait CategoryAggregatorTrait<M>
+where
+    M: MeasurementFamily,
+{
     type Snapshot;
 
-    fn record(&self, measurement: Self::Measurement<'_>);
+    fn record(&self, measurement: M::Measurement<'_>);
     fn snapshot(&self) -> Self::Snapshot;
     fn reset(&mut self);
 }
