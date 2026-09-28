@@ -1,14 +1,13 @@
 //! Reusable metric type implementations.
 
-/// Resets a metric to its initial empty state.
+/// Common behavior for live metric types.
 pub trait TypeTrait {
     fn reset(&mut self);
 }
 
+/// Common behavior for detached metric snapshot types.
 pub trait SnapshotTypeTrait {
-    type Snapshot;
-
-    fn merge(&mut self, other: &Self) -> Self::Snapshot;
+    fn merge(&mut self, other: &Self);
 }
 
 pub mod counter;
