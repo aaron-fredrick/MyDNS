@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::BoundedCounterSnapshot;
-use crate::observability::telemetry::metrics::types::Reset;
+use crate::observability::telemetry::metrics::types::TypeTrait;
 
 const MAX_CATEGORIES: usize = 32;
 const OTHER_CATEGORY: &str = "other";
@@ -47,7 +47,7 @@ impl BoundedCounter {
     }
 }
 
-impl Reset for BoundedCounter {
+impl TypeTrait for BoundedCounter {
     fn reset(&mut self) {
         self.values.clear();
     }

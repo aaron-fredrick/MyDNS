@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::AddAssign;
 
 use super::ScalarCounterSnapshot;
-use crate::observability::telemetry::metrics::types::Reset;
+use crate::observability::telemetry::metrics::types::TypeTrait;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ScalarCounter {
@@ -25,7 +25,7 @@ impl ScalarCounter {
     }
 }
 
-impl Reset for ScalarCounter {
+impl TypeTrait for ScalarCounter {
     fn reset(&mut self) {
         self.value = 0;
     }

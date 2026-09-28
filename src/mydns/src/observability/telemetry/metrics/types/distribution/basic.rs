@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::super::{Histogram, TDigestSummary};
 use super::basic_snapshot::DistributionSnapshot;
-use crate::observability::telemetry::metrics::types::Reset;
+use crate::observability::telemetry::metrics::types::TypeTrait;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DistributionMetrics {
@@ -26,7 +26,7 @@ impl DistributionMetrics {
     }
 }
 
-impl Reset for DistributionMetrics {
+impl TypeTrait for DistributionMetrics {
     fn reset(&mut self) {
         self.histogram.reset();
         self.summary.reset();

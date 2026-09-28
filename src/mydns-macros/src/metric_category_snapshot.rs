@@ -44,18 +44,14 @@ fn validate_datetime_field(
     }) else {
         return Err(Error::new_spanned(
             &input.ident,
-            format!(
-                "metric category snapshot must contain a `{field_name}: DateTime<Utc>` field"
-            ),
+            format!("metric category snapshot must contain a `{field_name}: DateTime<Utc>` field"),
         ));
     };
 
     if !is_datetime_utc(&field.ty) {
         return Err(Error::new_spanned(
             &field.ty,
-            format!(
-                "metric category snapshot `{field_name}` must have type `DateTime<Utc>`"
-            ),
+            format!("metric category snapshot `{field_name}` must have type `DateTime<Utc>`"),
         ));
     }
 

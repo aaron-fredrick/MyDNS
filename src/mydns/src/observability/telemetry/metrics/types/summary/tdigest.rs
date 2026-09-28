@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tdigest::TDigest;
 
 use super::TDigestSummarySnapshot;
-use crate::observability::telemetry::metrics::types::Reset;
+use crate::observability::telemetry::metrics::types::TypeTrait;
 
 const DEFAULT_TDIGEST_SIZE: usize = 100;
 
@@ -65,7 +65,7 @@ impl TDigestSummary {
     }
 }
 
-impl Reset for TDigestSummary {
+impl TypeTrait for TDigestSummary {
     fn reset(&mut self) {
         *self = Self::default();
     }

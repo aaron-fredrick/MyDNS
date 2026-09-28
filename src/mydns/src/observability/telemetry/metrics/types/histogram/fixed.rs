@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::HistogramSnapshot;
-use crate::observability::telemetry::metrics::types::Reset;
+use crate::observability::telemetry::metrics::types::TypeTrait;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Histogram {
@@ -72,7 +72,7 @@ impl Histogram {
     }
 }
 
-impl Reset for Histogram {
+impl TypeTrait for Histogram {
     fn reset(&mut self) {
         self.counts.fill(0);
         self.count = 0;

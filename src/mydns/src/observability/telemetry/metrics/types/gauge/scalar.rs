@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::GaugeSnapshot;
-use crate::observability::telemetry::metrics::types::Reset;
+use crate::observability::telemetry::metrics::types::TypeTrait;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Gauge {
@@ -30,7 +30,7 @@ impl Gauge {
     }
 }
 
-impl Reset for Gauge {
+impl TypeTrait for Gauge {
     fn reset(&mut self) {
         self.value = 0.0;
     }

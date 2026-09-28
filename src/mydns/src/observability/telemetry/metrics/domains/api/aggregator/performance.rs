@@ -8,7 +8,7 @@ use mydns_macros::metric_category_aggregator;
 use crate::observability::telemetry::metrics::{
     domains::api::{measurements::ApiPerformanceMeasurement, snapshot::ApiPerformanceSnapshot},
     traits::CategoryAggregatorTrait,
-    types::{DistributionMetrics, Gauge, Reset, ScalarCounter},
+    types::{DistributionMetrics, Gauge, TypeTrait, ScalarCounter},
 };
 
 const LATENCY_BOUNDS_MS: &[f64] = &[
