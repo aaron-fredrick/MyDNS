@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
 use crate::observability::telemetry::metrics::types::SnapshotTypeTrait;
 
 const MAX_CATEGORIES: usize = 32;
@@ -13,9 +14,7 @@ pub struct BoundedCounterSnapshot {
 }
 
 impl SnapshotTypeTrait for BoundedCounterSnapshot {
-    type Snapshot = BoundedCounterSnapshot;
-
-    fn merge(&mut self, other: &Self) -> Self::Snapshot {
+    fn merge(&mut self, other: &Self) {
         for (value, count) in &other.values {
             if let Some(existing) = self.values.get_mut(value) {
                 *existing = existing.saturating_add(*count);
