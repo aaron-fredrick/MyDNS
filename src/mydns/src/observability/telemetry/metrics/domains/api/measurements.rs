@@ -2,6 +2,8 @@
 //!
 //! These definitions describe the API measurement contract. They are intentionally
 //! independent from aggregation, time buckets, retention, and persistence.
+use crate::observability::telemetry::metrics::traits::MeasurementFamily;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ApiMeasurement<'a> {
     Request { method: &'a str, route: &'a str },
@@ -22,3 +24,16 @@ pub enum ApiMeasurement<'a> {
 // TODO: Revisit measurement ownership/lifetimes when the asynchronous metric
 // collection pipeline is implemented. Borrowed values are appropriate while
 // measurements are consumed synchronously by the aggregators.
+
+/// Type-level owner of the API domain's measurement family.
+///
+/// This is a zero-sized compile-time marker; the actual measurements remain
+/// ApiMeasurement<'a>.
+pub struct ApiMeasurementFamily;
+
+impl MeasurementFamily for ApiMeasurementFamily {
+    type Measurement<'a>
+        = ApiMeasurement<'a>
+    where
+        Self: 'a;
+}
