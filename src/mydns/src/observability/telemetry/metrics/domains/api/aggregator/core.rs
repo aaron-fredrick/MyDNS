@@ -1,7 +1,11 @@
 //! API-level composition of performance and operational aggregators.
 
-use crate::observability::telemetry::metrics::aggregator::DomainAggregator;
+use crate::observability::telemetry::metrics::{
+    aggregator::DomainAggregator,
+    domains::api::measurements::ApiMeasurementFamily,
+};
 
 use super::{ApiOperationalAggregator, ApiPerformanceAggregator};
 
-pub type ApiAggregator = DomainAggregator<ApiPerformanceAggregator, ApiOperationalAggregator>;
+pub type ApiAggregator =
+    DomainAggregator<ApiMeasurementFamily, ApiPerformanceAggregator, ApiOperationalAggregator>;
