@@ -22,11 +22,8 @@ where
     P: CategoryAggregatorTrait,
     O: CategoryAggregatorTrait,
 {
-    pub fn record_performance(&self, measurement: P::Measurement<'_>) {
+    pub fn record(&self, measurement: P::Measurement<'_>) {
         self.performance.record(measurement);
-    }
-
-    pub fn record_operational(&self, measurement: O::Measurement<'_>) {
         self.operational.record(measurement);
     }
 }

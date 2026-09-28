@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use mydns_macros::metric_category_aggregator;
 
 use crate::observability::telemetry::metrics::{
-    domains::api::{measurements::ApiOperationalMeasurement, snapshot::ApiOperationalSnapshot},
+    domains::api::{measurements::ApiMeasurement, snapshot::ApiOperationalSnapshot},
     traits::CategoryAggregatorTrait,
     types::{BoundedCounter, ScalarCounter, TypeTrait},
 };
@@ -86,25 +86,21 @@ impl Default for ApiOperationalAggregator {
 
 impl CategoryAggregatorTrait for ApiOperationalAggregator {
     type Measurement<'a>
-        = ApiOperationalMeasurement<'a>
+        = ApiMeasurement<'a>
     where
         Self: 'a;
     type Snapshot = ApiOperationalSnapshot;
 
     fn record(&self, measurement: Self::Measurement<'_>) {
         match measurement {
-            ApiOperationalMeasurement::Request { method, route } => {
-                self.record_request(method, route)
-            }
-            ApiOperationalMeasurement::Response { status_code } => {
-                self.record_response(status_code)
-            }
-            ApiOperationalMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
-            ApiOperationalMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
-            ApiOperationalMeasurement::Authentication { successful } => {
-                self.record_authentication(successful)
-            }
-            ApiOperationalMeasurement::Error { category } => self.record_error(category),
+            ApiMeasurement::Request { method, route } => self.record_request(method, route),
+            ApiMeasurement::Response { status_code } => self.record_response(status_code),
+            ApiMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
+            ApiMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
+            ApiMeasurement::Authentication { successful } => self.record_authentication(successful),
+            ApiMeasurement::Error { category } => self.record_error(category),
+
+            _ => {}
         }
     }
 

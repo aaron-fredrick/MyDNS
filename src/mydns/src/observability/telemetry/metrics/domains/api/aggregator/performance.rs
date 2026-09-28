@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use mydns_macros::metric_category_aggregator;
 
 use crate::observability::telemetry::metrics::{
-    domains::api::{measurements::ApiPerformanceMeasurement, snapshot::ApiPerformanceSnapshot},
+    domains::api::{measurements::ApiMeasurement, snapshot::ApiPerformanceSnapshot},
     traits::CategoryAggregatorTrait,
     types::{DistributionMetrics, Gauge, ScalarCounter, TypeTrait},
 };
@@ -79,25 +79,27 @@ impl Default for ApiPerformanceAggregator {
 
 impl CategoryAggregatorTrait for ApiPerformanceAggregator {
     type Measurement<'a>
-        = ApiPerformanceMeasurement
+        = ApiMeasurement<'a>
     where
         Self: 'a;
     type Snapshot = ApiPerformanceSnapshot;
 
     fn record(&self, measurement: Self::Measurement<'_>) {
         match measurement {
-            ApiPerformanceMeasurement::RequestLatency { latency_ms } => {
-                self.record_request_latency(latency_ms)
+            ApiMeasurement::RequestLatency { latency_ms } => {
+                self.record_request_latency(latency_ms);
+                self.record_request_count();
             }
-            ApiPerformanceMeasurement::HandlerLatency { latency_ms } => {
+            ApiMeasurement::HandlerLatency { latency_ms } => {
                 self.record_handler_latency(latency_ms)
             }
-            ApiPerformanceMeasurement::RequestCount => self.record_request_count(),
-            ApiPerformanceMeasurement::RequestConcurrency { active_requests } => {
+            ApiMeasurement::RequestConcurrency { active_requests } => {
                 self.record_request_concurrency(active_requests)
             }
-            ApiPerformanceMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
-            ApiPerformanceMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
+            ApiMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
+            ApiMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
+
+            _ => {}
         }
     }
 
