@@ -6,7 +6,10 @@ use chrono::{DateTime, Utc};
 use mydns_macros::metric_category_aggregator;
 
 use crate::observability::telemetry::metrics::{
-    domains::api::{measurements::ApiMeasurement, snapshot::ApiPerformanceSnapshot},
+    domains::api::{
+        measurements::{ApiMeasurement, ApiMeasurementFamily},
+        snapshot::ApiPerformanceSnapshot,
+    },
     traits::CategoryAggregatorTrait,
     types::{DistributionMetrics, Gauge, ScalarCounter, TypeTrait},
 };
@@ -15,16 +18,8 @@ const LATENCY_BOUNDS_MS: &[f64] = &[
     1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 3000.0, 5000.0,
 ];
 const SIZE_BOUNDS_BYTES: &[f64] = &[
-    64.0,
-    256.0,
-    1024.0,
-    4096.0,
-    16_384.0,
-    65_536.0,
-    262_144.0,
-    1_048_576.0,
-    4_194_304.0,
-    16_777_216.0,
+    64.0, 256.0, 1024.0, 4096.0, 16_384.0, 65_536.0, 262_144.0, 1_048_576.0,
+    4_194_304.0, 16_777_216.0,
 ];
 
 #[metric_category_aggregator]
@@ -77,14 +72,10 @@ impl Default for ApiPerformanceAggregator {
     }
 }
 
-impl CategoryAggregatorTrait for ApiPerformanceAggregator {
-    type Measurement<'a>
-        = ApiMeasurement<'a>
-    where
-        Self: 'a;
+impl CategoryAggregatorTrait<ApiMeasurementFamily> for ApiPerformanceAggregator {
     type Snapshot = ApiPerformanceSnapshot;
 
-    fn record(&self, measurement: Self::Measurement<'_>) {
+    fn record(&self, measurement: ApiMeasurement<'_>) {
         match measurement {
             ApiMeasurement::RequestLatency { latency_ms } => {
                 self.record_request_latency(latency_ms);
@@ -98,7 +89,6 @@ impl CategoryAggregatorTrait for ApiPerformanceAggregator {
             }
             ApiMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
             ApiMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
-
             _ => {}
         }
     }
