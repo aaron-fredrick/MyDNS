@@ -2,6 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::observability::telemetry::metrics::types::SnapshotTypeTrait;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HistogramSnapshot {
     pub bounds: Vec<f64>,
@@ -10,8 +12,8 @@ pub struct HistogramSnapshot {
     pub sum: f64,
 }
 
-impl HistogramSnapshot {
-    pub fn merge(&mut self, other: &Self) {
+impl SnapshotTypeTrait for HistogramSnapshot {
+    fn merge(&mut self, other: &Self) {
         assert_eq!(self.bounds, other.bounds, "histogram bounds must match");
         assert_eq!(
             self.counts.len(),
