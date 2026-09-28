@@ -8,7 +8,7 @@ use mydns_macros::metric_category_aggregator;
 use crate::observability::telemetry::metrics::{
     domains::api::{measurements::ApiOperationalMeasurement, snapshot::ApiOperationalSnapshot},
     traits::CategoryAggregatorTrait,
-    types::{BoundedCounter, TypeTrait, ScalarCounter},
+    types::{BoundedCounter, ScalarCounter, TypeTrait},
 };
 
 #[metric_category_aggregator]
