@@ -5,7 +5,7 @@ use mydns_macros::metric_category_snapshot;
 
 use crate::observability::telemetry::metrics::{
     traits::CategorySnapshotTrait,
-    types::{DistributionSnapshot, GaugeSnapshot, ScalarCounterSnapshot},
+    types::{DistributionSnapshot, GaugeSnapshot, ScalarCounterSnapshot, SnapshotTypeTrait},
 };
 
 use serde::{Deserialize, Serialize};
