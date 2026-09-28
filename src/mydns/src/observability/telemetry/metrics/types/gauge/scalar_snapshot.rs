@@ -2,15 +2,17 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::observability::telemetry::metrics::types::SnapshotTypeTrait;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct GaugeSnapshot {
     pub value: f64,
 }
 
-impl GaugeSnapshot {
+impl SnapshotTypeTrait for GaugeSnapshot {
     /// A gauge represents current state, so merging replaces the value with the
     /// snapshot supplied by the caller.
-    pub fn merge(&mut self, other: &Self) {
+    fn merge(&mut self, other: &Self) {
         self.value = other.value;
     }
 }
