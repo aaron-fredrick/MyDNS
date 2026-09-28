@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use tdigest::TDigest;
 
+use crate::observability::telemetry::metrics::types::SnapshotTypeTrait;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TDigestSummarySnapshot {
     pub count: u64,
@@ -24,8 +26,10 @@ impl TDigestSummarySnapshot {
     pub fn mean(&self) -> Option<f64> {
         (self.count > 0).then_some(self.sum / self.count as f64)
     }
+}
 
-    pub fn merge(&mut self, other: &Self) {
+impl SnapshotTypeTrait for TDigestSummarySnapshot {
+    fn merge(&mut self, other: &Self) {
         self.count = self.count.saturating_add(other.count);
         self.sum += other.sum;
 
