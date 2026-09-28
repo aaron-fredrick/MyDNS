@@ -6,7 +6,10 @@ use chrono::{DateTime, Utc};
 use mydns_macros::metric_category_aggregator;
 
 use crate::observability::telemetry::metrics::{
-    domains::api::{measurements::ApiMeasurement, snapshot::ApiOperationalSnapshot},
+    domains::api::{
+        measurements::{ApiMeasurement, ApiMeasurementFamily},
+        snapshot::ApiOperationalSnapshot,
+    },
     traits::CategoryAggregatorTrait,
     types::{BoundedCounter, ScalarCounter, TypeTrait},
 };
@@ -84,14 +87,10 @@ impl Default for ApiOperationalAggregator {
     }
 }
 
-impl CategoryAggregatorTrait for ApiOperationalAggregator {
-    type Measurement<'a>
-        = ApiMeasurement<'a>
-    where
-        Self: 'a;
+impl CategoryAggregatorTrait<ApiMeasurementFamily> for ApiOperationalAggregator {
     type Snapshot = ApiOperationalSnapshot;
 
-    fn record(&self, measurement: Self::Measurement<'_>) {
+    fn record(&self, measurement: ApiMeasurement<'_>) {
         match measurement {
             ApiMeasurement::Request { method, route } => self.record_request(method, route),
             ApiMeasurement::Response { status_code } => self.record_response(status_code),
@@ -99,7 +98,6 @@ impl CategoryAggregatorTrait for ApiOperationalAggregator {
             ApiMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
             ApiMeasurement::Authentication { successful } => self.record_authentication(successful),
             ApiMeasurement::Error { category } => self.record_error(category),
-
             _ => {}
         }
     }
