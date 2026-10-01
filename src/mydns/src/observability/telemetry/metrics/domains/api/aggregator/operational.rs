@@ -1,83 +1,29 @@
 //! Operational aggregation for API measurements.
 
-use std::sync::Mutex;
-
-use chrono::{DateTime, Utc};
-use mydns_macros::metric_category_aggregator;
-
 use crate::observability::telemetry::metrics::{
     domains::api::{
+        bucket::ApiOperationalBucket,
         measurements::{ApiMeasurement, ApiMeasurementFamily},
         snapshot::ApiOperationalSnapshot,
     },
     traits::CategoryAggregatorTrait,
-    types::{BoundedCounter, ScalarCounter, TypeTrait},
 };
 
-#[metric_category_aggregator]
+/// Coordinates API operational aggregation over the active bucket.
+///
+/// Metric state and measurement dispatch belong to ApiOperationalBucket.
+/// The aggregator owns the bucket boundary and the recording lease around
+/// each delegated measurement. Rotation will later replace the active bucket
+/// with a reserve bucket without changing the bucket's metric contract.
 pub struct ApiOperationalAggregator {
-    start_time: DateTime<Utc>,
-    requests: Mutex<ScalarCounter>,
-    responses: Mutex<ScalarCounter>,
-    request_size_bytes: Mutex<ScalarCounter>,
-    response_size_bytes: Mutex<ScalarCounter>,
-    authentication_successes: Mutex<ScalarCounter>,
-    authentication_failures: Mutex<ScalarCounter>,
-    errors: Mutex<ScalarCounter>,
-    method_counts: Mutex<BoundedCounter>,
-    route_counts: Mutex<BoundedCounter>,
-    status_counts: Mutex<BoundedCounter>,
-    error_category_counts: Mutex<BoundedCounter>,
+    active: ApiOperationalBucket,
 }
 
 impl ApiOperationalAggregator {
     pub fn new() -> Self {
         Self {
-            start_time: Utc::now(),
-            requests: Mutex::new(ScalarCounter::new()),
-            responses: Mutex::new(ScalarCounter::new()),
-            request_size_bytes: Mutex::new(ScalarCounter::new()),
-            response_size_bytes: Mutex::new(ScalarCounter::new()),
-            authentication_successes: Mutex::new(ScalarCounter::new()),
-            authentication_failures: Mutex::new(ScalarCounter::new()),
-            errors: Mutex::new(ScalarCounter::new()),
-            method_counts: Mutex::new(BoundedCounter::default()),
-            route_counts: Mutex::new(BoundedCounter::default()),
-            status_counts: Mutex::new(BoundedCounter::default()),
-            error_category_counts: Mutex::new(BoundedCounter::default()),
+            active: ApiOperationalBucket::new(),
         }
-    }
-
-    fn record_request(&self, m: &str, r: &str) {
-        self.requests.lock().unwrap().increment();
-        self.method_counts.lock().unwrap().increment(m);
-        self.route_counts.lock().unwrap().increment(r); /* TODO: instrumentation should provide a canonical route template. */
-    }
-
-    fn record_response(&self, s: u16) {
-        self.responses.lock().unwrap().increment();
-        self.status_counts.lock().unwrap().increment(&s.to_string())
-    }
-
-    fn record_request_size(&self, b: u64) {
-        self.request_size_bytes.lock().unwrap().increment_by(b)
-    }
-
-    fn record_response_size(&self, b: u64) {
-        self.response_size_bytes.lock().unwrap().increment_by(b)
-    }
-
-    fn record_authentication(&self, s: bool) {
-        if s {
-            self.authentication_successes.lock().unwrap().increment()
-        } else {
-            self.authentication_failures.lock().unwrap().increment()
-        }
-    }
-
-    fn record_error(&self, c: &str) {
-        self.errors.lock().unwrap().increment();
-        self.error_category_counts.lock().unwrap().increment(c)
     }
 }
 
@@ -91,49 +37,20 @@ impl CategoryAggregatorTrait<ApiMeasurementFamily> for ApiOperationalAggregator 
     type Snapshot = ApiOperationalSnapshot;
 
     fn record(&self, measurement: ApiMeasurement<'_>) {
-        match measurement {
-            ApiMeasurement::Request { method, route } => self.record_request(method, route),
-            ApiMeasurement::Response { status_code } => self.record_response(status_code),
-            ApiMeasurement::RequestSize { bytes } => self.record_request_size(bytes),
-            ApiMeasurement::ResponseSize { bytes } => self.record_response_size(bytes),
-            ApiMeasurement::Authentication { successful } => self.record_authentication(successful),
-            ApiMeasurement::Error { category } => self.record_error(category),
-            _ => {}
-        }
+        assert!(
+            self.active.try_acquire(),
+            "active API operational bucket unexpectedly rejected a recording lease"
+        );
+
+        self.active.record(measurement);
+        self.active.release();
     }
 
     fn snapshot(&self) -> Self::Snapshot {
-        let end_time = Utc::now();
-
-        ApiOperationalSnapshot {
-            start_time: self.start_time,
-            end_time,
-            requests: (&*self.requests.lock().unwrap()).into(),
-            responses: (&*self.responses.lock().unwrap()).into(),
-            request_size_bytes: (&*self.request_size_bytes.lock().unwrap()).into(),
-            response_size_bytes: (&*self.response_size_bytes.lock().unwrap()).into(),
-            authentication_successes: (&*self.authentication_successes.lock().unwrap()).into(),
-            authentication_failures: (&*self.authentication_failures.lock().unwrap()).into(),
-            errors: (&*self.errors.lock().unwrap()).into(),
-            method_counts: (&*self.method_counts.lock().unwrap()).into(),
-            route_counts: (&*self.route_counts.lock().unwrap()).into(),
-            status_counts: (&*self.status_counts.lock().unwrap()).into(),
-            error_category_counts: (&*self.error_category_counts.lock().unwrap()).into(),
-        }
+        self.active.snapshot()
     }
 
-    fn reset(&mut self) {
-        self.start_time = Utc::now();
-        self.requests.get_mut().unwrap().reset();
-        self.responses.get_mut().unwrap().reset();
-        self.request_size_bytes.get_mut().unwrap().reset();
-        self.response_size_bytes.get_mut().unwrap().reset();
-        self.authentication_successes.get_mut().unwrap().reset();
-        self.authentication_failures.get_mut().unwrap().reset();
-        self.errors.get_mut().unwrap().reset();
-        self.method_counts.get_mut().unwrap().reset();
-        self.route_counts.get_mut().unwrap().reset();
-        self.status_counts.get_mut().unwrap().reset();
-        self.error_category_counts.get_mut().unwrap().reset();
+    fn reset(&self) {
+        self.active.reset();
     }
 }
