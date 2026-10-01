@@ -1,39 +1,42 @@
 //! Mutable metric state for API operational aggregation.
 
+use std::sync::Mutex;
+
 use crate::observability::telemetry::metrics::types::{BoundedCounter, ScalarCounter};
 
 /// Mutable metric state for one API operational aggregation window.
 ///
-/// This contains only metric state. Window timing and bucket lifecycle are
-/// deliberately handled outside the API-specific metric state.
+/// Metric-level mutexes preserve the concurrency model of the current
+/// operational aggregator. Bucket leasing/lifecycle synchronization is a
+/// separate concern and will be added when the aggregator is migrated.
 pub struct ApiOperationalBucket {
-    pub(crate) requests: ScalarCounter,
-    pub(crate) responses: ScalarCounter,
-    pub(crate) request_size_bytes: ScalarCounter,
-    pub(crate) response_size_bytes: ScalarCounter,
-    pub(crate) authentication_successes: ScalarCounter,
-    pub(crate) authentication_failures: ScalarCounter,
-    pub(crate) errors: ScalarCounter,
-    pub(crate) method_counts: BoundedCounter,
-    pub(crate) route_counts: BoundedCounter,
-    pub(crate) status_counts: BoundedCounter,
-    pub(crate) error_category_counts: BoundedCounter,
+    pub(crate) requests: Mutex<ScalarCounter>,
+    pub(crate) responses: Mutex<ScalarCounter>,
+    pub(crate) request_size_bytes: Mutex<ScalarCounter>,
+    pub(crate) response_size_bytes: Mutex<ScalarCounter>,
+    pub(crate) authentication_successes: Mutex<ScalarCounter>,
+    pub(crate) authentication_failures: Mutex<ScalarCounter>,
+    pub(crate) errors: Mutex<ScalarCounter>,
+    pub(crate) method_counts: Mutex<BoundedCounter>,
+    pub(crate) route_counts: Mutex<BoundedCounter>,
+    pub(crate) status_counts: Mutex<BoundedCounter>,
+    pub(crate) error_category_counts: Mutex<BoundedCounter>,
 }
 
 impl ApiOperationalBucket {
     pub fn new() -> Self {
         Self {
-            requests: ScalarCounter::new(),
-            responses: ScalarCounter::new(),
-            request_size_bytes: ScalarCounter::new(),
-            response_size_bytes: ScalarCounter::new(),
-            authentication_successes: ScalarCounter::new(),
-            authentication_failures: ScalarCounter::new(),
-            errors: ScalarCounter::new(),
-            method_counts: BoundedCounter::default(),
-            route_counts: BoundedCounter::default(),
-            status_counts: BoundedCounter::default(),
-            error_category_counts: BoundedCounter::default(),
+            requests: Mutex::new(ScalarCounter::new()),
+            responses: Mutex::new(ScalarCounter::new()),
+            request_size_bytes: Mutex::new(ScalarCounter::new()),
+            response_size_bytes: Mutex::new(ScalarCounter::new()),
+            authentication_successes: Mutex::new(ScalarCounter::new()),
+            authentication_failures: Mutex::new(ScalarCounter::new()),
+            errors: Mutex::new(ScalarCounter::new()),
+            method_counts: Mutex::new(BoundedCounter::default()),
+            route_counts: Mutex::new(BoundedCounter::default()),
+            status_counts: Mutex::new(BoundedCounter::default()),
+            error_category_counts: Mutex::new(BoundedCounter::default()),
         }
     }
 }
