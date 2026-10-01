@@ -1,6 +1,9 @@
 //! Mutable metric state for API performance aggregation.
 
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize},
+    Mutex,
+};
 
 use crate::observability::telemetry::metrics::types::{DistributionMetrics, Gauge, ScalarCounter};
 
@@ -27,6 +30,11 @@ const SIZE_BOUNDS_BYTES: &[f64] = &[
 /// performance aggregator. Bucket leasing/lifecycle synchronization is a
 /// separate concern and will be added when the aggregator is migrated.
 pub struct ApiPerformanceBucket {
+    /// Number of active recording leases on this bucket.
+    pub(crate) users: AtomicUsize,
+    /// Prevents new recording leases while the bucket is being drained.
+    pub(crate) draining: AtomicBool,
+
     pub(crate) request_latency: Mutex<DistributionMetrics>,
     pub(crate) handler_latency: Mutex<DistributionMetrics>,
     pub(crate) request_count: Mutex<ScalarCounter>,
@@ -38,6 +46,8 @@ pub struct ApiPerformanceBucket {
 impl ApiPerformanceBucket {
     pub fn new() -> Self {
         Self {
+            users: AtomicUsize::new(0),
+            draining: AtomicBool::new(false),
             request_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
             handler_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
             request_count: Mutex::new(ScalarCounter::new()),
