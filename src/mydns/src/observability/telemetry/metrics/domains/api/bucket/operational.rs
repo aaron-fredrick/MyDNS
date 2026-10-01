@@ -8,7 +8,10 @@ use std::sync::{
 use chrono::{DateTime, Utc};
 
 use crate::observability::telemetry::metrics::{
-    domains::api::snapshot::ApiOperationalSnapshot,
+    domains::api::{
+        measurements::ApiMeasurement,
+        snapshot::ApiOperationalSnapshot,
+    },
     types::{BoundedCounter, ScalarCounter, TypeTrait},
 };
 
@@ -168,6 +171,35 @@ impl ApiOperationalBucket {
             .lock()
             .unwrap()
             .increment(category);
+    }
+}
+
+/// Records an API measurement relevant to operational aggregation.
+    ///
+    /// This is the category-local dispatcher. The domain-level aggregator is
+    /// still responsible for broadcasting the measurement to both categories.
+    pub fn record(&self, measurement: ApiMeasurement<'_>) {
+        match measurement {
+            ApiMeasurement::Request { method, route } => {
+                self.record_request(method, route);
+            }
+            ApiMeasurement::Response { status_code } => {
+                self.record_response(status_code);
+            }
+            ApiMeasurement::RequestSize { bytes } => {
+                self.record_request_size(bytes);
+            }
+            ApiMeasurement::ResponseSize { bytes } => {
+                self.record_response_size(bytes);
+            }
+            ApiMeasurement::Authentication { successful } => {
+                self.record_authentication(successful);
+            }
+            ApiMeasurement::Error { category } => {
+                self.record_error(category);
+            }
+            _ => {}
+        }
     }
 }
 
