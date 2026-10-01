@@ -18,7 +18,6 @@ where
 
     fn record(&self, measurement: M::Measurement<'_>);
     fn snapshot(&self) -> Self::Snapshot;
-    fn reset(&self);
 }
 
 pub trait CategorySnapshotTrait {
