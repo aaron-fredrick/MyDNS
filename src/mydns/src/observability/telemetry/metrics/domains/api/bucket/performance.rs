@@ -1,5 +1,7 @@
 //! Mutable metric state for API performance aggregation.
 
+use std::sync::Mutex;
+
 use crate::observability::telemetry::metrics::types::{DistributionMetrics, Gauge, ScalarCounter};
 
 const LATENCY_BOUNDS_MS: &[f64] = &[
@@ -21,26 +23,27 @@ const SIZE_BOUNDS_BYTES: &[f64] = &[
 
 /// Mutable metric state for one API performance aggregation window.
 ///
-/// This contains only metric state. Window timing and bucket lifecycle are
-/// deliberately handled outside the API-specific metric state.
+/// Metric-level mutexes preserve the concurrency model of the current
+/// performance aggregator. Bucket leasing/lifecycle synchronization is a
+/// separate concern and will be added when the aggregator is migrated.
 pub struct ApiPerformanceBucket {
-    pub(crate) request_latency: DistributionMetrics,
-    pub(crate) handler_latency: DistributionMetrics,
-    pub(crate) request_count: ScalarCounter,
-    pub(crate) request_concurrency: Gauge,
-    pub(crate) request_size: DistributionMetrics,
-    pub(crate) response_size: DistributionMetrics,
+    pub(crate) request_latency: Mutex<DistributionMetrics>,
+    pub(crate) handler_latency: Mutex<DistributionMetrics>,
+    pub(crate) request_count: Mutex<ScalarCounter>,
+    pub(crate) request_concurrency: Mutex<Gauge>,
+    pub(crate) request_size: Mutex<DistributionMetrics>,
+    pub(crate) response_size: Mutex<DistributionMetrics>,
 }
 
 impl ApiPerformanceBucket {
     pub fn new() -> Self {
         Self {
-            request_latency: DistributionMetrics::new(LATENCY_BOUNDS_MS),
-            handler_latency: DistributionMetrics::new(LATENCY_BOUNDS_MS),
-            request_count: ScalarCounter::new(),
-            request_concurrency: Gauge::default(),
-            request_size: DistributionMetrics::new(SIZE_BOUNDS_BYTES),
-            response_size: DistributionMetrics::new(SIZE_BOUNDS_BYTES),
+            request_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
+            handler_latency: Mutex::new(DistributionMetrics::new(LATENCY_BOUNDS_MS)),
+            request_count: Mutex::new(ScalarCounter::new()),
+            request_concurrency: Mutex::new(Gauge::default()),
+            request_size: Mutex::new(DistributionMetrics::new(SIZE_BOUNDS_BYTES)),
+            response_size: Mutex::new(DistributionMetrics::new(SIZE_BOUNDS_BYTES)),
         }
     }
 }
