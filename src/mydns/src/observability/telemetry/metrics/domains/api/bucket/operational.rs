@@ -1,6 +1,9 @@
 //! Mutable metric state for API operational aggregation.
 
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize},
+    Mutex,
+};
 
 use crate::observability::telemetry::metrics::types::{BoundedCounter, ScalarCounter};
 
@@ -10,6 +13,11 @@ use crate::observability::telemetry::metrics::types::{BoundedCounter, ScalarCoun
 /// operational aggregator. Bucket leasing/lifecycle synchronization is a
 /// separate concern and will be added when the aggregator is migrated.
 pub struct ApiOperationalBucket {
+    /// Number of active recording leases on this bucket.
+    pub(crate) users: AtomicUsize,
+    /// Prevents new recording leases while the bucket is being drained.
+    pub(crate) draining: AtomicBool,
+
     pub(crate) requests: Mutex<ScalarCounter>,
     pub(crate) responses: Mutex<ScalarCounter>,
     pub(crate) request_size_bytes: Mutex<ScalarCounter>,
@@ -26,6 +34,8 @@ pub struct ApiOperationalBucket {
 impl ApiOperationalBucket {
     pub fn new() -> Self {
         Self {
+            users: AtomicUsize::new(0),
+            draining: AtomicBool::new(false),
             requests: Mutex::new(ScalarCounter::new()),
             responses: Mutex::new(ScalarCounter::new()),
             request_size_bytes: Mutex::new(ScalarCounter::new()),
