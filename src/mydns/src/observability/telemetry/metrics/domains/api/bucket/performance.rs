@@ -8,7 +8,10 @@ use std::sync::{
 use chrono::{DateTime, Utc};
 
 use crate::observability::telemetry::metrics::{
-    domains::api::snapshot::ApiPerformanceSnapshot,
+    domains::api::{
+        measurements::ApiMeasurement,
+        snapshot::ApiPerformanceSnapshot,
+    },
     types::{DistributionMetrics, Gauge, ScalarCounter, TypeTrait},
 };
 
@@ -150,6 +153,33 @@ impl ApiPerformanceBucket {
 
     pub fn record_response_size(&self, value: u64) {
         self.response_size.lock().unwrap().record(value as f64);
+    }
+}
+
+/// Records an API measurement relevant to performance aggregation.
+    ///
+    /// This is the category-local dispatcher. The domain-level aggregator is
+    /// still responsible for broadcasting the measurement to both categories.
+    pub fn record(&self, measurement: ApiMeasurement<'_>) {
+        match measurement {
+            ApiMeasurement::RequestLatency { latency_ms } => {
+                self.record_request_latency(latency_ms);
+                self.record_request_count();
+            }
+            ApiMeasurement::HandlerLatency { latency_ms } => {
+                self.record_handler_latency(latency_ms);
+            }
+            ApiMeasurement::RequestConcurrency { active_requests } => {
+                self.record_request_concurrency(active_requests);
+            }
+            ApiMeasurement::RequestSize { bytes } => {
+                self.record_request_size(bytes);
+            }
+            ApiMeasurement::ResponseSize { bytes } => {
+                self.record_response_size(bytes);
+            }
+            _ => {}
+        }
     }
 }
 
