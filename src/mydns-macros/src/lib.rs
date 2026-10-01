@@ -6,14 +6,7 @@
 
 use proc_macro::TokenStream;
 
-mod metric_category_aggregator;
 mod metric_category_snapshot;
-
-/// Enforces the structural contract for a metric category aggregator.
-#[proc_macro_attribute]
-pub fn metric_category_aggregator(attr: TokenStream, item: TokenStream) -> TokenStream {
-    metric_category_aggregator::expand(attr, item)
-}
 
 /// Enforces the structural contract for a metric category snapshot.
 #[proc_macro_attribute]
