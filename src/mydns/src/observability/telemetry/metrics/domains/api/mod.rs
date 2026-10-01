@@ -1,6 +1,7 @@
 //! API metric domain.
 
 pub mod aggregator;
+pub mod bucket;
 pub mod measurements;
 pub mod snapshot;
 
