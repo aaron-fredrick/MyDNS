@@ -154,7 +154,6 @@ impl ApiPerformanceBucket {
     pub fn record_response_size(&self, value: u64) {
         self.response_size.lock().unwrap().record(value as f64);
     }
-}
 
 /// Records an API measurement relevant to performance aggregation.
     ///

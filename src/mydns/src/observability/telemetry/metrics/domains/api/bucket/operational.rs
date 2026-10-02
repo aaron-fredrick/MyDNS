@@ -172,7 +172,6 @@ impl ApiOperationalBucket {
             .unwrap()
             .increment(category);
     }
-}
 
 /// Records an API measurement relevant to operational aggregation.
     ///

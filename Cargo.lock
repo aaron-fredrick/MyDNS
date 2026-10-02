@@ -1703,8 +1703,8 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 name = "mydns"
 version = "0.1.1-dev"
 dependencies = [
- "arc-swap",
  "anyhow",
+ "arc-swap",
  "argon2",
  "async-recursion",
  "async-trait",
